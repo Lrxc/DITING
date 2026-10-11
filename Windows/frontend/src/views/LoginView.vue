@@ -1,0 +1,408 @@
+<script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ipc } from '../api/ipc';
+import { themeManager, type ThemeMode } from '../theme/theme';
+import {
+  loadLoginBgConfig,
+  type LoginBgConfig,
+} from '../utils/imageCompressor';
+import M3Icon from '../components/M3Icon.vue';
+import LoginBgModal from '../components/auth/LoginBgModal.vue';
+import appLogo from '../assets/images/logo-universal.png';
+
+const props = withDefaults(
+  defineProps<{
+    initialMode?: 'login' | 'setup';
+  }>(),
+  {
+    initialMode: 'login',
+  }
+);
+
+const emit = defineEmits<{
+  (e: 'success'): void;
+}>();
+
+const currentMode = ref<'login' | 'setup'>(props.initialMode);
+const username = ref('admin');
+const password = ref('');
+const confirmPassword = ref('');
+const showPassword = ref(false);
+const showConfirmPassword = ref(false);
+
+const loading = ref(false);
+const errorMsg = ref('');
+const successMsg = ref('');
+const lockoutSeconds = ref(0);
+let lockoutTimer: ReturnType<typeof setInterval> | null = null;
+
+// 背景图配置
+const bgConfig = ref<LoginBgConfig>(loadLoginBgConfig());
+const showBgModal = ref(false);
+
+// 主题模式
+const currentThemeMode = ref<ThemeMode>(themeManager.getThemeMode());
+
+const hasCustomBg = computed(() => Boolean(bgConfig.value.url));
+
+function cycleTheme() {
+  const modes: ThemeMode[] = ['light', 'dark', 'system'];
+  const nextIdx = (modes.indexOf(currentThemeMode.value) + 1) % modes.length;
+  const nextMode = modes[nextIdx] ?? 'system';
+  currentThemeMode.value = nextMode;
+  themeManager.setThemeMode(nextMode);
+}
+
+const themeIcon = computed(() => {
+  if (currentThemeMode.value === 'dark') return 'contrast';
+  if (currentThemeMode.value === 'light') return 'palette';
+  return 'settings';
+});
+
+const themeLabel = computed(() => {
+  if (currentThemeMode.value === 'dark') return '深色模式';
+  if (currentThemeMode.value === 'light') return '浅色模式';
+  return '跟随系统';
+});
+
+async function checkAuthStatus() {
+  try {
+    const status = await ipc.getAuthStatus();
+    if (!status.initialized) {
+      currentMode.value = 'setup';
+    } else {
+      currentMode.value = props.initialMode || 'login';
+    }
+    if (status.username) {
+      username.value = status.username;
+    }
+    if (status.locked && status.lockoutRemainingSec > 0) {
+      startLockoutCountdown(status.lockoutRemainingSec);
+    }
+  } catch {}
+}
+
+function startLockoutCountdown(seconds: number) {
+  lockoutSeconds.value = seconds;
+  if (lockoutTimer) clearInterval(lockoutTimer);
+  lockoutTimer = setInterval(() => {
+    lockoutSeconds.value--;
+    if (lockoutSeconds.value <= 0) {
+      if (lockoutTimer) clearInterval(lockoutTimer);
+      lockoutTimer = null;
+      errorMsg.value = '';
+    }
+  }, 1000);
+}
+
+async function handleSubmit() {
+  errorMsg.value = '';
+  successMsg.value = '';
+
+  if (currentMode.value === 'setup') {
+    if (!username.value.trim()) {
+      errorMsg.value = '管理员用户名不能为空';
+      return;
+    }
+    if (password.value.length < 4) {
+      errorMsg.value = '密码长度至少为 4 位字符';
+      return;
+    }
+    if (password.value !== confirmPassword.value) {
+      errorMsg.value = '两次输入的密码不一致';
+      return;
+    }
+
+    loading.value = true;
+    try {
+      await ipc.setupAuth({
+        username: username.value.trim(),
+        password: password.value,
+      });
+      await ipc.login({
+        username: username.value.trim(),
+        password: password.value,
+      });
+      successMsg.value = '管理员账号初始化成功，正在安全进入控制台...';
+      setTimeout(() => {
+        emit('success');
+      }, 700);
+    } catch (err: any) {
+      errorMsg.value = err.message || '初始化管理员账号失败';
+    } finally {
+      loading.value = false;
+    }
+    return;
+  }
+
+  if (currentMode.value === 'login') {
+    if (!username.value.trim()) {
+      errorMsg.value = '请输入管理员用户名';
+      return;
+    }
+    if (!password.value) {
+      errorMsg.value = '请输入管理员密码';
+      return;
+    }
+
+    loading.value = true;
+    try {
+      await ipc.login({
+        username: username.value.trim(),
+        password: password.value,
+      });
+      successMsg.value = '凭证校验成功，正在进入系统...';
+      setTimeout(() => {
+        emit('success');
+      }, 500);
+    } catch (err: any) {
+      const msg = err.message || '登录失败，请检查账号密码';
+      if (msg.includes('未初始化')) {
+        currentMode.value = 'setup';
+        errorMsg.value = '检测到系统尚未初始化管理员凭据，请在此处设置初始密码';
+      } else {
+        errorMsg.value = msg;
+        if (msg.includes('锁定')) {
+          startLockoutCountdown(300);
+        }
+      }
+    } finally {
+      loading.value = false;
+    }
+  }
+}
+
+function handleBgChange(newCfg: LoginBgConfig) {
+  bgConfig.value = { ...newCfg };
+}
+
+onMounted(() => {
+  checkAuthStatus();
+});
+
+onUnmounted(() => {
+  if (lockoutTimer) clearInterval(lockoutTimer);
+});
+</script>
+
+<template>
+  <div class="relative min-h-screen w-full flex flex-col justify-between overflow-x-hidden font-sans select-none bg-surface-base text-text-main">
+    <!-- 1. 自定义壁纸背景层 (支持平滑过渡与模糊) -->
+    <div
+      v-if="hasCustomBg"
+      class="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat transition-all duration-700 pointer-events-none"
+      :style="{
+        backgroundImage: `url(${bgConfig.url})`,
+        filter: bgConfig.blur > 0 ? `blur(${bgConfig.blur}px)` : 'none',
+        transform: bgConfig.blur > 0 ? 'scale(1.05)' : 'none',
+      }"
+    />
+
+    <!-- 2. 背景遮罩层 (保证前景卡片文字高清晰度) -->
+    <div
+      v-if="hasCustomBg"
+      class="fixed inset-0 z-0 bg-black pointer-events-none transition-opacity duration-300"
+      :style="{ opacity: bgConfig.opacity / 100 }"
+    />
+
+    <!-- 3. 默认无背景时的优雅环境微渐变光晕 -->
+    <div
+      v-else
+      class="fixed inset-0 z-0 pointer-events-none overflow-hidden"
+    >
+      <div class="absolute -top-[20%] left-1/2 -translate-x-1/2 w-[600px] h-[500px] rounded-full bg-accent-seal/5 dark:bg-accent-seal/10 blur-[120px]" />
+      <div class="absolute -bottom-[20%] right-[10%] w-[500px] h-[400px] rounded-full bg-brand-container/40 dark:bg-brand-container/20 blur-[100px]" />
+    </div>
+
+    <!-- 顶栏辅助操作：主题切换与自定义壁纸入口 -->
+    <header class="relative z-10 w-full px-4 sm:px-8 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <img :src="appLogo" alt="Logo" class="w-7 h-7 object-contain rounded-md" />
+        <span class="font-serif text-sm font-semibold tracking-wide text-text-main">谛听 DITING</span>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <!-- 自定义背景入口按钮 -->
+        <button
+          type="button"
+          @click="showBgModal = true"
+          class="app-btn-secondary app-btn-compact relative backdrop-blur-md"
+          :class="hasCustomBg ? 'border-accent-seal/50 text-accent-seal bg-surface-card/60' : 'bg-surface-card/70'"
+          title="配置登录页自定义背景图片"
+        >
+          <M3Icon name="image" :size="14" />
+          <span class="hidden sm:inline">自定义背景</span>
+          <span
+            v-if="hasCustomBg"
+            class="w-1.5 h-1.5 rounded-full bg-accent-seal"
+            title="已启用自定义背景"
+          />
+        </button>
+
+        <!-- 主题切换按钮 -->
+        <button
+          type="button"
+          @click="cycleTheme"
+          class="app-btn-secondary app-btn-compact backdrop-blur-md bg-surface-card/70"
+          :title="`当前主题：${themeLabel}（点击切换）`"
+        >
+          <M3Icon :name="themeIcon" :size="14" />
+          <span class="hidden sm:inline">{{ themeLabel }}</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- 中部主登录卡片容器（自适应不同屏幕尺寸） -->
+    <main class="relative z-10 flex-1 flex items-center justify-center p-4 sm:p-6 my-auto">
+      <div
+        class="w-full max-w-sm sm:max-w-md rounded-xl transition-all duration-300"
+        :class="[
+          hasCustomBg
+            ? 'bg-surface-card/90 dark:bg-surface-card/85 backdrop-blur-md shadow-2xl border border-surface-border/80'
+            : 'bg-surface-card shadow-xl border border-surface-border'
+        ]"
+      >
+        <!-- 卡片头部品牌标识 -->
+        <div class="p-6 sm:p-8 pb-4 text-center">
+          <div class="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-brand-container shadow-xs mb-3.5 mx-auto">
+            <img :src="appLogo" alt="谛听 Logo" class="w-10 h-10 object-contain rounded-md" />
+          </div>
+          <h1 class="font-serif text-xl sm:text-2xl font-bold tracking-tight text-text-main">
+            谛听 DNS 控制台
+          </h1>
+          <p class="text-xs text-text-sub mt-1.5 leading-relaxed">
+            {{ currentMode === 'setup' ? '初始化管理员密码，守护局域网远程管理安全' : '局域网远程管理服务 · 请验证管理员凭据' }}
+          </p>
+        </div>
+
+        <!-- 表单区域 -->
+        <form @submit.prevent="handleSubmit" class="px-6 sm:px-8 pb-6 sm:pb-8 space-y-4">
+          <!-- 错误提示 -->
+          <div
+            v-if="errorMsg"
+            class="p-3 rounded-lg bg-status-error-bg border border-status-error/30 text-status-error text-xs flex items-start gap-2 animate-shake"
+          >
+            <M3Icon name="error" :size="16" class="shrink-0 mt-0.5" />
+            <span class="leading-relaxed">{{ errorMsg }}</span>
+          </div>
+
+          <!-- 成功提示 -->
+          <div
+            v-if="successMsg"
+            class="p-3 rounded-lg bg-status-success-bg border border-status-success/30 text-status-success text-xs flex items-center gap-2"
+          >
+            <M3Icon name="check_circle" :size="16" class="shrink-0" />
+            <span>{{ successMsg }}</span>
+          </div>
+
+          <!-- 安全锁定倒计时提示 -->
+          <div
+            v-if="lockoutSeconds > 0"
+            class="p-3 rounded-lg bg-status-warning-bg border border-status-warning/30 text-status-warning text-xs flex items-center gap-2"
+          >
+            <M3Icon name="alarm" :size="16" class="shrink-0" />
+            <span>安全保护频控锁定中，请等待 {{ lockoutSeconds }} 秒后再试</span>
+          </div>
+
+          <!-- 用户名 -->
+          <div class="space-y-1">
+            <label class="block text-xs font-medium text-text-sub">管理员账号</label>
+            <div class="relative">
+              <input
+                v-model="username"
+                type="text"
+                autocomplete="username"
+                :disabled="loading || lockoutSeconds > 0"
+                class="w-full h-10 px-3 text-sm rounded-md border border-surface-border bg-surface-card text-text-main focus:outline-none focus:border-brand-primary transition-colors disabled:opacity-50"
+                placeholder="admin"
+              />
+            </div>
+          </div>
+
+          <!-- 密码输入框 -->
+          <div class="space-y-1">
+            <div class="flex items-center justify-between">
+              <label class="block text-xs font-medium text-text-sub">
+                {{ currentMode === 'setup' ? '设置初始密码 (至少 4 位)' : '管理员密码' }}
+              </label>
+            </div>
+            <div class="relative flex items-center">
+              <input
+                v-model="password"
+                :type="showPassword ? 'text' : 'password'"
+                autocomplete="current-password"
+                :disabled="loading || lockoutSeconds > 0"
+                class="w-full h-10 pl-3 pr-10 text-sm rounded-md border border-surface-border bg-surface-card text-text-main focus:outline-none focus:border-brand-primary transition-colors disabled:opacity-50"
+                placeholder="请输入密码"
+              />
+              <button
+                type="button"
+                @click="showPassword = !showPassword"
+                class="absolute right-2.5 p-1 text-text-muted hover:text-text-main cursor-pointer"
+                title="显隐密码"
+              >
+                <M3Icon :name="showPassword ? 'visibility_off' : 'visibility'" :size="16" />
+              </button>
+            </div>
+          </div>
+
+          <!-- 确认密码（仅设置模式） -->
+          <div v-if="currentMode === 'setup'" class="space-y-1">
+            <label class="block text-xs font-medium text-text-sub">确认管理员密码</label>
+            <div class="relative flex items-center">
+              <input
+                v-model="confirmPassword"
+                :type="showConfirmPassword ? 'text' : 'password'"
+                autocomplete="new-password"
+                :disabled="loading || lockoutSeconds > 0"
+                class="w-full h-10 pl-3 pr-10 text-sm rounded-md border border-surface-border bg-surface-card text-text-main focus:outline-none focus:border-brand-primary transition-colors disabled:opacity-50"
+                placeholder="请再次输入设置的新密码"
+              />
+              <button
+                type="button"
+                @click="showConfirmPassword = !showConfirmPassword"
+                class="absolute right-2.5 p-1 text-text-muted hover:text-text-main cursor-pointer"
+                title="显隐密码"
+              >
+                <M3Icon :name="showConfirmPassword ? 'visibility_off' : 'visibility'" :size="16" />
+              </button>
+            </div>
+          </div>
+
+          <!-- 提交登录按钮 -->
+          <div class="pt-2">
+            <button
+              type="submit"
+              :disabled="loading || lockoutSeconds > 0"
+              class="app-btn-primary w-full h-11 text-sm font-semibold shadow-md flex items-center justify-center gap-2 cursor-pointer transition-transform active:scale-[0.99]"
+            >
+              <M3Icon :name="loading ? 'sync' : 'check'" :size="18" :class="loading ? 'animate-spin' : ''" />
+              <span>{{ currentMode === 'setup' ? '完成初始化并进入控制台' : '立即登录' }}</span>
+            </button>
+          </div>
+
+          <!-- 模式切换与安全提示 -->
+          <div class="pt-2 border-t border-surface-border text-center text-[11px] text-text-muted space-y-1">
+            <div class="flex items-center justify-center gap-1.5 text-text-sub">
+              <M3Icon name="shield" :size="13" class="text-accent-seal" />
+              <span>SHA-256 加盐哈希保护 · 连续错误自动安全锁定</span>
+            </div>
+          </div>
+        </form>
+      </div>
+    </main>
+
+    <!-- 底部版权信息 -->
+    <footer class="relative z-10 py-3 text-center text-[11px] text-text-muted">
+      <span>谛听 (DITING) DNS 解析加速与安全防护系统</span>
+    </footer>
+
+    <!-- 自定义背景弹窗 -->
+    <LoginBgModal
+      :open="showBgModal"
+      :current-config="bgConfig"
+      @close="showBgModal = false"
+      @change="handleBgChange"
+    />
+  </div>
+</template>

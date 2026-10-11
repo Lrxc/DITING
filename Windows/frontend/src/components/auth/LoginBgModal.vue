@@ -1,0 +1,330 @@
+<script setup lang="ts">
+import { ref, watch } from 'vue';
+import AppModal from '../AppModal.vue';
+import M3Icon from '../M3Icon.vue';
+import {
+  compressImageFile,
+  validateImageUrl,
+  saveLoginBgConfig,
+  clearLoginBgConfig,
+  type LoginBgConfig,
+} from '../../utils/imageCompressor';
+
+const props = defineProps<{
+  open: boolean;
+  currentConfig: LoginBgConfig;
+}>();
+
+const emit = defineEmits<{
+  (e: 'close'): void;
+  (e: 'change', config: LoginBgConfig): void;
+}>();
+
+const activeTab = ref<'local' | 'url'>('local');
+const previewUrl = ref('');
+const imageUrlInput = ref('');
+const opacity = ref(40);
+const blur = ref(0);
+
+const isProcessing = ref(false);
+const errorMsg = ref('');
+const successMsg = ref('');
+const fileInput = ref<HTMLInputElement | null>(null);
+
+watch(
+  () => props.open,
+  (val) => {
+    if (val) {
+      previewUrl.value = props.currentConfig.url || '';
+      imageUrlInput.value = props.currentConfig.url?.startsWith('data:') ? '' : props.currentConfig.url || '';
+      opacity.value = props.currentConfig.opacity ?? 40;
+      blur.value = props.currentConfig.blur ?? 0;
+      errorMsg.value = '';
+      successMsg.value = '';
+      activeTab.value = props.currentConfig.url?.startsWith('data:') ? 'local' : (props.currentConfig.url ? 'url' : 'local');
+    }
+  },
+  { immediate: true }
+);
+
+async function handleFileSelect(e: Event) {
+  const target = e.target as HTMLInputElement;
+  const file = target.files?.[0];
+  if (!file) return;
+
+  errorMsg.value = '';
+  successMsg.value = '';
+
+  if (!file.type.startsWith('image/')) {
+    errorMsg.value = '请选择合法的图片文件（支持 PNG、JPG、WebP、SVG）';
+    return;
+  }
+
+  isProcessing.value = true;
+  try {
+    const compressed = await compressImageFile(file, 1920, 1080, 0.82);
+    previewUrl.value = compressed;
+    successMsg.value = `图片读取成功（已智能压缩，分辨率自动适配）`;
+  } catch (err: any) {
+    errorMsg.value = err.message || '图片读取与压缩失败，请重试';
+  } finally {
+    isProcessing.value = false;
+    if (fileInput.value) fileInput.value.value = '';
+  }
+}
+
+async function handleApplyUrl() {
+  const url = imageUrlInput.value.trim();
+  if (!url) {
+    errorMsg.value = '请输入有效的网络图片链接';
+    return;
+  }
+
+  errorMsg.value = '';
+  successMsg.value = '';
+  isProcessing.value = true;
+
+  const valid = await validateImageUrl(url);
+  isProcessing.value = false;
+
+  if (!valid) {
+    errorMsg.value = '图片链接加载失败，请检查网络地址是否正确或是否存在跨域防盗链';
+    return;
+  }
+
+  previewUrl.value = url;
+  successMsg.value = '网络图片检测成功，已应用预览';
+}
+
+function handleSave() {
+  errorMsg.value = '';
+  const result = saveLoginBgConfig(previewUrl.value, opacity.value, blur.value);
+  if (!result.success) {
+    errorMsg.value = result.error || '保存配置失败';
+    return;
+  }
+
+  emit('change', {
+    url: previewUrl.value,
+    opacity: opacity.value,
+    blur: blur.value,
+  });
+  emit('close');
+}
+
+function handleResetDefault() {
+  clearLoginBgConfig();
+  previewUrl.value = '';
+  imageUrlInput.value = '';
+  opacity.value = 40;
+  blur.value = 0;
+  errorMsg.value = '';
+  successMsg.value = '已恢复系统默认背景（不设置背景图）';
+
+  emit('change', {
+    url: '',
+    opacity: 40,
+    blur: 0,
+  });
+  setTimeout(() => {
+    emit('close');
+  }, 400);
+}
+</script>
+
+<template>
+  <AppModal
+    :open="open"
+    @close="emit('close')"
+    max-width="max-w-lg"
+  >
+    <template #headline>
+      <div class="flex items-center gap-3 w-full">
+        <div class="w-10 h-10 rounded-md bg-brand-container flex items-center justify-center shrink-0">
+          <M3Icon name="image" :size="22" class="text-text-main" />
+        </div>
+        <div>
+          <h3 class="section-title">自定义登录背景</h3>
+          <p class="text-xs text-text-sub mt-0.5">
+            自由上传本地壁纸或指定网络图片，兼顾全屏视觉与卡片可读性
+          </p>
+        </div>
+      </div>
+    </template>
+
+    <div class="space-y-4 py-1 select-none">
+      <!-- 提示信息 -->
+      <div v-if="errorMsg" class="p-2.5 rounded-md bg-status-error-bg border border-status-error/30 text-status-error text-xs flex items-center gap-2">
+        <M3Icon name="error" :size="16" class="shrink-0" />
+        <span class="break-words">{{ errorMsg }}</span>
+      </div>
+      <div v-if="successMsg" class="p-2.5 rounded-md bg-status-success-bg border border-status-success/30 text-status-success text-xs flex items-center gap-2">
+        <M3Icon name="check_circle" :size="16" class="shrink-0" />
+        <span class="break-words">{{ successMsg }}</span>
+      </div>
+
+      <!-- 选项卡切换 -->
+      <div class="flex rounded-md bg-surface-card-sub p-1 border border-surface-border-sub text-xs">
+        <button
+          type="button"
+          @click="activeTab = 'local'"
+          class="flex-1 py-1.5 rounded text-center font-medium transition-colors cursor-pointer"
+          :class="activeTab === 'local' ? 'bg-surface-card text-text-main shadow-xs' : 'text-text-sub hover:text-text-main'"
+        >
+          本地图片上传
+        </button>
+        <button
+          type="button"
+          @click="activeTab = 'url'"
+          class="flex-1 py-1.5 rounded text-center font-medium transition-colors cursor-pointer"
+          :class="activeTab === 'url' ? 'bg-surface-card text-text-main shadow-xs' : 'text-text-sub hover:text-text-main'"
+        >
+          网络图片链接
+        </button>
+      </div>
+
+      <!-- 本地上传区域 -->
+      <div v-if="activeTab === 'local'" class="space-y-2">
+        <input
+          ref="fileInput"
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/svg+xml"
+          class="hidden"
+          @change="handleFileSelect"
+        />
+        <div
+          @click="fileInput?.click()"
+          class="border-2 border-dashed border-surface-border hover:border-brand-primary/50 rounded-lg p-5 flex flex-col items-center justify-center gap-2 text-center cursor-pointer transition-colors bg-surface-card-sub/40 hover:bg-surface-card-sub"
+        >
+          <div class="w-10 h-10 rounded-full bg-surface-card flex items-center justify-center text-text-sub shadow-xs">
+            <M3Icon name="upload" :size="20" />
+          </div>
+          <div class="text-xs font-semibold text-text-main">
+            点击选择本地图片文件
+          </div>
+          <div class="text-[11px] text-text-muted">
+            支持 PNG、JPG、WebP、SVG，客户端自动缩放压缩以节省存储
+          </div>
+        </div>
+      </div>
+
+      <!-- 网络 URL 输入区域 -->
+      <div v-else class="space-y-2">
+        <div class="flex gap-2">
+          <input
+            v-model="imageUrlInput"
+            type="url"
+            placeholder="https://example.com/wallpaper.jpg"
+            class="flex-1 px-3 py-2 text-xs rounded-md border border-surface-border bg-surface-card text-text-main focus:outline-none focus:border-brand-primary placeholder:text-text-muted"
+            @keydown.enter="handleApplyUrl"
+          />
+          <button
+            type="button"
+            @click="handleApplyUrl"
+            :disabled="isProcessing || !imageUrlInput.trim()"
+            class="app-btn-secondary app-btn-compact"
+          >
+            <M3Icon :name="isProcessing ? 'sync' : 'search'" :size="14" :class="isProcessing ? 'animate-spin' : ''" />
+            <span>加载</span>
+          </button>
+        </div>
+        <div class="text-[11px] text-text-muted">
+          可输入公网图床、Unsplash 或本地局域网 NAS 中的壁纸地址
+        </div>
+      </div>
+
+      <!-- 图片预览缩略图 -->
+      <div v-if="previewUrl" class="relative rounded-md overflow-hidden border border-surface-border bg-surface-card h-32 flex items-center justify-center group">
+        <img
+          :src="previewUrl"
+          alt="背景预览"
+          class="w-full h-full object-cover transition-transform group-hover:scale-105"
+        />
+        <div
+          class="absolute inset-0 bg-black pointer-events-none transition-opacity"
+          :style="{ opacity: opacity / 100, backdropFilter: blur > 0 ? `blur(${blur}px)` : 'none' }"
+        />
+        <div class="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/60 backdrop-blur-xs text-[10px] text-white">
+          预览效果 (含遮罩与模糊)
+        </div>
+        <button
+          type="button"
+          @click="previewUrl = ''"
+          class="absolute top-2 right-2 p-1 rounded-full bg-black/60 hover:bg-black/80 text-white transition-colors cursor-pointer"
+          title="移除选定图片"
+        >
+          <M3Icon name="close" :size="14" />
+        </button>
+      </div>
+
+      <!-- 视觉微调滑块 -->
+      <div v-if="previewUrl" class="space-y-3 p-3 rounded-md bg-surface-card-sub/60 border border-surface-border-sub text-xs">
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between text-text-sub font-medium">
+            <span>背景遮罩暗度</span>
+            <span class="font-mono text-text-main">{{ opacity }}%</span>
+          </div>
+          <input
+            v-model.number="opacity"
+            type="range"
+            min="10"
+            max="90"
+            step="5"
+            class="w-full accent-brand-primary cursor-pointer"
+          />
+          <div class="text-[11px] text-text-muted">提高遮罩比例可确保明亮图片下卡片文字依然清晰可见</div>
+        </div>
+
+        <div class="space-y-1.5 pt-1 border-t border-surface-border-sub">
+          <div class="flex items-center justify-between text-text-sub font-medium">
+            <span>背景毛玻璃模糊</span>
+            <span class="font-mono text-text-main">{{ blur }}px</span>
+          </div>
+          <input
+            v-model.number="blur"
+            type="range"
+            min="0"
+            max="16"
+            step="1"
+            class="w-full accent-brand-primary cursor-pointer"
+          />
+          <div class="text-[11px] text-text-muted">适度模糊可使复杂背景更柔和，凸显前景登录表单</div>
+        </div>
+      </div>
+    </div>
+
+    <template #actions>
+      <div class="flex items-center justify-between w-full">
+        <button
+          v-if="currentConfig.url || previewUrl"
+          type="button"
+          @click="handleResetDefault"
+          class="app-btn-secondary text-status-error border-status-error/40 hover:bg-status-error-bg"
+          title="清除自定义背景并还原默认极简背景"
+        >
+          <M3Icon name="refresh" :size="14" />
+          <span>恢复默认背景</span>
+        </button>
+        <div v-else />
+
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            @click="emit('close')"
+            class="app-btn-secondary"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            @click="handleSave"
+            class="app-btn-primary"
+          >
+            <M3Icon name="check" :size="16" />
+            <span>保存并应用</span>
+          </button>
+        </div>
+      </div>
+    </template>
+  </AppModal>
+</template>

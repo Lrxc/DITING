@@ -8,7 +8,7 @@ import M3Icon from './components/M3Icon.vue';
 import NavItem from './components/NavItem.vue';
 import StatusBadge from './components/StatusBadge.vue';
 import ServiceAlertModal from './components/ServiceAlertModal.vue';
-import LoginModal from './components/LoginModal.vue';
+import LoginView from './views/LoginView.vue';
 import appLogo from './assets/images/logo-universal.png';
 import OverviewView from './views/OverviewView.vue';
 import NetworkView from './views/NetworkView.vue';
@@ -29,12 +29,13 @@ let mql: MediaQueryList | null = null;
 
 const currentNav = computed(() => navItems.find((i) => i.id === currentTab.value));
 
-// Web 远程管理与用户态
+// Web 远程管理与用户态：与主界面彻底分离
 const webMode = isWebMode();
-const currentUser = ref(localStorage.getItem('diting_session_user') || '');
-const showAuthModal = ref(false);
-const authModalMode = ref<'login' | 'setup'>('login');
+const isAuthenticated = ref(!webMode);
+const isCheckingAuth = ref(webMode);
+const authPageMode = ref<'login' | 'setup'>('login');
 const isAuthInitialized = ref(true);
+const currentUser = ref(localStorage.getItem('diting_session_user') || '');
 
 let unsubConn: (() => void) | null = null;
 let unsubAuth: (() => void) | null = null;
@@ -73,46 +74,61 @@ function handleNavigate(tab: NavTab) {
 }
 
 async function checkWebAuth() {
-  if (!webMode) return;
+  if (!webMode) {
+    isAuthenticated.value = true;
+    isCheckingAuth.value = false;
+    ipc.connectWS();
+    ipc.checkHealth();
+    return;
+  }
+
+  isCheckingAuth.value = true;
   try {
     const status = await ipc.getAuthStatus();
     isAuthInitialized.value = Boolean(status.initialized);
     if (!status.initialized) {
-      authModalMode.value = 'setup';
-      showAuthModal.value = true;
+      authPageMode.value = 'setup';
+      isAuthenticated.value = false;
     } else {
       const token = localStorage.getItem('diting_session_token');
       if (!token) {
-        authModalMode.value = 'login';
-        showAuthModal.value = true;
+        authPageMode.value = 'login';
+        isAuthenticated.value = false;
       } else {
-        currentUser.value = status.username || 'admin';
+        try {
+          await ipc.getStatus();
+          isAuthenticated.value = true;
+          currentUser.value = localStorage.getItem('diting_session_user') || status.username || 'admin';
+          ipc.connectWS();
+          ipc.checkHealth();
+        } catch {
+          await ipc.logout();
+          isAuthenticated.value = false;
+          authPageMode.value = 'login';
+        }
       }
     }
-  } catch (err: any) {
-    if (err.message && (err.message.includes('未授权') || err.message.includes('401'))) {
-      if (isAuthInitialized.value) {
-        authModalMode.value = 'login';
-      } else {
-        authModalMode.value = 'setup';
-      }
-      showAuthModal.value = true;
-    }
+  } catch {
+    isAuthenticated.value = false;
+    authPageMode.value = 'login';
+  } finally {
+    isCheckingAuth.value = false;
   }
 }
 
 async function handleLogout() {
   await ipc.logout();
   currentUser.value = '';
-  authModalMode.value = 'login';
-  showAuthModal.value = true;
+  isAuthenticated.value = false;
+  authPageMode.value = 'login';
+  ipc.disconnectWS();
 }
 
 function handleAuthSuccess() {
-  showAuthModal.value = false;
+  isAuthenticated.value = true;
   isAuthInitialized.value = true;
   currentUser.value = localStorage.getItem('diting_session_user') || 'admin';
-  ipc.reconnectWS();
+  ipc.connectWS();
   ipc.checkHealth();
 }
 
@@ -125,17 +141,13 @@ onMounted(() => {
   mql.addEventListener('change', handleMqlChange);
 
   checkWebAuth();
-  ipc.connectWS();
-  ipc.checkHealth();
 
   unsubAuth = ipc.onAuthRequired((required) => {
     if (webMode && required) {
-      if (!isAuthInitialized.value) {
-        authModalMode.value = 'setup';
-      } else {
-        authModalMode.value = 'login';
-      }
-      showAuthModal.value = true;
+      isAuthenticated.value = false;
+      currentUser.value = '';
+      authPageMode.value = isAuthInitialized.value ? 'login' : 'setup';
+      ipc.disconnectWS();
     }
   });
 
@@ -169,7 +181,29 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex h-screen w-screen overflow-hidden bg-surface-base text-text-main font-sans antialiased select-none">
+  <!-- 1. Web 模式鉴权初始状态检查中（仅冷启动短暂检测 Token 时展示） -->
+  <div
+    v-if="webMode && isCheckingAuth"
+    class="flex h-screen w-screen items-center justify-center bg-surface-base text-text-muted select-none"
+  >
+    <div class="flex flex-col items-center gap-3">
+      <img :src="appLogo" alt="Logo" class="w-10 h-10 object-contain rounded-md animate-pulse" />
+      <span class="text-xs text-text-sub font-mono">DITING DNS 控制台安全载入中...</span>
+    </div>
+  </div>
+
+  <!-- 2. Web 模式且未通过鉴权：展示完全独立的沉浸式登录页面（与主系统完全解耦） -->
+  <LoginView
+    v-else-if="webMode && !isAuthenticated"
+    :initial-mode="authPageMode"
+    @success="handleAuthSuccess"
+  />
+
+  <!-- 3. 已认证登录态或桌面客户端：展示系统主界面 -->
+  <div
+    v-else
+    class="flex h-screen w-screen overflow-hidden bg-surface-base text-text-main font-sans antialiased select-none"
+  >
     <!-- 侧边导航：宽屏文本栏（w-56）／中屏图标栏（w-16） -->
     <nav
       class="hidden md:flex shrink-0 flex-col py-4 border-r border-surface-border bg-surface-base z-20"
@@ -293,15 +327,6 @@ onUnmounted(() => {
       :open="showAlertModal"
       @close="showAlertModal = false"
       @connected="isConnected = true"
-    />
-
-    <!-- Web 管理员登录与首次设置向导弹窗 -->
-    <LoginModal
-      :open="showAuthModal"
-      :mode="authModalMode"
-      :force-modal="true"
-      @close="showAuthModal = false"
-      @success="handleAuthSuccess"
     />
   </div>
 </template>

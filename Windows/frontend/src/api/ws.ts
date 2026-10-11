@@ -18,6 +18,9 @@ export class EventChannel {
       return;
     }
     if (this.isConnecting) return;
+    if (!isDesktopApp() && !this.transport.token) {
+      return;
+    }
     this.isConnecting = true;
 
     const wsProtocol = this.transport.baseURL.startsWith('https') ? 'wss' : 'ws';
@@ -83,6 +86,18 @@ export class EventChannel {
     this.connect();
   }
 
+  public disconnect() {
+    this.cancelRetry();
+    if (this.ws) {
+      try {
+        this.ws.close();
+      } catch {}
+      this.ws = null;
+    }
+    this.isConnecting = false;
+    this.transport.setConnected(false);
+  }
+
   /** 订阅事件；未连接时自动建立连接 */
   public subscribe(listener: (event: WebSocketEvent) => void): () => void {
     this.listeners.add(listener);
@@ -102,6 +117,9 @@ export class EventChannel {
   }
 
   private scheduleRetry() {
+    if (!isDesktopApp() && !this.transport.token) {
+      return;
+    }
     if (!this.reconnectTimer) {
       this.reconnectTimer = setTimeout(() => {
         this.reconnectTimer = null;

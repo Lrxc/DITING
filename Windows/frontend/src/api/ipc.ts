@@ -30,6 +30,7 @@ class IPCService {
   public onEvent = (l: (e: WebSocketEvent) => void) => this.events.subscribe(l);
   public connectWS = () => this.events.connect();
   public reconnectWS = () => this.events.reconnect();
+  public disconnectWS = () => this.events.disconnect();
   public checkHealth = () => this.core.checkHealth();
 
   get isConnected(): boolean {
