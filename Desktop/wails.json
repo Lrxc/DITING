@@ -1,0 +1,20 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "diting-gui",
+  "outputfilename": "diting-gui",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "leehaoze",
+    "email": "leehaoze2022@gmail.com"
+  },
+  "info": {
+    "companyName": "Diting",
+    "productName": "谛听 DNS",
+    "productVersion": "1.3.5",
+    "copyright": "Copyright 2026 DITING",
+    "comments": "谛听 (DITING) 桌面客户端"
+  }
+}

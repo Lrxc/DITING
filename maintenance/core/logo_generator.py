@@ -122,7 +122,7 @@ def export_logo_assets(
 ) -> dict:
     current_dir = os.path.dirname(os.path.abspath(__file__))
     root_dir = os.path.abspath(os.path.join(current_dir, "..", ".."))
-    windows_dir = os.path.join(root_dir, "Windows")
+    desktop_dir = os.path.join(root_dir, "Desktop")
 
     def _log(lvl, msg):
         if on_log:
@@ -139,8 +139,8 @@ def export_logo_assets(
 
     exported_files = []
 
-    # 1. 默认 Windows 项目目录导出 SVG
-    svg_out_path = os.path.join(windows_dir, "frontend", "src", "assets", "images", "logo.svg")
+    # 1. 默认桌面端项目目录导出 SVG
+    svg_out_path = os.path.join(desktop_dir, "frontend", "src", "assets", "images", "logo.svg")
     os.makedirs(os.path.dirname(svg_out_path), exist_ok=True)
     with open(svg_out_path, "w", encoding="utf-8") as f:
         f.write(svg_content)
@@ -164,7 +164,7 @@ def export_logo_assets(
     # 2. 导出 1024x1024 appicon.png
     qimg_1024 = render_svg_to_qimage(svg_content, 1024, 1024)
     pil_1024 = qimage_to_pil(qimg_1024)
-    build_appicon_path = os.path.join(windows_dir, "build", "appicon.png")
+    build_appicon_path = os.path.join(desktop_dir, "build", "appicon.png")
     os.makedirs(os.path.dirname(build_appicon_path), exist_ok=True)
     pil_1024.save(build_appicon_path, "PNG")
     _log("info", f"导出应用主图标: {build_appicon_path}")
@@ -173,7 +173,7 @@ def export_logo_assets(
     # 3. 导出导航栏徽标 logo-universal.png (512x512)
     qimg_512 = render_svg_to_qimage(svg_content, 512, 512)
     pil_512 = qimage_to_pil(qimg_512)
-    frontend_logo_path = os.path.join(windows_dir, "frontend", "src", "assets", "images", "logo-universal.png")
+    frontend_logo_path = os.path.join(desktop_dir, "frontend", "src", "assets", "images", "logo-universal.png")
     pil_512.save(frontend_logo_path, "PNG")
     _log("info", f"导出前端导航栏图标: {frontend_logo_path}")
     exported_files.append(frontend_logo_path)
@@ -186,14 +186,14 @@ def export_logo_assets(
         pil_s = qimage_to_pil(q_s)
         ico_images.append(pil_s)
 
-    ico_out_path = os.path.join(windows_dir, "build", "windows", "icon.ico")
+    ico_out_path = os.path.join(desktop_dir, "build", "windows", "icon.ico")
     os.makedirs(os.path.dirname(ico_out_path), exist_ok=True)
     ico_images[-1].save(ico_out_path, format="ICO", sizes=[(s, s) for s in ico_sizes], append_images=ico_images[:-1])
     _log("info", f"导出 Windows 多分辨率 ICO: {ico_out_path}")
     exported_files.append(ico_out_path)
 
-    # 5. 同步输出至前端公共静态目录 Windows/frontend/public/
-    public_dir = os.path.join(windows_dir, "frontend", "public")
+    # 5. 同步输出至前端公共静态目录 Desktop/frontend/public/
+    public_dir = os.path.join(desktop_dir, "frontend", "public")
     if os.path.isdir(public_dir):
         pub_svg = os.path.join(public_dir, "logo.svg")
         with open(pub_svg, "w", encoding="utf-8") as f:

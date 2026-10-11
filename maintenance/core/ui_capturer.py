@@ -77,7 +77,7 @@ def capture_screenshots(
 
     if not is_port_in_use(port):
         _log("warn", f"检测到 Vite 前端未在端口 {port} 运行，正在尝试启动临时前端服务...")
-        frontend_dir = os.path.join(root, "Windows", "frontend")
+        frontend_dir = os.path.join(root, "Desktop", "frontend")
         npx_cmd = shutil.which("npx.cmd") or shutil.which("npx") or "npx"
         try:
             temp_vite_proc = subprocess.Popen(

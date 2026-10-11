@@ -26,13 +26,13 @@ def get_root_dir() -> str:
 
 def get_file_targets() -> List[Dict[str, str]]:
     root = get_root_dir()
-    windows = os.path.join(root, "Windows")
-    frontend = os.path.join(windows, "frontend")
+    desktop = os.path.join(root, "Desktop")
+    frontend = os.path.join(desktop, "frontend")
     return [
-        {"name": "Windows 主程序", "path": os.path.join(windows, "main.go"), "type": "go"},
-        {"name": "特权服务", "path": os.path.join(windows, "cmd", "service", "main.go"), "type": "go"},
-        {"name": "NSIS 主配置", "path": os.path.join(windows, "build", "windows", "installer", "project.nsi"), "type": "nsi"},
-        {"name": "Wails 配置", "path": os.path.join(windows, "wails.json"), "type": "wails"},
+        {"name": "桌面端主程序", "path": os.path.join(desktop, "main.go"), "type": "go"},
+        {"name": "特权服务", "path": os.path.join(desktop, "cmd", "service", "main.go"), "type": "go"},
+        {"name": "NSIS 主配置", "path": os.path.join(desktop, "build", "windows", "installer", "project.nsi"), "type": "nsi"},
+        {"name": "Wails 配置", "path": os.path.join(desktop, "wails.json"), "type": "wails"},
         {"name": "前端 package.json", "path": os.path.join(frontend, "package.json"), "type": "pkg"},
     ]
 
@@ -161,8 +161,8 @@ def sync_version(
             _log("warn", f"未匹配到版本标识或版本未变: {rel}")
 
     # 同步更新本地 package.json.md5 校验文件 (已在 .gitignore 中，不纳入 Git 跟踪)
-    pkg_path = os.path.join(root, "Windows", "frontend", "package.json")
-    pkg_md5_path = os.path.join(root, "Windows", "frontend", "package.json.md5")
+    pkg_path = os.path.join(root, "Desktop", "frontend", "package.json")
+    pkg_md5_path = os.path.join(root, "Desktop", "frontend", "package.json.md5")
     if os.path.exists(pkg_path):
         with open(pkg_path, "rb") as f:
             h = hashlib.md5(f.read()).hexdigest()
@@ -174,7 +174,7 @@ def sync_version(
     if verify and not dry_run:
         _log("info", "正在运行 Go 编译测试以验证版本语法...")
         cmd = ["go", "test", "./..."]
-        p = subprocess.run(cmd, cwd=os.path.join(root, "Windows"), capture_output=True, text=True)
+        p = subprocess.run(cmd, cwd=os.path.join(root, "Desktop"), capture_output=True, text=True)
         if p.returncode != 0:
             _log("error", f"Go 测试失败:\n{p.stderr or p.stdout}")
             return {"success": False, "message": "Go 验证测试失败", "modified": modified_files}

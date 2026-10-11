@@ -161,7 +161,7 @@ window.App = {
     document.getElementById('logo-gradient').addEventListener('change', () => LogoModule.refreshPreview());
     document.getElementById('btn-logo-export').addEventListener('click', () => LogoModule.exportAssets());
     document.getElementById('btn-logo-open-res').addEventListener('click', () => {
-      window.pywebview.api.open_explorer('Windows/frontend/src/assets/images');
+      window.pywebview.api.open_explorer('Desktop/frontend/src/assets/images');
     });
 
     // Build
@@ -169,7 +169,7 @@ window.App = {
     document.getElementById('btn-build-start').addEventListener('click', () => BuildModule.startBuild());
     document.getElementById('btn-build-cancel').addEventListener('click', () => BuildModule.cancelBuild());
     document.getElementById('btn-build-open-bin').addEventListener('click', () => {
-      window.pywebview.api.open_explorer('Windows/build/bin');
+      window.pywebview.api.open_explorer('Desktop/build/bin');
     });
 
     // Version

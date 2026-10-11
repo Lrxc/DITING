@@ -54,7 +54,7 @@ def get_current_project_version() -> str:
         pass
 
     try:
-        wails_json = os.path.join(ROOT_DIR, "Windows", "wails.json")
+        wails_json = os.path.join(ROOT_DIR, "Desktop", "wails.json")
         if os.path.exists(wails_json):
             import json
             with open(wails_json, "r", encoding="utf-8") as f:
@@ -200,8 +200,8 @@ def build_pipeline(
         version = get_current_project_version()
 
     root = get_root_dir()
-    windows_dir = os.path.join(root, "Windows")
-    bin_dir = os.path.join(windows_dir, "build", "bin")
+    desktop_dir = os.path.join(root, "Desktop")
+    bin_dir = os.path.join(desktop_dir, "build", "bin")
     service_bin = os.path.join(bin_dir, "diting-service.exe")
     gui_bin = os.path.join(bin_dir, "diting-gui.exe")
 
@@ -263,7 +263,7 @@ def build_pipeline(
         )
         cmd_linux = ["go", "build", "-trimpath", "-ldflags", linux_ldflags, "-o", linux_bin, "./cmd/service"]
         env_linux = {"GOOS": "linux", "GOARCH": arch, "CGO_ENABLED": "0"}
-        ok = run_cmd_live(cmd_linux, cwd=windows_dir, on_log=on_log, is_cancelled=is_cancelled, env=env_linux)
+        ok = run_cmd_live(cmd_linux, cwd=desktop_dir, on_log=on_log, is_cancelled=is_cancelled, env=env_linux)
         if not ok:
             return {"success": False, "message": "Linux 特权服务编译失败"}
         if os.path.exists(linux_bin):
@@ -288,7 +288,7 @@ def build_pipeline(
     if need_service:
         on_log("info", ">>> 正在编译 Windows 特权服务 (diting-service.exe)...")
         cmd_svc = ["go", "build", "-ldflags", f"-s -w -H windowsgui -X main.Version={version}", "-o", service_bin, "./cmd/service"]
-        ok = run_cmd_live(cmd_svc, cwd=windows_dir, on_log=on_log, is_cancelled=is_cancelled)
+        ok = run_cmd_live(cmd_svc, cwd=desktop_dir, on_log=on_log, is_cancelled=is_cancelled)
         if not ok:
             return {"success": False, "message": "特权服务编译失败"}
         if os.path.exists(service_bin):
@@ -303,7 +303,7 @@ def build_pipeline(
         wails_cmd = [tools["wails"]["cmd"] or "wails", "build", "-platform", "windows/amd64", "-o", "diting-gui.exe", "-ldflags", ldflags]
         if not is_rel:
             wails_cmd.append("-debug")
-        ok = run_cmd_live(wails_cmd, cwd=windows_dir, on_log=on_log, is_cancelled=is_cancelled)
+        ok = run_cmd_live(wails_cmd, cwd=desktop_dir, on_log=on_log, is_cancelled=is_cancelled)
         if not ok:
             return {"success": False, "message": "GUI 客户端编译失败"}
         if os.path.exists(gui_bin):
@@ -315,7 +315,7 @@ def build_pipeline(
     if target in ("all", "installer"):
         on_log("info", ">>> 正在打包 NSIS 独立安装包...")
         nsis_exe = tools["nsis"]["cmd"] or "makensis"
-        nsi_script = os.path.join(windows_dir, "build", "windows", "installer", "project.nsi")
+        nsi_script = os.path.join(desktop_dir, "build", "windows", "installer", "project.nsi")
         installer_name = f"DITING-{build_type.lower()}-v{version}.exe"
         installer_path = os.path.join(bin_dir, installer_name)
         fallback_installer = os.path.join(bin_dir, "diting-gui-amd64-installer.exe")
@@ -330,7 +330,7 @@ def build_pipeline(
             f"-DOUTPUT_FILENAME={installer_path}",
             nsi_script,
         ]
-        ok = run_cmd_live(cmd_nsis, cwd=windows_dir, on_log=on_log, is_cancelled=is_cancelled)
+        ok = run_cmd_live(cmd_nsis, cwd=desktop_dir, on_log=on_log, is_cancelled=is_cancelled)
         if not ok:
             return {"success": False, "message": "NSIS 安装包打包失败"}
 

@@ -2,7 +2,7 @@
 
 ## 1. 目标与交付形态
 
-本次移植在既有 `Windows/` Go 模块（`github.com/haoze-evolluling/diting/windows`）内实现 Linux 支持，交付形态为：
+本次移植在既有 `Desktop/` Go 模块（`github.com/haoze-evolluling/diting/desktop`）内实现 Linux 支持，交付形态为：
 
 - **核心服务 `diting-service`**：单一二进制，内嵌 Vue 3 Web 控制台，由 systemd 托管。
 - **DNS 监听**：默认 `127.0.0.1:53` 与 `[::1]:53`，可切换局域网模式监听 `0.0.0.0:53` / `[::]:53`。
@@ -18,7 +18,7 @@
 Go 单模块通过 `//go:build` 约束实现跨平台分层，避免导入环：
 
 ```
-Windows/internal/platform/            # 中性层：DTO、接口、纯逻辑（无构建标签）
+Desktop/internal/platform/            # 中性层：DTO、接口、纯逻辑（无构建标签）
 ├── types.go            AdapterInfo / AdapterState / TakeoverState / PortConflict / ...
 ├── interfaces.go       CommandExecutor / AdapterScanner / DNSManager / StateStore / PortChecker / ...
 ├── netutil.go          IsVirtualAdapter / HasValidIPv4Gateway / GetLANAddresses / IsPortBindConflict / ...
@@ -159,7 +159,7 @@ sudo DITING_DATA_DIR=/tmp/diting ./build/bin/diting-service -run -port 5353
 
 ```bash
 # 双端编译
-cd Windows
+cd Desktop
 go build ./...                             # Windows
 GOOS=linux GOARCH=amd64 go build ./...     # Linux 交叉编译
 
@@ -170,7 +170,7 @@ GOOS=linux go test ./...                   # 需在 Linux 环境；仅纯逻辑�
 
 - Linux 单二进制构建：`./build_linux.sh`（支持 `--package` 生成 `.deb` / `.tar.gz`）。
 - 维护工具箱：构建目标选择 `linux`，架构可选 `amd64` / `arm64` / `arm`。
-- systemd 安装：`Windows/build/linux/install.sh` / `uninstall.sh`。
+- systemd 安装：`Desktop/build/linux/install.sh` / `uninstall.sh`。
 
 ### WSL 实测要点（本次验证记录）
 
@@ -200,5 +200,5 @@ WSL2（NAT 模式，WSL 2.9.12 / Ubuntu 24.04）下让 Windows 宿主机浏览�
 - **systemd-resolved stub 占 53**：`DNSStubListener=no` 属侵入性操作，UI 上必须给出明确确认提示；卸载后需手动删除 drop-in 并重启 resolved。
 - **无提权弹窗**：服务必须由 root/systemd 启动，非 root 运行需给出可读错误。
 - **空防火墙后端**：无 `ufw`/`firewalld`/`nftables`/`iptables` 时 `ConfigureFirewall*` 走降级分支返回诊断提示，不阻塞启动。
-- **`//go:embed all:dist`**：`Windows/frontend/dist/` 虽被 gitignore 但必须存在于工作区，清理构建产物时不要删除。
+- **`//go:embed all:dist`**：`Desktop/frontend/dist/` 虽被 gitignore 但必须存在于工作区，清理构建产物时不要删除。
 - **单文件行数**：所有代码文件须遵循不超过 600 行的项目规范（`AGENTS.md`）。

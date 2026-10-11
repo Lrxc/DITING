@@ -161,15 +161,18 @@ $$\dots \longrightarrow \text{RuleFilterMiddleware} \longrightarrow \text{CacheM
 
 ## 5. 源码工程目录规划
 
-Windows 端源码集中位于 `Windows/` 根目录下，模块组织如下：
+桌面与核心服务源码集中位于 `Desktop/` 根目录下，模块组织如下：
 
 ```
-Windows/
+Desktop/
 ├── cmd/
-│   ├── service/                 # 核心特权服务入口 (diting-service.exe)
+│   ├── service/                 # 核心特权服务入口 (diting-service.exe / diting-service)
 │   │   └── main.go
-│   └── gui/                     # Wails GUI 客户端入口 (diting-gui.exe)
-│       └── main.go
+├── app.go                       # 跨平台桌面 GUI 应用逻辑
+├── platform_windows.go          # Windows 平台实现绑定
+├── platform_linux.go            # Linux 平台实现绑定
+├── main.go                      # Windows Wails GUI 启动器
+├── main_linux.go                # Linux CLI 助手启动器
 ├── internal/
 │   ├── core/                    # 纯 Go DNS 核心内核 (无平台依赖)
 │   │   ├── resolver.go          # 上游多协议解析器 (Plain/DoH/DoT)
@@ -292,7 +295,7 @@ Windows/
   6. **IPC 前后端打通与异常边界交互**：
      - 封装 Wails 前端 HTTP/WebSocket 客户端，无缝调用后台 `diting-service` REST 接口。
      - 增加特权服务生命周期感知：当服务未运行、崩溃或端口冲突时，前端呈现友好的 M3 引导 Dialog，指导用户一键启动服务或排查 53 端口冲突。
-- **涉及模块**：`Windows/frontend/*`, `Windows/cmd/gui/*`, `Windows/wails.json`
+- **涉及模块**：`Desktop/frontend/*`, `Desktop/cmd/service/*`, `Desktop/wails.json`
 - **前置依赖**：阶段三特权服务与 IPC 接口就绪（已达成）。
 - **验收标准**：
   - 启动 `diting-gui.exe` 免 UAC 弹窗秒级渲染，全界面符合 M3 视觉质感（圆角、Elevation、Ripple 动效）。
@@ -331,12 +334,12 @@ Windows/
   5. **缓存策略动态配置**：可视化配置 TTL 计算模式、最大/最小 TTL、Stale 容灾保活宽限时长与 Optimistic 开关。
   6. **一键清空 `<md-dialog>` 交互**：标准 M3 模态对话框，支持确认清空全部分片条目与即时状态反馈。
 - **涉及模块**：
-  - `Windows/internal/core/cache*.go`
-  - `Windows/internal/dns/cache_middleware*.go`
-  - `Windows/internal/ipc/*cache*.go`
-  - `Windows/cmd/service/controller_cache*.go`
-  - `Windows/frontend/src/views/CacheView.vue`
-  - `Windows/frontend/src/api/*`
+  - `Desktop/internal/core/cache*.go`
+  - `Desktop/internal/dns/cache_middleware*.go`
+  - `Desktop/internal/ipc/*cache*.go`
+  - `Desktop/cmd/service/controller_cache*.go`
+  - `Desktop/frontend/src/views/CacheView.vue`
+  - `Desktop/frontend/src/api/*`
   - `scripts/test_phase5_cache.py`
 - **验收标准与验证记录**：
   - Go 全量测试套件（含 64 分片并发测试、LRU 淘汰、TTL 评估、SWR 容灾、SingleFlight 并发合并与 IPC 接口）100% 通过（`-count=1` 验证无缓存通过）。
@@ -374,14 +377,14 @@ Windows/
   5. **域名检测工具**：输入待测域名与记录类型，即时分析匹配状态、规则来源与阻断动作。
   6. **实时日志与总览联动**：日志列表高亮呈现红色 `BLOCKED` 标签并提示规则，支持“仅拦截”快捷过滤芯片；总览大盘新增规则防护大盘摘要卡片。
 - **涉及模块**：
-  - `Windows/internal/core/rule_*.go`
-  - `Windows/internal/dns/filter_middleware*.go`
-  - `Windows/internal/ipc/*filter*.go`
-  - `Windows/cmd/service/controller_filter*.go`
-  - `Windows/frontend/src/views/RulesView.vue`
-  - `Windows/frontend/src/views/LogsView.vue`
-  - `Windows/frontend/src/views/DashboardView.vue`
-  - `Windows/frontend/src/api/*`
+  - `Desktop/internal/core/rule_*.go`
+  - `Desktop/internal/dns/filter_middleware*.go`
+  - `Desktop/internal/ipc/*filter*.go`
+  - `Desktop/cmd/service/controller_filter*.go`
+  - `Desktop/frontend/src/views/RulesView.vue`
+  - `Desktop/frontend/src/views/LogsView.vue`
+  - `Desktop/frontend/src/views/DashboardView.vue`
+  - `Desktop/frontend/src/api/*`
   - `scripts/test_phase6_filter.py`
 - **验收标准与验证记录**：
   - Go 全量测试套件（含规则解析、Trie/Bloom、优先级调度、流水线短路与 IPC 接口）100% 通过。
