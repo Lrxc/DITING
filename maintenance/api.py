@@ -119,9 +119,9 @@ class ApiBridge:
     def build_get_default_version(self) -> str:
         return get_current_project_version()
 
-    def build_start(self, target: str, version: str, build_type: str, clean: bool, skip_check: bool):
+    def build_start(self, target: str, version: str, build_type: str, clean: bool, skip_check: bool, arch: str = "amd64"):
         def _task(log_cb, is_cancelled):
-            res = build_pipeline(target=target, version=version, build_type=build_type, clean=clean, skip_check=skip_check, on_log=log_cb, is_cancelled=is_cancelled)
+            res = build_pipeline(target=target, version=version, build_type=build_type, clean=clean, skip_check=skip_check, on_log=log_cb, is_cancelled=is_cancelled, arch=arch)
             return res
 
         self.runner.run_async(_task, self._log, lambda res: self._emit("build_done", res))

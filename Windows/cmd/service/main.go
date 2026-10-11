@@ -99,13 +99,13 @@ func (p *program) run() error {
 		log.Printf("[自愈检查] 检测到上次非正常退出残留的接管状态，已成功执行自愈还原！\n")
 	}
 
-	// 4. 探测 53 端口冲突与 ICS 状态
+	// 4. 探测 53 端口冲突与系统级占用（Windows ICS / Linux systemd-resolved stub）
 	portCheck, err := p.portChecker.CheckPort53(context.Background())
 	if err != nil {
 		log.Printf("[端口探测] 失败: %v\n", err)
 	} else {
 		if portCheck.HasICS {
-			log.Printf("[端口探测警告] 检测到 SharedAccess (ICS) 服务运行中！\n%s\n", portCheck.Diagnostic)
+			log.Printf("[端口探测警告] 检测到系统级 53 端口占用（Windows ICS / Linux systemd-resolved stub）！\n%s\n", portCheck.Diagnostic)
 		} else if !portCheck.Available {
 			log.Printf("[端口探测提醒] 127.0.0.1:53 可能存在冲突: %s\n", portCheck.Diagnostic)
 		}

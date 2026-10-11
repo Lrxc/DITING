@@ -223,10 +223,12 @@ window.BuildModule = {
     const version = document.getElementById('build-version').value.trim();
     const buildType = document.getElementById('build-type').value;
     const clean = document.getElementById('build-clean').checked;
+    const archEl = document.getElementById('build-arch');
+    const arch = archEl ? archEl.value : 'amd64';
 
     App.setBusy(true, `正在执行 ${target} 构建流水线...`);
     document.getElementById('btn-build-cancel').disabled = false;
-    await window.pywebview.api.build_start(target, version, buildType, clean, false);
+    await window.pywebview.api.build_start(target, version, buildType, clean, false, arch);
   },
 
   async cancelBuild() {

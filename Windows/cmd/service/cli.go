@@ -15,7 +15,7 @@ import (
 
 func printVersion() {
 	fmt.Printf("diting-service version %s (built: %s, commit: %s)\n", Version, BuildTime, GitCommit)
-	fmt.Println("DNS engine: miekg/dns | Platform: Windows | IPC: HTTP/WebSocket")
+	fmt.Printf("DNS engine: miekg/dns | Platform: %s | IPC: HTTP/WebSocket\n", platformDisplayName())
 }
 
 func executeEmergencyRestore(customConfigPath string) {
@@ -57,7 +57,7 @@ func executePortDiagnostics() {
 	}
 
 	fmt.Printf("端口 127.0.0.1:53 绑定可用性: %v\n", res.Available)
-	fmt.Printf("是否检测到 ICS (SharedAccess): %v\n", res.HasICS)
+	fmt.Printf("%s: %v\n", privilegedPortCheckHint(), res.HasICS)
 	fmt.Println("--------------------------------------------------")
 	fmt.Printf("诊断报告:\n%s\n", res.Diagnostic)
 	fmt.Println("--------------------------------------------------")
@@ -72,7 +72,7 @@ func executePortDiagnostics() {
 func main() {
 	showVersion := flag.Bool("v", false, "显示服务版本号并退出")
 	flag.BoolVar(showVersion, "version", false, "显示服务版本号并退出")
-	serviceAction := flag.String("service", "", "控制 Windows 服务 (install, uninstall, start, stop, restart)")
+	serviceAction := flag.String("service", "", "控制系统服务 (install, uninstall, start, stop, restart)")
 	runConsole := flag.Bool("run", false, "在前台控制台直接运行 DNS 服务")
 	listenPort := flag.Int("port", 0, "DNS 服务监听端口 (默认从配置读取或 53)")
 	ipcAddr := flag.String("ipc-addr", "", "IPC HTTP/WS 监听地址 (默认 127.0.0.1:15353)")
@@ -97,10 +97,11 @@ func main() {
 		return
 	}
 
+	svcName, svcDisplayName, svcDescription := defaultServiceConfig()
 	svcConfig := &service.Config{
-		Name:        "DitingDNSService",
-		DisplayName: "谛听 DNS 内核特权服务",
-		Description: "谛听 Windows 端 DNS 内核特权服务，负责双栈物理网卡 DNS 接管与多协议上游转发。",
+		Name:        svcName,
+		DisplayName: svcDisplayName,
+		Description: svcDescription,
 		Arguments:   []string{"-run"},
 	}
 	if *configPath != "" {
@@ -126,7 +127,7 @@ func main() {
 
 	s, err := service.New(prg, svcConfig)
 	if err != nil {
-		log.Fatalf("初始化 Windows 服务失败: %v\n", err)
+		log.Fatalf("初始化系统服务失败: %v\n", err)
 	}
 
 	if *serviceAction != "" {

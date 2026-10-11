@@ -1,8 +1,7 @@
 package core
 
 import (
-	"os"
-	"path/filepath"
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 )
 
 const (
@@ -47,14 +46,6 @@ type FilterConfig struct {
 
 // DefaultFilterConfig 生成默认过滤配置
 func DefaultFilterConfig() FilterConfig {
-	dataDir := ""
-	programData := os.Getenv("ProgramData")
-	if programData != "" {
-		dataDir = filepath.Join(programData, "DITING", "filters")
-	} else {
-		dataDir = filepath.Join(".", "data", "filters")
-	}
-
 	return FilterConfig{
 		Enabled:             true,
 		BlockMode:           BlockModeNullIP,
@@ -63,7 +54,7 @@ func DefaultFilterConfig() FilterConfig {
 		CustomRules:         []string{},
 		Lists:               defaultSubscriptionLists(),
 		UpdateIntervalHours: 24,
-		DataDir:             dataDir,
+		DataDir:             platform.DefaultFilterDir(),
 	}
 }
 

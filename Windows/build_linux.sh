@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+# ============================================================================
+#   谛听 (DITING) Linux 端构建脚本
+#
+#   在 Linux 主机本地（或在 WSL 中）构建 diting-service 单二进制，
+#   可选生成 .deb 与 .tar.gz 发行包。
+#
+#   用法:
+#     ./build_linux.sh                    # 构建 amd64 二进制
+#     ./build_linux.sh -a arm64           # 构建 arm64 二进制
+#     ./build_linux.sh -v 1.3.5           # 指定版本号
+#     ./build_linux.sh --package          # 额外生成 .deb 与 .tar.gz
+#     ./build_linux.sh --clean            # 先清理旧产物
+# ============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+ARCH="amd64"
+VERSION=""
+BUILD_TYPE="release"
+CLEAN=0
+PACKAGE=0
+OUTPUT_DIR="$SCRIPT_DIR/build/bin"
+
+usage() {
+    sed -n '2,15p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    exit 0
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -a|--arch)    ARCH="$2"; shift 2 ;;
+        -v|--version) VERSION="$2"; shift 2 ;;
+        -b|--build-type) BUILD_TYPE="$2"; shift 2 ;;
+        -o|--output)  OUTPUT_DIR="$2"; shift 2 ;;
+        --clean)      CLEAN=1; shift ;;
+        --package)    PACKAGE=1; shift ;;
+        -h|--help)    usage ;;
+        *) echo "[错误] 未知参数: $1" >&2; usage ;;
+    esac
+done
+
+case "$ARCH" in
+    amd64|arm64|arm) ;;
+    *) echo "[错误] 不支持的架构: $ARCH (可选: amd64 / arm64 / arm)" >&2; exit 1 ;;
+esac
+
+if ! command -v go >/dev/null 2>&1; then
+    if [ -x /usr/local/go/bin/go ]; then
+        export PATH="$PATH:/usr/local/go/bin"
+    else
+        echo "[错误] 未找到 Go 工具链，请先安装 Go 1.21+。" >&2
+        exit 1
+    fi
+fi
+
+if [ -z "$VERSION" ]; then
+    VERSION="$(grep -m1 -oE 'Version[[:space:]]*=[[:space:]]*"[^"]+"' cmd/service/main.go 2>/dev/null | grep -oE '"[^"]+"' | tr -d '"' || true)"
+    VERSION="${VERSION:-0.0.0}"
+fi
+
+GIT_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+BUILD_TIME="$(date -Iseconds)"
+
+BIN_NAME="diting-service"
+BIN_PATH="$OUTPUT_DIR/$BIN_NAME"
+
+if [ "$CLEAN" -eq 1 ]; then
+    echo ">>> 清理旧构建产物: $OUTPUT_DIR"
+    rm -rf "$OUTPUT_DIR"
+fi
+mkdir -p "$OUTPUT_DIR"
+
+if [ "$BUILD_TYPE" = "release" ]; then
+    LDFLAGS="-s -w -X main.Version=$VERSION -X main.GitCommit=$GIT_COMMIT -X main.BuildTime=$BUILD_TIME"
+else
+    LDFLAGS="-X main.Version=$VERSION -X main.GitCommit=$GIT_COMMIT -X main.BuildTime=$BUILD_TIME"
+fi
+
+echo "============================================================"
+echo " 谛听 (DITING) Linux 构建"
+echo " 目标架构: linux/$ARCH   版本: $VERSION   类型: $BUILD_TYPE"
+echo "============================================================"
+
+echo ">>> 正在编译 $BIN_NAME ..."
+CGO_ENABLED=0 GOOS=linux GOARCH="$ARCH" go build -trimpath -ldflags "$LDFLAGS" -o "$BIN_PATH" ./cmd/service
+
+if [ ! -f "$BIN_PATH" ]; then
+    echo "[错误] 编译失败，未生成 $BIN_PATH" >&2
+    exit 1
+fi
+chmod +x "$BIN_PATH"
+echo "[OK] 编译成功: $BIN_PATH ($(du -h "$BIN_PATH" | cut -f1))"
+
+# ---------------------------------------------------------------------------
+# 发行包
+# ---------------------------------------------------------------------------
+if [ "$PACKAGE" -eq 1 ]; then
+    PKG_NAME="diting_${VERSION}_linux_${ARCH}"
+    PKG_DIR="$OUTPUT_DIR/$PKG_NAME"
+
+    echo ">>> 正在组装发行包: $PKG_NAME"
+    rm -rf "$PKG_DIR"
+    mkdir -p "$PKG_DIR/usr/local/bin"
+    mkdir -p "$PKG_DIR/usr/share/diting"
+    mkdir -p "$PKG_DIR/lib/systemd/system"
+    mkdir -p "$PKG_DIR/etc/diting"
+
+    cp "$BIN_PATH" "$PKG_DIR/usr/local/bin/$BIN_NAME"
+    cp "build/linux/diting-dnsservice.service" "$PKG_DIR/lib/systemd/system/"
+    cp "build/linux/install.sh" "$PKG_DIR/usr/share/diting/install.sh"
+    cp "build/linux/uninstall.sh" "$PKG_DIR/usr/share/diting/uninstall.sh"
+    chmod 0755 "$PKG_DIR/usr/share/diting/install.sh" "$PKG_DIR/usr/share/diting/uninstall.sh"
+
+    if command -v dpkg-deb >/dev/null 2>&1; then
+        mkdir -p "$PKG_DIR/DEBIAN"
+        cat > "$PKG_DIR/DEBIAN/control" <<EOF
+Package: diting
+Version: $VERSION
+Section: net
+Priority: optional
+Architecture: $ARCH
+Maintainer: DITING <https://github.com/haoze-evolluling/diting>
+Description: 谛听 (DITING) DNS 内核特权服务
+ 谛听 DNS 内核的 Linux 端特权服务，负责系统 DNS 接管、
+ 多协议上游转发、本地缓存与规则拦截，并内嵌 Web 控制台。
+EOF
+
+        cat > "$PKG_DIR/DEBIAN/postinst" <<'EOF'
+#!/bin/sh
+set -e
+systemctl daemon-reload || true
+systemctl enable diting-dnsservice.service || true
+echo "谛听 DNS 服务已安装。请执行 'systemctl start diting-dnsservice' 启动，"
+echo "或运行 'diting-service -service install' 完成注册。"
+exit 0
+EOF
+
+        cat > "$PKG_DIR/DEBIAN/prerm" <<'EOF'
+#!/bin/sh
+set -e
+systemctl stop diting-dnsservice.service || true
+systemctl disable diting-dnsservice.service || true
+exit 0
+EOF
+
+        chmod 0755 "$PKG_DIR/DEBIAN/postinst" "$PKG_DIR/DEBIAN/prerm"
+    fi
+
+    # .tar.gz（始终生成）
+    TARBALL="$OUTPUT_DIR/${PKG_NAME}.tar.gz"
+    tar -C "$OUTPUT_DIR" -czf "$TARBALL" "$PKG_NAME"
+    echo "[OK] 已生成压缩包: $TARBALL"
+
+    # .deb（仅在具备 dpkg-deb 时生成）
+    if [ -d "$PKG_DIR/DEBIAN" ] && command -v dpkg-deb >/dev/null 2>&1; then
+        DEB="$OUTPUT_DIR/${PKG_NAME}.deb"
+        dpkg-deb --build --root-owner-group "$PKG_DIR" "$DEB" >/dev/null
+        echo "[OK] 已生成 Debian 安装包: $DEB"
+    else
+        echo "[提示] 未找到 dpkg-deb，跳过 .deb 生成（仅保留 tar.gz）。"
+    fi
+
+    rm -rf "$PKG_DIR"
+fi
+
+echo "============================================================"
+echo " 构建完成。安装方式:"
+echo "   sudo install -m 0755 $BIN_PATH /usr/local/bin/$BIN_NAME"
+echo "   sudo $BIN_NAME -service install && sudo $BIN_NAME -service start"
+echo "   管理地址: http://127.0.0.1:15353"
+echo "============================================================"

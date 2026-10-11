@@ -5,6 +5,7 @@
 本项目已实现跨平台支持：
 - 📱 **Android 移动端**：支持纯 Kotlin 极速模式（窄路由、极低功耗）、Go 用户态全隧道模式（gVisor netstack、应用级分流、HTTPS 检查）及局域网独立 DNS 服务模式。
 - 💻 **Windows 桌面端**：基于「特权系统服务 + Wails 桌面 GUI + 局域网 Web 控制台」双二进制协作架构，提供物理网卡双栈 DNS 安全接管、崩溃自愈、53 端口冲突检测、局域网 DNS 服务与浏览器远程管理。
+- 🐧 **Linux 服务端**：单二进制 `diting-service` + 内嵌浏览器 Web 控制台，基于 systemd 托管，自动探测 systemd-resolved / NetworkManager / resolv.conf 多后端接管系统 DNS，支持崩溃自愈与离线还原脚本。
 - 🧰 **开发者维护工具箱**：基于 Python + PyWebView 提供桌面可视化维护套件，涵盖 DNS 批量压测、代码规范扫描、品牌资产渲染、界面自动截图、跨端统一流水线构建与全端版本同步。
 
 ---
@@ -43,13 +44,21 @@
 - **局域网 Web 远程管理控制台**：服务内置 Web 仪表盘与 REST 接口（默认监听 15353 端口），集成管理员账号密码鉴权、安全 Session/Token 与防火墙 Web 端口放行，支持局域网其他设备通过浏览器远程管理。
 - **系统集成**：支持一键注册与管理 Windows 系统服务、开机静默启动、界面截图捕获。
 
+### 🐧 Linux 服务端专属特性
+- **单二进制交付**：`diting-service` 内嵌 Vue 3 Web 控制台，无需额外前端运行时；以 systemd 服务托管，开机自启、异常自动重启。
+- **多后端 DNS 接管**：自动探测并适配 `systemd-resolved`（`resolvectl`）→ `NetworkManager`（`nmcli`）→ `/etc/resolv.conf` 三种后端，接管前原子快照、退出自动还原、崩溃自愈，并生成可独立执行的离线 `restore-dns.sh`。
+- **systemd-resolved stub 冲突处置**：精准识别 `127.0.0.53:53` / `127.0.0.54:53` 的 stub 监听占用，支持一键写入 `DNSStubListener=no` 的 drop-in 配置并重启服务释放端口。
+- **防火墙自动适配**：探测 `firewalld` / `ufw` / `nftables` / `iptables` 并尽力维护 53 与 Web 端口放行规则；无防火墙管理器时优雅降级为诊断提示，不阻塞启动。
+- **FHS 目录规范**：配置位于 `/etc/diting`、运行数据位于 `/var/lib/diting`；支持 `DITING_DATA_DIR` 环境变量整体覆盖，便于 WSL 与非 root 环境调试。
+- **Web 远程管理控制台**：与服务同源的内嵌 Web 仪表盘（默认 15353 端口），支持管理员鉴权、缓存/规则/上游/局域网等全功能远程配置。
+
 ### 🧰 开发者桌面维护工具箱
 - **桌面可视化交互**：基于 Python + PyWebView + 原生 WebView2 构建，双击 `maintenance/run_maintenance.bat` 即可启动图形化维护界面。
 - **六大核心工坊能力**：
   - **🌐 DNS 调试诊断**：单次解析探测与多轮并发批量压测，统计平均延迟、耗时抖动与丢包率。
   - **📊 代码规模扫描**：递归扫描源码文件，严格检查单文件行数（遵循不超过 600 行的项目规范）。
   - **🎨 品牌 Logo 工坊**：一键预览与导出高清松石绿品牌 Logo（含 SVG 矢量图、各尺寸 PNG 与 Windows ICO 格式）。
-  - **🔨 Windows 构建打包**：支持 Windows 特权服务、Wails 桌面端、NSIS 完整安装包的一键流水线构建与依赖工具链检测。
+  - **🔨 跨端构建打包**：支持 Windows 特权服务、Wails 桌面端、NSIS 完整安装包，以及 Linux 服务单二进制（`amd64` / `arm64` / `arm` 交叉编译）的一键流水线构建与依赖工具链检测。
   - **🔖 统一版本管理**：跨 Go、NSIS、Wails、前端 package.json 等统一检测、同步版本号并生成校验信息。
   - **📸 界面自动截图**：基于无头 Edge 浏览器驱动前端开发服务器，自动化导出深浅双主题、多标签页与多分辨率的高清 UI 截图。
 
@@ -66,6 +75,9 @@
 | **Windows** | 🏠 **局域网 DNS 服务** (LAN DNS) | Windows 10+ (64-bit) | **Go 双栈监听**<br>(监听 `0.0.0.0:53` / `[::]:53`) | **局域网 DNS 枢纽**。供局域网内其他设备接入解析，支持一键配置 Windows 防火墙 53 端口 UDP/TCP 放行规则。 |
 | **Windows** | 🖥️ **桌面图形控制台** (GUI) | Windows 10+ (64-bit)<br>WebView2 运行时 | **Wails v2 + Vue 3**<br>TypeScript + Material Web | **桌面交互与监控**。免管理员权限运行，提供实时查询流日志、服务商管理、缓存与规则配置、系统服务安装与启停、应急脱困与开机自启。 |
 | **Windows** | 🌐 **局域网 Web 控制台** | 任意主流浏览器 | **嵌入式 Web 仪表盘**<br>(带管理员账号认证) | **跨设备远程管理**。局域网内任意手机、平板或 PC 无需安装客户端，直接通过浏览器访问 15353 端口管理 Windows 核心服务。 |
+| **Linux** | ⚙️ **核心服务** (Service) | 现代 systemd 发行版<br>`amd64` / `arm64` | **Go 原生服务**<br>(systemd 单元托管) | **底层接管与 DNS 核心**。自动探测 systemd-resolved / NetworkManager / resolv.conf 后端接管系统 DNS、本地 53 端口监听、LRU 缓存与规则匹配、崩溃自愈与离线还原脚本。 |
+| **Linux** | 🏠 **局域网 DNS 服务** (LAN DNS) | 现代 systemd 发行版 | **Go 双栈监听**<br>(监听 `0.0.0.0:53` / `[::]:53`) | **局域网 DNS 枢纽**。供局域网内其他设备接入解析，自动适配 firewalld / ufw / nftables / iptables 放行 53 端口。 |
+| **Linux** | 🌐 **内嵌 Web 控制台** | 任意主流浏览器 | **嵌入式 Web 仪表盘**<br>(带管理员账号认证) | **跨设备远程管理**。无需桌面环境与额外客户端，通过浏览器访问 15353 端口即可完成全部配置与管理。 |
 
 ---
 
@@ -77,15 +89,20 @@ DITING/
 │   ├── app/                    # Android 应用层源码（UI、Room 数据库、极速模式模块）
 │   ├── tunnel/                 # Go 用户态网络栈与 DNS 隧道模块（编译为 tunnel.aar）
 │   └── build_apk.bat           # Android 交互式构建、版本归档与 ADB 安装脚本
-├── Windows/                    # Windows 桌面端工程
+├── Windows/                    # Windows / Linux 桌面与服务端工程
 │   ├── cmd/
 │   │   ├── gui/                # Wails GUI 调试入口
-│   │   └── service/            # Windows 特权核心服务（CLI 与系统服务）源码
-│   ├── internal/               # Windows 端核心实现（DNS 内核、平台适配、IPC、鉴权）
+│   │   └── service/            # 特权核心服务（Windows 服务 / Linux systemd）源码
+│   ├── internal/               # 核心实现（DNS 内核、平台适配、IPC、鉴权）
+│   │   ├── platform/           # 跨平台抽象层（中性接口与类型）
+│   │   │   ├── windows/        # Windows 专有实现（Win32 / SCM / netsh）
+│   │   │   └── linux/          # Linux 专有实现（resolvectl / nmcli / /proc / systemd）
 │   ├── frontend/               # Wails 前端界面源码（Vue 3 + TypeScript + Material Web）
-│   ├── build/                  # Windows 构建输出、图标与 NSIS 打包脚本
-│   ├── main.go                 # Wails 桌面客户端应用主入口
+│   ├── build/                  # 构建输出、图标、NSIS 与 Linux systemd 打包脚本
+│   ├── main.go                 # Wails 桌面客户端应用主入口（Windows）
+│   ├── main_linux.go           # Linux 端入口提示（服务端以 diting-service 交付）
 │   ├── build.bat               # Windows 端多目标流水线构建脚本
+│   ├── build_linux.sh          # Linux 端构建脚本（支持 .deb / .tar.gz 发行包）
 │   ├── set_version.bat         # Windows 端版本同步与检测脚本
 │   └── wails.json              # Wails 项目配置文件
 ├── maintenance/                # 开发者桌面交互式工具箱 (Python + PyWebView)
@@ -182,6 +199,95 @@ makensis -DPRODUCT_VERSION=1.3.1 -DOUTPUT_FILENAME=build/bin/DITING-release-v1.3
 
 ---
 
+### 🐧 Linux 服务端
+
+#### 构建环境要求
+- **Go**：Go 1.23 或更高版本（Linux 主机，或在 WSL 中开发）。
+- **交叉编译**：在 Windows 宿主上亦可直接交叉编译 Linux 二进制（`CGO_ENABLED=0`）。
+- **打包**（可选）：`dpkg-deb`（生成 `.deb`）、`tar`（生成 `.tar.gz`）。
+
+#### 构建方式
+
+##### 1. 使用构建脚本（推荐）
+在 Linux（或 WSL）中运行 `Windows/build_linux.sh`：
+
+```bash
+cd Windows
+
+# 构建 amd64 单二进制
+./build_linux.sh
+
+# 构建 arm64 单二进制并生成 .deb / .tar.gz 发行包
+./build_linux.sh -a arm64 --package
+
+# 指定版本号与输出目录
+./build_linux.sh -v 1.3.5 -o build/bin
+```
+
+亦可在 Windows 宿主上通过维护工具箱或 `build.bat` 交叉编译：
+
+```cmd
+cd Windows
+
+# 通过构建引擎交叉编译 Linux amd64 二进制
+build.bat -t linux -b release
+
+# 指定架构（arm64 / arm）
+python ..\maintenance\core\build_manager.py -t linux -a arm64
+```
+
+##### 2. 手动构建
+```bash
+cd Windows
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+  -trimpath -ldflags "-s -w -X main.Version=1.3.5" \
+  -o build/bin/diting-service ./cmd/service
+```
+
+构建产物：`Windows/build/bin/diting-service`。
+
+#### 安装为 systemd 服务
+
+```bash
+cd Windows/build/linux
+
+# 一键安装（自动写入二进制、systemd 单元、创建目录并启动）
+sudo ./install.sh --bin ../../build/bin/diting-service
+
+# 或手动安装
+sudo install -m 0755 ../../build/bin/diting-service /usr/local/bin/diting-service
+sudo diting-service -service install && sudo diting-service -service start
+
+# 查看运行状态与日志
+systemctl status diting-dnsservice
+journalctl -u diting-dnsservice -f
+```
+
+管理地址：`http://127.0.0.1:15353`。
+
+#### 卸载
+
+```bash
+cd Windows/build/linux
+sudo ./uninstall.sh           # 保留 /etc/diting 与 /var/lib/diting
+sudo ./uninstall.sh --purge   # 一并清理配置与数据
+```
+
+#### WSL 开发与调试
+WSL2 环境下 53 端口默认被 `systemd-resolved` 的 stub 监听器（`127.0.0.53` / `127.0.0.54`）占用，且 `/etc/resolv.conf` 由 WSL 自动生成。建议使用 `DITING_DATA_DIR` 将数据重定向到临时目录，并以非特权端口先行验证：
+
+```bash
+# 以临时数据目录、5353 端口运行，避免影响 WSL 网络
+sudo DITING_DATA_DIR=/tmp/diting ./build/bin/diting-service -run -port 5353
+
+# 独立诊断 53 端口占用
+sudo ./build/bin/diting-service -check-ports
+```
+
+更多平台差异与调试细节见 [`docs/development/linux-port-notes.md`](docs/development/linux-port-notes.md)。
+
+---
+
 ### 🧰 开发者桌面工具箱 (Maintenance Toolbox)
 
 工具箱提供统一的可视化维护界面，免去记忆各类命令行参数的负担。
@@ -213,6 +319,7 @@ python maintenance/app.py
 
 - **Android 客户端**：Kotlin / Jetpack Compose / Material 3 / Coroutines & Flow / Room / DataStore / VpnService / OkHttp / WorkManager
 - **Windows 桌面端**：Go 1.23+ / Wails v2 / Vue 3 / TypeScript / Vite / @material/web (Material 3) / Win32 API / Windows Service
+- **Linux 服务端**：Go 1.23+ / systemd / resolvectl / nmcli / netlink (/proc, /sys) / Vue 3 内嵌 Web 控制台
 - **核心 DNS 引擎**：Go / gVisor netstack (Android) / miekg/dns / quic-go / Singleflight
 - **维护工具箱**：Python 3 / PyWebView (WebView2) / HTML5 / CSS3 / JavaScript
 
@@ -223,6 +330,7 @@ python maintenance/app.py
 项目技术规范与深度设计文档归档于 `docs/development/` 目录：
 
 - [Windows 端基础 DNS 内核架构设计与分阶段开发规划](docs/development/windows-dns-kernel-roadmap.md) — Windows 端双进程架构、网卡接管与恢复状态机、IPC 与 Pipeline 详细设计。
+- [Linux 端移植说明与平台差异对照](docs/development/linux-port-notes.md) — Windows ↔ Linux 架构差异、DNS 接管后端与还原机制、`DITING_DATA_DIR` 调试用法与功能差异清单。
 - [Go AAR 构建记录](docs/development/aar-build-notes.md) — Android 端 Go 隧道 AAR（`tunnel.aar`）的编译环境、构建参数与跨平台交叉编译细节。
 - [云控贡献者名单维护说明](docs/development/recognition-members.md) — 赞助者与共建者名单的云控机制、配置 JSON 规范与头像资源维护指南。
 - [AdGuard 规则修饰符语法参考（历史归档）](docs/development/Archive/adguard-rule-modifier-syntax-reference.md) — AdGuard 规则语法与 `$modifier` 规范整理，包含规则引擎适配说明。

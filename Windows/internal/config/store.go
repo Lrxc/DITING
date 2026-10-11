@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/haoze-evolluling/diting/windows/internal/core"
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 )
 
 var (
@@ -19,13 +20,12 @@ var (
 // DefaultConfigFileName 默认配置文件名称
 const DefaultConfigFileName = "config.json"
 
-// GetDefaultConfigPath 获取默认配置文件路径 (%ProgramData%\DITING\config.json)
+// GetDefaultConfigPath 获取默认配置文件路径。
+//
+// Windows: %ProgramData%\DITING\config.json；Linux: /etc/diting/config.json
+// （非 root 时退避至 ~/.diting/config.json）。设置 DITING_DATA_DIR 时收敛至该目录。
 func GetDefaultConfigPath() string {
-	programData := os.Getenv("ProgramData")
-	if programData == "" {
-		programData = `C:\ProgramData`
-	}
-	return filepath.Join(programData, "DITING", DefaultConfigFileName)
+	return platform.DefaultConfigPath()
 }
 
 // LoadConfig 从指定路径加载配置，若路径为空则使用默认路径，若文件不存在则返回默认配置

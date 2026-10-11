@@ -43,3 +43,20 @@ func firewallCheckWeb(ctx context.Context) (bool, error) {
 func firewallConfigureWeb(ctx context.Context, port int, enable bool) error {
 	return windows.ConfigureFirewallPortWeb(ctx, platform.NewDefaultExecutor(), port, enable)
 }
+
+// platformDisplayName 返回当前平台的可读名称，用于版本与诊断输出。
+func platformDisplayName() string {
+	return "Windows"
+}
+
+// defaultServiceConfig 返回当前平台的默认服务配置（服务名、显示名与描述）。
+func defaultServiceConfig() (name, displayName, description string) {
+	return "DitingDNSService",
+		"谛听 DNS 内核特权服务",
+		"谛听 Windows 端 DNS 内核特权服务，负责双栈物理网卡 DNS 接管与多协议上游转发。"
+}
+
+// privilegedPortCheckHint 返回端口诊断输出中针对系统级占用的提示前缀。
+func privilegedPortCheckHint() string {
+	return "是否检测到 ICS (SharedAccess)"
+}

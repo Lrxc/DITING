@@ -69,17 +69,34 @@ def get_current_project_version() -> str:
 
 def stop_running_processes(on_log: Optional[Callable[[str, str], None]] = None):
     """构建前安全终止旧进程，防止文件占用锁导致编译或打包失败"""
-    targets = ["diting-gui.exe", "diting-service.exe"]
-    for exe in targets:
+    if sys.platform == "win32":
+        for exe in ("diting-gui.exe", "diting-service.exe"):
+            try:
+                res = subprocess.run(
+                    ["taskkill", "/F", "/T", "/IM", exe],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                )
+                if res.returncode == 0 and on_log:
+                    on_log("info", f"已安全终止正在运行的旧进程: {exe}")
+            except Exception:
+                pass
+        return
+
+    # 类 Unix（Linux/macOS）：以 pkill 结束同名进程，未运行时 pkill 返回非零属正常
+    for name in ("diting-gui", "diting-service"):
+        if not shutil.which("pkill"):
+            break
         try:
             res = subprocess.run(
-                ["taskkill", "/F", "/T", "/IM", exe],
+                ["pkill", "-x", name],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 check=False,
             )
             if res.returncode == 0 and on_log:
-                on_log("info", f"已安全终止正在运行的旧进程: {exe}")
+                on_log("info", f"已安全终止正在运行的旧进程: {name}")
         except Exception:
             pass
 
@@ -173,6 +190,7 @@ def build_pipeline(
     skip_check: bool = False,
     on_log: Optional[Callable[[str, str], None]] = None,
     is_cancelled: Optional[Callable[[], bool]] = None,
+    arch: str = "amd64",
 ) -> dict:
     if not on_log:
         on_log = lambda lvl, msg: print(f"[{lvl.upper()}] {msg}")
@@ -196,7 +214,11 @@ def build_pipeline(
 
     # 2. 前置依赖检查
     tools = check_toolchain()
-    if not skip_check:
+    if target == "linux":
+        if not tools["go"]["found"]:
+            on_log("error", "未找到 Go 环境，无法继续编译。")
+            return {"success": False, "message": "缺少 Go 环境"}
+    elif not skip_check:
         if not tools["go"]["found"]:
             on_log("error", "未找到 Go 环境，无法继续编译。")
             return {"success": False, "message": "缺少 Go 环境"}
@@ -227,6 +249,39 @@ def build_pipeline(
     ldflags = f"-s -w -X 'main.Version={version}' -X 'main.GitCommit={git_commit}' -X 'main.BuildTime={build_time}'" if is_rel else f"-X 'main.Version={version}' -X 'main.GitCommit={git_commit}' -X 'main.BuildTime={build_time}'"
 
     built_artifacts = []
+
+    # 3.1 Linux 目标：交叉编译单一二进制（Windows 宿主亦可执行）
+    if target == "linux":
+        if arch not in ("amd64", "arm64", "arm"):
+            return {"success": False, "message": f"不支持的 Linux 架构: {arch}"}
+        linux_bin = os.path.join(bin_dir, "diting-service")
+        on_log("info", f">>> 正在交叉编译 Linux 特权服务 (linux/{arch})...")
+        linux_ldflags = (
+            f"-s -w -X main.Version={version} -X main.GitCommit={git_commit} -X main.BuildTime={build_time}"
+            if is_rel
+            else f"-X main.Version={version} -X main.GitCommit={git_commit} -X main.BuildTime={build_time}"
+        )
+        cmd_linux = ["go", "build", "-trimpath", "-ldflags", linux_ldflags, "-o", linux_bin, "./cmd/service"]
+        env_linux = {"GOOS": "linux", "GOARCH": arch, "CGO_ENABLED": "0"}
+        ok = run_cmd_live(cmd_linux, cwd=windows_dir, on_log=on_log, is_cancelled=is_cancelled, env=env_linux)
+        if not ok:
+            return {"success": False, "message": "Linux 特权服务编译失败"}
+        if os.path.exists(linux_bin):
+            sz = os.path.getsize(linux_bin)
+            on_log("info", f"[OK] Linux 特权服务编译成功: {linux_bin} ({format_size(sz)})")
+            built_artifacts.append(linux_bin)
+        else:
+            return {"success": False, "message": "未生成预期的 Linux 二进制产物"}
+
+        on_log("info", f"=== 构建流水线执行完毕，生成 {len(built_artifacts)} 个产物 ===")
+        return {
+            "success": True,
+            "bin_dir": bin_dir,
+            "artifacts": built_artifacts,
+            "target": target,
+            "version": version,
+            "arch": arch,
+        }
 
     # 4. 编译特权服务
     need_service = target in ("all", "service") or (target == "installer" and not os.path.exists(service_bin))
@@ -305,15 +360,16 @@ def build_pipeline(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="谛听 Windows 构建工具")
-    parser.add_argument("-t", "--target", choices=["all", "service", "gui", "installer"], default="all")
+    parser = argparse.ArgumentParser(description="谛听构建工具")
+    parser.add_argument("-t", "--target", choices=["all", "service", "gui", "installer", "linux"], default="all")
     parser.add_argument("-v", "--version", default=None, help="目标版本号 (默认自动读取)")
     parser.add_argument("-b", "--build-type", choices=["release", "debug"], default="release")
+    parser.add_argument("-a", "--arch", choices=["amd64", "arm64", "arm"], default="amd64", help="Linux 目标架构")
     parser.add_argument("--clean", action="store_true")
     parser.add_argument("--skip-check", action="store_true")
     args = parser.parse_args()
 
-    res = build_pipeline(target=args.target, version=args.version, build_type=args.build_type, clean=args.clean, skip_check=args.skip_check)
+    res = build_pipeline(target=args.target, version=args.version, build_type=args.build_type, clean=args.clean, skip_check=args.skip_check, arch=args.arch)
     sys.exit(0 if res["success"] else 1)
 
 

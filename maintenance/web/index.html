@@ -209,11 +209,11 @@
         </div>
       </section>
 
-      <!-- 4. Windows 构建打包 -->
+      <!-- 4. Windows / Linux 构建打包 -->
       <section class="tab-pane" id="pane-build">
         <header class="pane-header">
-          <h2>Windows 构建与打包流水线</h2>
-          <p class="desc">一键编译特权服务 diting-service.exe、Wails GUI 客户端并打包独立 NSIS 安装包。</p>
+          <h2>Windows / Linux 构建与打包流水线</h2>
+          <p class="desc">一键编译特权服务 diting-service、Wails GUI 客户端并打包独立 NSIS 安装包；亦可交叉编译 Linux 端单二进制。</p>
         </header>
 
         <div class="card toolchain-card">
@@ -233,6 +233,7 @@
                 <option value="service">service (仅特权服务)</option>
                 <option value="gui">gui (仅GUI客户端)</option>
                 <option value="installer">installer (仅NSIS安装包)</option>
+                <option value="linux">linux (仅Linux服务)</option>
               </select>
             </div>
             <div class="form-group flex-1">
@@ -244,6 +245,14 @@
               <select id="build-type">
                 <option value="release" selected>Release (精简优化)</option>
                 <option value="debug">Debug (带调试符号)</option>
+              </select>
+            </div>
+            <div class="form-group flex-1">
+              <label>Linux 目标架构</label>
+              <select id="build-arch">
+                <option value="amd64" selected>amd64 (x86_64)</option>
+                <option value="arm64">arm64 (aarch64)</option>
+                <option value="arm">arm (32-bit)</option>
               </select>
             </div>
             <div class="form-group flex-1 flex-center">
