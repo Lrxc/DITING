@@ -178,11 +178,25 @@ GOOS=linux go test ./...                   # 需在 Linux 环境；仅纯逻辑�
 - 验证顺序：启动服务 → `curl /api/v1/health`、`/api/v1/status` → UDP 查询命中缓存 → `POST /api/v1/takeover/enable` 写入 `resolvectl dns eth0 127.0.0.1 ::1` → `kill -9` 模拟崩溃 → 重启触发 `CheckAndSelfHeal` 自动还原 → `POST /api/v1/takeover/disable` 正常还原。
 - 回退手段：若 WSL 网络异常，`wsl --shutdown` 后重进会由 WSL 重新生成 `/etc/resolv.conf`。
 
+### WSL 宿主机浏览器访问 Web 控制台（本次验证记录）
+
+WSL2（NAT 模式，WSL 2.9.12 / Ubuntu 24.04）下让 Windows 宿主机浏览器访问 Linux 端 WebUI 的实测结论：
+
+- **访问地址**：`http://localhost:15353`（`http://127.0.0.1:15353` 等价）。WSL2 默认将 Windows 侧 `127.0.0.1` 的入站连接转发到 Linux 内同为 IPv4 的监听端口，因此**无需** `.wslconfig` mirrored 模式、无需端口代理（`netsh portproxy`）、无需修改 WSL 防火墙。
+- **必须绑定 IPv4**：Go 的 `net.Listen("tcp", "0.0.0.0:PORT")` 在 Linux 上会收敛为 `[::]:PORT` 的**纯 IPv6 套接字**（实测 `/proc/net/tcp6` 有监听、`/proc/net/tcp` 无），而 WSL 的 localhost 转发仅对 IPv4 监听生效，此时只有用 `http://<WSL-IP>:PORT` 才能访问。因此 WSL 调试时应让 Web 控制台监听 `127.0.0.1`：
+  - 将 `web.enabled` 置为 `false`（`ConfigureWeb` 在关闭时会把 `ipc.listenAddress` 收敛为 `127.0.0.1:<port>`），或
+  - 直接令 `ipc.listenAddress = "127.0.0.1:15353"` 且不开启局域网 Web。
+  - 若确需同时保留 IPv4 与 IPv6 通配监听，应显式分别 `net.Listen("tcp4", "0.0.0.0:P")` 与 `net.Listen("tcp6", "[::]:P")`，而非依赖 `tcp` + `0.0.0.0` 的隐式收敛。
+- **DNS 不受影响**：服务以 `127.0.0.1:53` / `[::1]:53` 监听本地回环，与 `systemd-resolved` 的 `127.0.0.53` / `127.0.0.54` stub 及 WSL 的 `10.255.255.254` 不冲突；保持 `takeover.autoTakeoverOnStart=false` 时 `/etc/resolv.conf`（`nameserver 10.255.255.254`）与 `resolvectl` 状态全程不变。
+- **验证清单**：`GET /`（内嵌 SPA 首页）、`GET /api/v1/health`、`GET /api/v1/auth/status`（免鉴权）；`POST /api/v1/auth/setup` 初始化管理员 → `POST /api/v1/auth/login` 取得会话 Token → 携带 `Authorization: Bearer <token>` 访问 `/api/v1/status`、`/api/v1/web/status`、`/api/v1/cache/stats`、`/api/v1/dns/lan`、`/api/v1/portcheck`、`POST /api/v1/upstream/test`、`POST /api/v1/filter/check`；WebSocket `ws://localhost:15353/api/v1/events` 每 3 秒收到 `metrics` 帧。
+- **自愈与自启**：`kill -9` 主进程后 `Restart=always` 于 `RestartSec=10` 内拉起（`NRestarts` +1），宿主浏览器随即恢复；`wsl --shutdown` 重启后服务随 systemd 自动拉起，访问地址不变。
+
 ---
 
 ## 9. 风险与注意事项
 
 - **WSL 网络易断**：WSL2 的 `/etc/resolv.conf` 由 WSL 生成（`/mnt/wsl/resolv.conf`），接管测试务必在临时 `DITING_DATA_DIR` 下进行并备好还原脚本。
+- **WSL 通配绑定收敛**：Linux 上 `0.0.0.0` 的 `tcp` 监听会收敛为纯 IPv6，导致 Windows 侧 `localhost` 转发失效；WSL 调试请按上文让控制台监听 `127.0.0.1`。
 - **systemd-resolved stub 占 53**：`DNSStubListener=no` 属侵入性操作，UI 上必须给出明确确认提示；卸载后需手动删除 drop-in 并重启 resolved。
 - **无提权弹窗**：服务必须由 root/systemd 启动，非 root 运行需给出可读错误。
 - **空防火墙后端**：无 `ufw`/`firewalld`/`nftables`/`iptables` 时 `ConfigureFirewall*` 走降级分支返回诊断提示，不阻塞启动。
