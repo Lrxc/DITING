@@ -44,8 +44,8 @@ def extract_paths_from_android(xml_path: Optional[str] = None) -> List[Tuple[Opt
 
 
 def generate_squircle_svg(
-    bg_color: str = "#d4e3ff",
-    totem_color: str = "#404a58",
+    bg_color: str = "#9e2b25",
+    totem_color: str = "#ffffff",
     sphere_bg: Optional[str] = None,
     subtle_gradient: bool = False,
     xml_path: Optional[str] = None,
@@ -114,8 +114,8 @@ def qimage_to_pil(qimg: "QImage") -> "Image.Image":
 
 
 def export_logo_assets(
-    bg_color: str = "#d4e3ff",
-    totem_color: str = "#404a58",
+    bg_color: str = "#9e2b25",
+    totem_color: str = "#ffffff",
     subtle_gradient: bool = False,
     output_dir: Optional[str] = None,
     on_log: Optional[Callable[[str, str], None]] = None,
@@ -192,7 +192,20 @@ def export_logo_assets(
     _log("info", f"导出 Windows 多分辨率 ICO: {ico_out_path}")
     exported_files.append(ico_out_path)
 
-    # 5. 若指定了外部 output_dir，同时输出一份到指定目录
+    # 5. 同步输出至前端公共静态目录 Windows/frontend/public/
+    public_dir = os.path.join(windows_dir, "frontend", "public")
+    if os.path.isdir(public_dir):
+        pub_svg = os.path.join(public_dir, "logo.svg")
+        with open(pub_svg, "w", encoding="utf-8") as f:
+            f.write(svg_content)
+        pub_appicon = os.path.join(public_dir, "appicon.png")
+        pil_512.save(pub_appicon, "PNG")
+        pub_ico = os.path.join(public_dir, "favicon.ico")
+        ico_images[-1].save(pub_ico, format="ICO", sizes=[(s, s) for s in ico_sizes], append_images=ico_images[:-1])
+        _log("info", f"同步更新前端 Public 静态资源: {public_dir}")
+        exported_files.extend([pub_svg, pub_appicon, pub_ico])
+
+    # 6. 若指定了外部 output_dir，同时输出一份到指定目录
     if output_dir and os.path.isdir(output_dir):
         custom_svg = os.path.join(output_dir, "diting_logo.svg")
         with open(custom_svg, "w", encoding="utf-8") as f:
@@ -214,8 +227,8 @@ def export_logo_assets(
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="谛听品牌 Logo 渲染导出工具")
-    parser.add_argument("--bg", default="#d4e3ff", help="背景底色 hex")
-    parser.add_argument("--totem", default="#404a58", help="图腾颜色 hex")
+    parser.add_argument("--bg", default="#9e2b25", help="背景底色 hex (默认朱砂红 #9e2b25)")
+    parser.add_argument("--totem", default="#ffffff", help="图腾颜色 hex (默认纯白 #ffffff)")
     parser.add_argument("--gradient", action="store_true", help="启用渐变质感")
     parser.add_argument("-o", "--out", default=None, help="自定义导出目录")
     args = parser.parse_args()
