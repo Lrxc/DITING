@@ -107,6 +107,16 @@ def inspect_versions() -> List[Dict[str, str]]:
     return results
 
 
+def get_current_version() -> str:
+    """动态读取并返回当前代码库核心配置中的最新有效版本号"""
+    targets = get_file_targets()
+    for item in targets:
+        ver = extract_version(item)
+        if ver and ver not in ("未知", "文件不存在"):
+            return ver
+    return "0.0.0"
+
+
 def sync_version(
     target_version: str,
     dry_run: bool = False,

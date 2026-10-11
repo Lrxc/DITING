@@ -44,7 +44,15 @@ def get_root_dir() -> str:
 
 
 def get_current_project_version() -> str:
-    """自动获取当前项目的核心版本号"""
+    """自动获取当前项目的核心最新版本号（消除硬编码）"""
+    try:
+        from maintenance.core.version_manager import get_current_version
+        v = get_current_version()
+        if v and v != "0.0.0":
+            return v
+    except Exception:
+        pass
+
     try:
         wails_json = os.path.join(ROOT_DIR, "Windows", "wails.json")
         if os.path.exists(wails_json):
@@ -56,7 +64,7 @@ def get_current_project_version() -> str:
                     return v
     except Exception:
         pass
-    return "1.3.2"
+    return "0.0.0"
 
 
 def stop_running_processes(on_log: Optional[Callable[[str, str], None]] = None):

@@ -12,7 +12,7 @@ import subprocess
 import sys
 from typing import Optional
 
-from maintenance.core.build_manager import build_pipeline, check_toolchain
+from maintenance.core.build_manager import build_pipeline, check_toolchain, get_current_project_version
 from maintenance.core.dns_engine import execute_benchmark, execute_dns_query
 from maintenance.core.file_scanner import run_scan_analysis
 from maintenance.core.logo_generator import export_logo_assets, generate_squircle_svg
@@ -111,7 +111,13 @@ class ApiBridge:
 
     # === 4. 构建打包模块 ===
     def build_get_toolchain(self) -> dict:
-        return check_toolchain()
+        return {
+            "tools": check_toolchain(),
+            "default_version": get_current_project_version(),
+        }
+
+    def build_get_default_version(self) -> str:
+        return get_current_project_version()
 
     def build_start(self, target: str, version: str, build_type: str, clean: bool, skip_check: bool):
         def _task(log_cb, is_cancelled):

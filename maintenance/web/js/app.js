@@ -41,6 +41,13 @@ window.App = {
     document.querySelectorAll('.tab-pane').forEach(p => {
       p.classList.toggle('active', p.id === `pane-${tabId}`);
     });
+    if (tabId === 'logo') {
+      LogoModule.refreshPreview();
+    } else if (tabId === 'build') {
+      BuildModule.refreshToolchain();
+    } else if (tabId === 'version') {
+      VersionModule.refreshVersions();
+    }
   },
 
   bindTheme() {

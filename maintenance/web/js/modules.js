@@ -196,7 +196,12 @@ window.LogoModule = {
 window.BuildModule = {
   async refreshToolchain() {
     try {
-      const tools = await window.pywebview.api.build_get_toolchain();
+      const res = await window.pywebview.api.build_get_toolchain();
+      const tools = res.tools || res;
+      if (res.default_version) {
+        const verInput = document.getElementById('build-version');
+        if (verInput) verInput.value = res.default_version;
+      }
       const grid = document.getElementById('toolchain-grid');
       grid.innerHTML = '';
       Object.entries(tools).forEach(([k, info]) => {
@@ -215,7 +220,7 @@ window.BuildModule = {
 
   async startBuild() {
     const target = document.getElementById('build-target').value;
-    const version = document.getElementById('build-version').value.trim() || '1.3.2';
+    const version = document.getElementById('build-version').value.trim();
     const buildType = document.getElementById('build-type').value;
     const clean = document.getElementById('build-clean').checked;
 
@@ -276,6 +281,10 @@ window.VersionModule = {
     App.setBusy(false);
     this.refreshVersions();
     if (payload.success) {
+      if (payload.target_version) {
+        const buildVerInput = document.getElementById('build-version');
+        if (buildVerInput) buildVerInput.value = payload.target_version;
+      }
       App.toast(`版本号同步成功，影响文件数: ${payload.modified_files ? payload.modified_files.length : 0}`, 'ok');
     }
   }
