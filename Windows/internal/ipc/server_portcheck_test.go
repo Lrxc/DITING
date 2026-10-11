@@ -5,16 +5,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/haoze-evolluling/diting/windows/internal/platform/windows"
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 )
 
 func TestServer_AutofixPortConflicts(t *testing.T) {
 	mockCtrl := &mockController{
-		portResult: &windows.PortCheckResult{
+		portResult: &platform.PortCheckResult{
 			Available:  false,
 			HasICS:     true,
 			CanAutofix: true,
-			Conflicts: []windows.PortConflict{
+			Conflicts: []platform.PortConflict{
 				{
 					Port:         53,
 					Protocol:     "UDP",

@@ -1,3 +1,5 @@
+//go:build windows
+
 package windows
 
 import (
@@ -5,11 +7,12 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 )
 
-func scanAdaptersNative(ctx context.Context) ([]AdapterInfo, error) {
+func scanAdaptersNative(ctx context.Context) ([]platform.AdapterInfo, error) {
 	flags := uint32(windows.GAA_FLAG_INCLUDE_GATEWAYS |
 		windows.GAA_FLAG_SKIP_MULTICAST | windows.GAA_FLAG_SKIP_ANYCAST)
 
@@ -32,7 +35,7 @@ func scanAdaptersNative(ctx context.Context) ([]AdapterInfo, error) {
 		return nil, err
 	}
 
-	var results []AdapterInfo
+	var results []platform.AdapterInfo
 	cur := (*windows.IpAdapterAddresses)(unsafe.Pointer(&buf[0]))
 
 	for cur != nil {
@@ -50,7 +53,7 @@ func scanAdaptersNative(ctx context.Context) ([]AdapterInfo, error) {
 		gateway := ""
 		for gw := cur.FirstGatewayAddress; gw != nil; gw = gw.Next {
 			ip := gw.Address.IP()
-			if ip != nil && ip.To4() != nil && HasValidIPv4Gateway(ip.String()) {
+			if ip != nil && ip.To4() != nil && platform.HasValidIPv4Gateway(ip.String()) {
 				gateway = ip.String()
 				break
 			}
@@ -63,13 +66,13 @@ func scanAdaptersNative(ctx context.Context) ([]AdapterInfo, error) {
 			ip := dns.Address.IP()
 			if ip != nil {
 				if ip4 := ip.To4(); ip4 != nil {
-					if !IsLoopbackOrLocalIP(ip4.String()) {
+					if !platform.IsLoopbackOrLocalIP(ip4.String()) {
 						v4DNS = append(v4DNS, ip4.String())
 					}
 				} else {
 					ipStr := ip.String()
 					lower := strings.ToLower(ipStr)
-					if !IsLoopbackOrLocalIP(ipStr) && !strings.HasPrefix(lower, "fec0:") {
+					if !platform.IsLoopbackOrLocalIP(ipStr) && !strings.HasPrefix(lower, "fec0:") {
 						v6DNS = append(v6DNS, ipStr)
 					}
 				}
@@ -80,7 +83,7 @@ func scanAdaptersNative(ctx context.Context) ([]AdapterInfo, error) {
 		hasResidualLoopback := false
 		for dns := cur.FirstDnsServerAddress; dns != nil; dns = dns.Next {
 			ip := dns.Address.IP()
-			if ip != nil && IsLoopbackOrLocalIP(ip.String()) {
+			if ip != nil && platform.IsLoopbackOrLocalIP(ip.String()) {
 				hasResidualLoopback = true
 				break
 			}
@@ -89,8 +92,8 @@ func scanAdaptersNative(ctx context.Context) ([]AdapterInfo, error) {
 			hasResidualLoopback = true
 		}
 
-		v4DNS = FilterLoopbackIPs(v4DNS)
-		v6DNS = FilterLoopbackIPs(v6DNS)
+		v4DNS = platform.FilterLoopbackIPs(v4DNS)
+		v6DNS = platform.FilterLoopbackIPs(v6DNS)
 
 		// 检查 DHCP 与静态 DNS 配置（从注册表读取真实配置以防被虚拟层覆盖）
 		v4DHCP, v6DHCP := getDHCPConfigFromRegistry(id)
@@ -103,9 +106,9 @@ func scanAdaptersNative(ctx context.Context) ([]AdapterInfo, error) {
 
 		// 判断是否为虚拟网卡
 		isVirt := (cur.IfType == 24 || cur.IfType == 131) // Loopback / Tunnel
-		isPhysical := !IsVirtualAdapter(name, description, isVirt)
+		isPhysical := !platform.IsVirtualAdapter(name, description, isVirt)
 
-		results = append(results, AdapterInfo{
+		results = append(results, platform.AdapterInfo{
 			ID:                  id,
 			Name:                name,
 			Description:         description,
@@ -191,7 +194,7 @@ func parseRegistryNameServer(ns string) []string {
 	var clean []string
 	for _, f := range fields {
 		f = strings.TrimSpace(f)
-		if f != "" && !IsLoopbackOrLocalIP(f) {
+		if f != "" && !platform.IsLoopbackOrLocalIP(f) {
 			clean = append(clean, f)
 		}
 	}
@@ -209,7 +212,7 @@ func checkRegistryContainsLoopback(guid string) bool {
 		ns, _, _ := k.GetStringValue("NameServer")
 		k.Close()
 		for _, f := range strings.FieldsFunc(ns, func(r rune) bool { return r == ',' || r == ' ' || r == ';' }) {
-			if IsLoopbackOrLocalIP(f) {
+			if platform.IsLoopbackOrLocalIP(f) {
 				return true
 			}
 		}
@@ -219,11 +222,10 @@ func checkRegistryContainsLoopback(guid string) bool {
 		ns6, _, _ := k6.GetStringValue("NameServer")
 		k6.Close()
 		for _, f := range strings.FieldsFunc(ns6, func(r rune) bool { return r == ',' || r == ' ' || r == ';' }) {
-			if IsLoopbackOrLocalIP(f) {
+			if platform.IsLoopbackOrLocalIP(f) {
 				return true
 			}
 		}
 	}
 	return false
 }
-

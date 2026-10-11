@@ -1,4 +1,4 @@
-package windows
+package platform
 
 import (
 	"net"
@@ -25,7 +25,7 @@ func TestIsPrivateIPv4(t *testing.T) {
 
 	for _, tt := range tests {
 		ip := net.ParseIP(tt.ip)
-		if got := isPrivateIPv4(ip); got != tt.want {
+		if got := IsPrivateIPv4(ip); got != tt.want {
 			t.Errorf("isPrivateIPv4(%q) = %v; want %v", tt.ip, got, tt.want)
 		}
 	}

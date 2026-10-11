@@ -12,7 +12,7 @@ import (
 	"github.com/haoze-evolluling/diting/windows/internal/core"
 	ditingdns "github.com/haoze-evolluling/diting/windows/internal/dns"
 	"github.com/haoze-evolluling/diting/windows/internal/ipc"
-	"github.com/haoze-evolluling/diting/windows/internal/platform/windows"
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 	miekgdns "github.com/miekg/dns"
 )
 
@@ -109,10 +109,10 @@ func (p *program) StartDNS(ctx context.Context) error {
 			break
 		}
 	}
-	if needs53 && p.portChecker != nil && !windows.AreAddressesAvailable(serverCfg.UDPAddresses, serverCfg.TCPAddresses) {
+	if needs53 && p.portChecker != nil && !platform.AreAddressesAvailable(serverCfg.UDPAddresses, serverCfg.TCPAddresses) {
 		res, checkErr := p.portChecker.CheckPort53ForAddresses(ctx, serverCfg.UDPAddresses, serverCfg.TCPAddresses)
 		if checkErr == nil && res != nil && !res.Available {
-			return &windows.PortConflictError{Result: res}
+			return &platform.PortConflictError{Result: res}
 		}
 		if checkErr != nil {
 			return fallbackPortConflict(nil)
@@ -121,10 +121,10 @@ func (p *program) StartDNS(ctx context.Context) error {
 
 	srv := ditingdns.NewServer(serverCfg, pipeline)
 	if err := srv.Start(); err != nil {
-		if windows.IsPortBindConflict(err) {
+		if platform.IsPortBindConflict(err) {
 			if p.portChecker != nil {
 				if res, checkErr := p.portChecker.CheckPort53ForAddresses(ctx, serverCfg.UDPAddresses, serverCfg.TCPAddresses); checkErr == nil && res != nil {
-					return &windows.PortConflictError{Result: res, Err: err}
+					return &platform.PortConflictError{Result: res, Err: err}
 				}
 			}
 			return fallbackPortConflict(err)
@@ -175,7 +175,7 @@ func (p *program) EnableTakeover(ctx context.Context) error {
 	if !dnsRun {
 		log.Println("[接管] DNS 服务未处于运行状态，自动先启动本地 DNS 监听器...")
 		if err := p.StartDNS(ctx); err != nil {
-			var pErr *windows.PortConflictError
+			var pErr *platform.PortConflictError
 			if errors.As(err, &pErr) {
 				return pErr
 			}
@@ -208,9 +208,9 @@ func (p *program) DisableTakeover(ctx context.Context) error {
 }
 
 // GetAdapters 实现 ServiceController 接口
-func (p *program) GetAdapters(ctx context.Context) ([]windows.AdapterInfo, error) {
+func (p *program) GetAdapters(ctx context.Context) ([]platform.AdapterInfo, error) {
 	if p.adapterScan == nil {
-		p.adapterScan = windows.NewAdapterScanner(windows.NewDefaultExecutor())
+		p.adapterScan = newAdapterScanner(platform.NewDefaultExecutor())
 	}
 	return p.adapterScan.ScanAll(ctx)
 }
@@ -239,7 +239,7 @@ func (p *program) GetStatus(ctx context.Context) (*ipc.StatusResponse, error) {
 	}
 
 	takenAdapters := p.takeoverMgr.GetTakenOverAdapters()
-	lanAddrs, _ := windows.GetLANAddresses()
+	lanAddrs, _ := platform.GetLANAddresses()
 	effUDP, _ := p.cfg.DNS.EffectiveListenAddresses()
 	return &ipc.StatusResponse{
 		Version:       Version,

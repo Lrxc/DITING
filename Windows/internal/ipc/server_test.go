@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/haoze-evolluling/diting/windows/internal/core"
-	"github.com/haoze-evolluling/diting/windows/internal/platform/windows"
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 )
 
 type mockController struct {
@@ -22,7 +22,7 @@ type mockController struct {
 	takeoverErr  error
 	restoreErr   error
 	statusResult *StatusResponse
-	portResult   *windows.PortCheckResult
+	portResult   *platform.PortCheckResult
 	cacheConfig  *core.CacheConfig
 	filterConfig *core.FilterConfig
 	bgConfig        *LoginBackgroundResponse
@@ -94,36 +94,36 @@ func (m *mockController) GetStatus(ctx context.Context) (*StatusResponse, error)
 	}, nil
 }
 
-func (m *mockController) CheckPortConflicts(ctx context.Context) (*windows.PortCheckResult, error) {
+func (m *mockController) CheckPortConflicts(ctx context.Context) (*platform.PortCheckResult, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.portResult != nil {
 		return m.portResult, nil
 	}
-	return &windows.PortCheckResult{
+	return &platform.PortCheckResult{
 		Available:  true,
-		Conflicts:  []windows.PortConflict{},
+		Conflicts:  []platform.PortConflict{},
 		HasICS:     false,
 		Diagnostic: "53 端口空闲且可用",
 	}, nil
 }
 
-func (m *mockController) AutofixPortConflicts(ctx context.Context, startDNS bool) (*windows.PortCheckResult, error) {
+func (m *mockController) AutofixPortConflicts(ctx context.Context, startDNS bool) (*platform.PortCheckResult, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if startDNS {
 		m.dnsRunning = true
 	}
-	return &windows.PortCheckResult{
+	return &platform.PortCheckResult{
 		Available:  true,
-		Conflicts:  []windows.PortConflict{},
+		Conflicts:  []platform.PortConflict{},
 		HasICS:     false,
 		Diagnostic: "53 端口冲突已自动修复",
 	}, nil
 }
 
-func (m *mockController) GetAdapters(ctx context.Context) ([]windows.AdapterInfo, error) {
-	return []windows.AdapterInfo{
+func (m *mockController) GetAdapters(ctx context.Context) ([]platform.AdapterInfo, error) {
+	return []platform.AdapterInfo{
 		{
 			ID:         "{GUID-TEST}",
 			Name:       "WLAN",
@@ -522,10 +522,10 @@ func TestIPCServerAndClient_EndToEnd(t *testing.T) {
 }
 
 func TestServer_DNSStart_PortConflict(t *testing.T) {
-	conflictDetail := &windows.PortCheckResult{
+	conflictDetail := &platform.PortCheckResult{
 		Available: false,
 		HasICS:    true,
-		Conflicts: []windows.PortConflict{
+		Conflicts: []platform.PortConflict{
 			{
 				Port:         53,
 				Protocol:     "UDP",
@@ -541,7 +541,7 @@ func TestServer_DNSStart_PortConflict(t *testing.T) {
 	}
 
 	mockCtrl := &mockController{
-		startErr: &windows.PortConflictError{Result: conflictDetail},
+		startErr: &platform.PortConflictError{Result: conflictDetail},
 	}
 	token := "test-secret-token"
 	server := NewServer("127.0.0.1:0", token, mockCtrl)
@@ -562,9 +562,9 @@ func TestServer_DNSStart_PortConflict(t *testing.T) {
 		t.Fatalf("expected port conflict error, got nil")
 	}
 
-	var pErr *windows.PortConflictError
+	var pErr *platform.PortConflictError
 	if !errors.As(err, &pErr) {
-		t.Fatalf("expected errors.As to match *windows.PortConflictError, got: %T (%v)", err, err)
+		t.Fatalf("expected errors.As to match *platform.PortConflictError, got: %T (%v)", err, err)
 	}
 	if pErr.Result == nil || !pErr.Result.HasICS {
 		t.Fatalf("expected PortConflictError to contain conflict result with HasICS=true, got %+v", pErr.Result)

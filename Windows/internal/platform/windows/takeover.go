@@ -1,3 +1,5 @@
+//go:build windows
+
 package windows
 
 import (
@@ -7,41 +9,30 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 )
 
-// DNSManager 定义系统 DNS 接管与还原管理接口
-type DNSManager interface {
-	Takeover(ctx context.Context, adapters []AdapterInfo) error
-	TakeoverSingle(ctx context.Context, adapter AdapterInfo) error
-	Restore(ctx context.Context) error
-	RestoreSingle(ctx context.Context, adapterID string) error
-	RestoreAdapters(ctx context.Context, adapters []AdapterState) error
-	ResetResidualLoopbackDNS(ctx context.Context) error
-	IsTakeoverActive() bool
-	GetTakenOverAdapters() []AdapterState
-	FlushDNSCache(ctx context.Context) error
-}
-
-// WindowsDNSManager 默认 Windows 平台 DNS 接管管理器
+// WindowsDNSManager 默认 Windows 平台 DNS 接管管理器。
 type WindowsDNSManager struct {
 	mu               sync.Mutex
-	executor         CommandExecutor
-	stateStore       StateStore
+	executor         platform.CommandExecutor
+	stateStore       platform.StateStore
 	active           bool
-	adapters         []AdapterState
+	adapters         []platform.AdapterState
 	version          string
 	dnsSetter        func(guidStr string, servers []string) error
 	dnsResetter      func(guidStr string) error
 	residualResetter func(ctx context.Context) error
 }
 
-// NewDNSManager 创建 DNS 接管管理器
-func NewDNSManager(executor CommandExecutor, store StateStore, version string) *WindowsDNSManager {
+// NewDNSManager 创建 DNS 接管管理器。
+func NewDNSManager(executor platform.CommandExecutor, store platform.StateStore, version string) *WindowsDNSManager {
 	if executor == nil {
-		executor = NewDefaultExecutor()
+		executor = platform.NewDefaultExecutor()
 	}
 	if store == nil {
-		store = NewFileStateStore("")
+		store = platform.NewFileStateStore("")
 	}
 	if version == "" {
 		version = "dev"
@@ -61,10 +52,10 @@ func (m *WindowsDNSManager) IsTakeoverActive() bool {
 }
 
 // GetTakenOverAdapters 获取当前被接管的网卡列表
-func (m *WindowsDNSManager) GetTakenOverAdapters() []AdapterState {
+func (m *WindowsDNSManager) GetTakenOverAdapters() []platform.AdapterState {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	res := make([]AdapterState, len(m.adapters))
+	res := make([]platform.AdapterState, len(m.adapters))
 	copy(res, m.adapters)
 	return res
 }
@@ -74,23 +65,8 @@ func (m *WindowsDNSManager) FlushDNSCache(ctx context.Context) error {
 	return flushDNSCacheNative()
 }
 
-// CleanAdapterState 净化网卡快照配置，过滤自身接管的回环地址（127.0.0.0/8、::1 等）
-// 若过滤后原始 DNS 为空，则自动将其修正为 DHCP 自动获取，避免恢复为静态 127.0.0.1 导致断网
-func CleanAdapterState(a AdapterState) AdapterState {
-	cleaned := a
-	cleaned.IPv4DNS = FilterLoopbackIPs(a.IPv4DNS)
-	cleaned.IPv6DNS = FilterLoopbackIPs(a.IPv6DNS)
-	if len(cleaned.IPv4DNS) == 0 {
-		cleaned.IPv4DHCP = true
-	}
-	if len(cleaned.IPv6DNS) == 0 {
-		cleaned.IPv6DHCP = true
-	}
-	return cleaned
-}
-
 // Takeover 对指定的活动物理网卡执行双栈 DNS 接管 (127.0.0.1 / ::1)
-func (m *WindowsDNSManager) Takeover(ctx context.Context, adapters []AdapterInfo) error {
+func (m *WindowsDNSManager) Takeover(ctx context.Context, adapters []platform.AdapterInfo) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -98,9 +74,9 @@ func (m *WindowsDNSManager) Takeover(ctx context.Context, adapters []AdapterInfo
 		return fmt.Errorf("无有效活动物理网卡可供接管")
 	}
 
-	states := make([]AdapterState, 0, len(adapters))
+	states := make([]platform.AdapterState, 0, len(adapters))
 	for _, a := range adapters {
-		states = append(states, CleanAdapterState(AdapterState{
+		states = append(states, platform.CleanAdapterState(platform.AdapterState{
 			ID:          a.ID,
 			Name:        a.Name,
 			Index:       a.Index,
@@ -113,7 +89,7 @@ func (m *WindowsDNSManager) Takeover(ctx context.Context, adapters []AdapterInfo
 	}
 
 	// 1. 持久化记录接管状态至 dns_state.json
-	persistState := &TakeoverState{
+	persistState := &platform.TakeoverState{
 		Active:    true,
 		Version:   m.version,
 		PID:       os.Getpid(),
@@ -147,11 +123,11 @@ func (m *WindowsDNSManager) Takeover(ctx context.Context, adapters []AdapterInfo
 }
 
 // TakeoverSingle 接管指定单个活动物理网卡
-func (m *WindowsDNSManager) TakeoverSingle(ctx context.Context, adapter AdapterInfo) error {
+func (m *WindowsDNSManager) TakeoverSingle(ctx context.Context, adapter platform.AdapterInfo) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	state := CleanAdapterState(AdapterState{
+	state := platform.CleanAdapterState(platform.AdapterState{
 		ID:          adapter.ID,
 		Name:        adapter.Name,
 		Index:       adapter.Index,
@@ -163,7 +139,7 @@ func (m *WindowsDNSManager) TakeoverSingle(ctx context.Context, adapter AdapterI
 	})
 
 	// 记录之前的快照，若接管失败则安全回滚
-	oldAdapters := make([]AdapterState, len(m.adapters))
+	oldAdapters := make([]platform.AdapterState, len(m.adapters))
 	copy(oldAdapters, m.adapters)
 	oldActive := m.active
 
@@ -179,7 +155,7 @@ func (m *WindowsDNSManager) TakeoverSingle(ctx context.Context, adapter AdapterI
 		m.adapters = append(m.adapters, state)
 	}
 
-	persistState := &TakeoverState{
+	persistState := &platform.TakeoverState{
 		Active:    true,
 		Version:   m.version,
 		PID:       os.Getpid(),
@@ -201,7 +177,7 @@ func (m *WindowsDNSManager) TakeoverSingle(ctx context.Context, adapter AdapterI
 		if len(oldAdapters) == 0 {
 			_ = m.stateStore.Clear()
 		} else {
-			_ = m.stateStore.Save(&TakeoverState{
+			_ = m.stateStore.Save(&platform.TakeoverState{
 				Active:    oldActive,
 				Version:   m.version,
 				PID:       os.Getpid(),
@@ -218,11 +194,11 @@ func (m *WindowsDNSManager) TakeoverSingle(ctx context.Context, adapter AdapterI
 }
 
 // applyTakeoverOnAdapter 在指定网卡上设置 IPv4 为 127.0.0.1，IPv6 为 ::1
-func (m *WindowsDNSManager) applyTakeoverOnAdapter(ctx context.Context, a AdapterState) error {
+func (m *WindowsDNSManager) applyTakeoverOnAdapter(ctx context.Context, a platform.AdapterState) error {
 	if m.dnsSetter != nil {
 		return m.dnsSetter(a.ID, []string{"127.0.0.1", "::1"})
 	}
-	if !isDefaultExecutor(m.executor) {
+	if !platform.IsDefaultExecutor(m.executor) {
 		return nil
 	}
 	return setAdapterDNSDualStackNative(a.ID, []string{"127.0.0.1"}, []string{"::1"})
@@ -258,8 +234,8 @@ func (m *WindowsDNSManager) RestoreSingle(ctx context.Context, adapterID string)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	var target *AdapterState
-	var remaining []AdapterState
+	var target *platform.AdapterState
+	var remaining []platform.AdapterState
 	for _, a := range m.adapters {
 		if a.ID == adapterID || a.Name == adapterID {
 			curr := a
@@ -283,7 +259,7 @@ func (m *WindowsDNSManager) RestoreSingle(ctx context.Context, adapterID string)
 		m.active = false
 		_ = m.stateStore.Clear()
 	} else {
-		persistState := &TakeoverState{
+		persistState := &platform.TakeoverState{
 			Active:    true,
 			Version:   m.version,
 			PID:       os.Getpid(),
@@ -296,7 +272,7 @@ func (m *WindowsDNSManager) RestoreSingle(ctx context.Context, adapterID string)
 }
 
 // RestoreAdapters 批量还原指定网卡列表的 DNS 配置
-func (m *WindowsDNSManager) RestoreAdapters(ctx context.Context, adapters []AdapterState) error {
+func (m *WindowsDNSManager) RestoreAdapters(ctx context.Context, adapters []platform.AdapterState) error {
 	var lastErr error
 	for _, a := range adapters {
 		if err := m.restoreSingleAdapter(ctx, a); err != nil {
@@ -309,8 +285,8 @@ func (m *WindowsDNSManager) RestoreAdapters(ctx context.Context, adapters []Adap
 }
 
 // restoreSingleAdapter 还原单个网卡的 IPv4 与 IPv6 DNS
-func (m *WindowsDNSManager) restoreSingleAdapter(ctx context.Context, a AdapterState) error {
-	a = CleanAdapterState(a)
+func (m *WindowsDNSManager) restoreSingleAdapter(ctx context.Context, a platform.AdapterState) error {
+	a = platform.CleanAdapterState(a)
 
 	v4IsDHCP := a.IPv4DHCP || len(a.IPv4DNS) == 0
 	v6IsDHCP := a.IPv6DHCP || len(a.IPv6DNS) == 0
@@ -339,7 +315,7 @@ func (m *WindowsDNSManager) restoreSingleAdapter(ctx context.Context, a AdapterS
 		return m.dnsResetter(a.ID)
 	}
 
-	if !isDefaultExecutor(m.executor) {
+	if !platform.IsDefaultExecutor(m.executor) {
 		return nil
 	}
 

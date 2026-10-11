@@ -1,3 +1,5 @@
+//go:build windows
+
 package windows
 
 import (
@@ -10,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 )
@@ -17,16 +20,16 @@ import (
 // ServiceManager 管理 Windows 后台服务生命周期
 type ServiceManager struct {
 	serviceName string
-	executor    CommandExecutor
-	privExec    PrivilegedExecutor
+	executor    platform.CommandExecutor
+	privExec    platform.PrivilegedExecutor
 	scmQuery    scmQuerier
 	locateExe   func() (string, error)
 }
 
 // NewServiceManager 创建服务管理器
-func NewServiceManager(executor CommandExecutor, privExec PrivilegedExecutor) *ServiceManager {
+func NewServiceManager(executor platform.CommandExecutor, privExec platform.PrivilegedExecutor) *ServiceManager {
 	if executor == nil {
-		executor = NewDefaultExecutor()
+		executor = platform.NewDefaultExecutor()
 	}
 	if privExec == nil {
 		privExec = NewDefaultPrivilegedExecutor(executor)
@@ -99,8 +102,8 @@ func (m *ServiceManager) LocateExecutable() (string, error) {
 }
 
 // GetStatus 获取当前核心服务状态（纯 Windows 原生 SCM API）
-func (m *ServiceManager) GetStatus(ctx context.Context) (*CoreServiceStatus, error) {
-	status := &CoreServiceStatus{
+func (m *ServiceManager) GetStatus(ctx context.Context) (*platform.CoreServiceStatus, error) {
+	status := &platform.CoreServiceStatus{
 		State:      "unknown",
 		StateText:  "未知状态",
 		IsElevated: m.privExec.IsElevated(),

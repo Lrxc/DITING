@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/haoze-evolluling/diting/windows/internal/platform/windows"
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 )
 
 // Server IPC 本地控制 HTTP API 与 WebSocket 服务
@@ -199,7 +199,7 @@ func (s *Server) handleDNSStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.controller.StartDNS(r.Context()); err != nil {
-		var pErr *windows.PortConflictError
+		var pErr *platform.PortConflictError
 		if errors.As(err, &pErr) {
 			writeJSON(w, http.StatusConflict, Response[any]{
 				Success:  false,
@@ -234,7 +234,7 @@ func (s *Server) handleTakeoverEnable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.controller.EnableTakeover(r.Context()); err != nil {
-		var pErr *windows.PortConflictError
+		var pErr *platform.PortConflictError
 		if errors.As(err, &pErr) {
 			writeJSON(w, http.StatusConflict, Response[any]{
 				Success:  false,
@@ -286,7 +286,7 @@ func (s *Server) handleAdapters(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, Response[any]{Success: false, Error: err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, Response[[]windows.AdapterInfo]{Success: true, Data: adapters})
+	writeJSON(w, http.StatusOK, Response[[]platform.AdapterInfo]{Success: true, Data: adapters})
 }
 
 func (s *Server) handleAdapterTakeover(w http.ResponseWriter, r *http.Request) {

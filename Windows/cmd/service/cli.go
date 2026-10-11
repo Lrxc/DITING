@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/haoze-evolluling/diting/windows/internal/config"
-	"github.com/haoze-evolluling/diting/windows/internal/platform/windows"
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 	"github.com/kardianos/service"
 )
 
@@ -26,9 +26,9 @@ func executeEmergencyRestore(customConfigPath string) {
 			statePath = cfg.Takeover.StateFilePath
 		}
 	}
-	store := windows.NewFileStateStore(statePath)
-	exec := windows.NewDefaultExecutor()
-	mgr := windows.NewDNSManager(exec, store, Version)
+	store := platform.NewFileStateStore(statePath)
+	exec := platform.NewDefaultExecutor()
+	mgr := newDNSManager(exec, store, Version)
 	healed, err := store.CheckAndSelfHeal(context.Background(), mgr)
 	if err != nil {
 		fmt.Printf("[警告] 快照自愈出现异常: %v，将继续执行全网卡兜底自愈...\n", err)
@@ -49,7 +49,7 @@ func executeEmergencyRestore(customConfigPath string) {
 
 func executePortDiagnostics() {
 	fmt.Println("[谛听] 正在探测本地 53 端口占用与冲突...")
-	checker := windows.NewPortChecker(nil)
+	checker := newPortChecker(nil)
 	res, err := checker.CheckPort53(context.Background())
 	if err != nil {
 		fmt.Printf("[错误] 探测失败: %v\n", err)

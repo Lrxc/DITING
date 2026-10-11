@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/haoze-evolluling/diting/windows/internal/platform/windows"
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 )
 
 // Client 用于与 diting-service 进行 REST 及 WebSocket 通信的 IPC 客户端
@@ -57,7 +57,7 @@ func (c *Client) StartDNS(ctx context.Context) error {
 	}
 	if !resp.Success {
 		if resp.Conflict != nil {
-			return &windows.PortConflictError{Result: resp.Conflict, Err: fmt.Errorf("%s", resp.Error)}
+			return &platform.PortConflictError{Result: resp.Conflict, Err: fmt.Errorf("%s", resp.Error)}
 		}
 		return fmt.Errorf("启动 DNS 失败: %s", resp.Error)
 	}
@@ -84,7 +84,7 @@ func (c *Client) EnableTakeover(ctx context.Context) error {
 	}
 	if !resp.Success {
 		if resp.Conflict != nil {
-			return &windows.PortConflictError{Result: resp.Conflict, Err: fmt.Errorf("%s", resp.Error)}
+			return &platform.PortConflictError{Result: resp.Conflict, Err: fmt.Errorf("%s", resp.Error)}
 		}
 		return fmt.Errorf("开启接管失败: %s", resp.Error)
 	}
@@ -104,8 +104,8 @@ func (c *Client) DisableTakeover(ctx context.Context) error {
 }
 
 // CheckPortConflicts 诊断 53 端口冲突
-func (c *Client) CheckPortConflicts(ctx context.Context) (*windows.PortCheckResult, error) {
-	var resp Response[*windows.PortCheckResult]
+func (c *Client) CheckPortConflicts(ctx context.Context) (*platform.PortCheckResult, error) {
+	var resp Response[*platform.PortCheckResult]
 	if err := c.doRequest(ctx, http.MethodGet, "/api/v1/portcheck", nil, &resp); err != nil {
 		return nil, err
 	}
@@ -116,13 +116,13 @@ func (c *Client) CheckPortConflicts(ctx context.Context) (*windows.PortCheckResu
 }
 
 // AutofixPortConflicts 自动修复 53 端口冲突并可按需拉起 DNS
-func (c *Client) AutofixPortConflicts(ctx context.Context, startDNS bool) (*windows.PortCheckResult, error) {
+func (c *Client) AutofixPortConflicts(ctx context.Context, startDNS bool) (*platform.PortCheckResult, error) {
 	req := AutofixPortRequest{StartDNS: startDNS}
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
-	var resp Response[*windows.PortCheckResult]
+	var resp Response[*platform.PortCheckResult]
 	if err := c.doRequest(ctx, http.MethodPost, "/api/v1/portcheck/autofix", bytes.NewReader(body), &resp); err != nil {
 		return nil, err
 	}
@@ -136,8 +136,8 @@ func (c *Client) AutofixPortConflicts(ctx context.Context, startDNS bool) (*wind
 }
 
 // GetAdapters 枚举系统所有网卡详情
-func (c *Client) GetAdapters(ctx context.Context) ([]windows.AdapterInfo, error) {
-	var resp Response[[]windows.AdapterInfo]
+func (c *Client) GetAdapters(ctx context.Context) ([]platform.AdapterInfo, error) {
+	var resp Response[[]platform.AdapterInfo]
 	if err := c.doRequest(ctx, http.MethodGet, "/api/v1/adapters", nil, &resp); err != nil {
 		return nil, err
 	}

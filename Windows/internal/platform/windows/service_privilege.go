@@ -1,3 +1,5 @@
+//go:build windows
+
 package windows
 
 import (
@@ -7,6 +9,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 	"golang.org/x/sys/windows"
 )
 
@@ -50,33 +53,15 @@ type shellExecuteInfo struct {
 	hProcess     windows.Handle
 }
 
-// CoreServiceStatus 核心服务状态
-type CoreServiceStatus struct {
-	Installed      bool   `json:"installed"`
-	Running        bool   `json:"running"`
-	State          string `json:"state"` // running, stopped, not_installed, start_pending, stop_pending, unknown
-	StateText      string `json:"stateText"`
-	ExecutablePath string `json:"executablePath"`
-	IsElevated     bool   `json:"isElevated"`
-	CanInstall     bool   `json:"canInstall"`
-	Message        string `json:"message"`
-}
-
-// PrivilegedExecutor 特权命令执行接口，支持测试 Mock
-type PrivilegedExecutor interface {
-	RunElevated(ctx context.Context, exe string, args ...string) error
-	IsElevated() bool
-}
-
 // DefaultPrivilegedExecutor 默认特权命令执行器（基于 Win32 原生 API）
 type DefaultPrivilegedExecutor struct {
-	executor CommandExecutor
+	executor platform.CommandExecutor
 }
 
 // NewDefaultPrivilegedExecutor 创建默认特权执行器
-func NewDefaultPrivilegedExecutor(executor CommandExecutor) *DefaultPrivilegedExecutor {
+func NewDefaultPrivilegedExecutor(executor platform.CommandExecutor) *DefaultPrivilegedExecutor {
 	if executor == nil {
-		executor = NewDefaultExecutor()
+		executor = platform.NewDefaultExecutor()
 	}
 	return &DefaultPrivilegedExecutor{executor: executor}
 }

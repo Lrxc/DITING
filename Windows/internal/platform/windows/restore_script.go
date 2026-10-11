@@ -1,3 +1,5 @@
+//go:build windows
+
 package windows
 
 import (
@@ -6,11 +8,13 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 )
 
 // GenerateRestoreScript 生成独立离线恢复脚本 restore-dns.bat
 // 该脚本不依赖本程序，用于程序无法启动时手动还原网卡 DNS
-func GenerateRestoreScript(adapters []AdapterState, outputPath string) error {
+func GenerateRestoreScript(adapters []platform.AdapterState, outputPath string) error {
 	var sb strings.Builder
 	sb.WriteString("@echo off\r\n")
 	sb.WriteString("chcp 65001 >nul\r\n")
@@ -27,7 +31,7 @@ func GenerateRestoreScript(adapters []AdapterState, outputPath string) error {
 	sb.WriteString("echo [1/2] 正在还原网卡 DNS 配置...\r\n")
 
 	for _, raw := range adapters {
-		a := CleanAdapterState(raw)
+		a := platform.CleanAdapterState(raw)
 		sb.WriteString(fmt.Sprintf("echo 正在恢复适配器 [%s] ...\r\n", a.Name))
 		if a.IPv4DHCP || len(a.IPv4DNS) == 0 {
 			sb.WriteString(fmt.Sprintf("netsh interface ipv4 set dnsservers name=\"%s\" source=dhcp\r\n", a.Name))

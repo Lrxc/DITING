@@ -1,3 +1,5 @@
+//go:build windows
+
 package windows
 
 import (
@@ -8,6 +10,7 @@ import (
 	"syscall"
 	"unsafe"
 
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 	"golang.org/x/sys/windows"
 )
 
@@ -58,7 +61,7 @@ type nativePortListener struct {
 }
 
 // checkPort53Native 纯原生探测 53 端口冲突并识别 SharedAccess (ICS) 等服务
-func checkPort53Native(available bool, selfPID int) ([]PortConflict, bool, string, error) {
+func checkPort53Native(available bool, selfPID int) ([]platform.PortConflict, bool, string, error) {
 	listeners, err := getPort53ListenersNative()
 	if err != nil {
 		return nil, false, "", err
@@ -72,8 +75,8 @@ func checkPort53Native(available bool, selfPID int) ([]PortConflict, bool, strin
 }
 
 // formatPortConflicts 根据端点与 ICS 状态汇总格式化诊断报告
-func formatPortConflicts(rawList []nativePortListener, hasICS bool, icsPID int, available bool, selfPID int) ([]PortConflict, bool, string) {
-	conflicts := make([]PortConflict, 0, len(rawList))
+func formatPortConflicts(rawList []nativePortListener, hasICS bool, icsPID int, available bool, selfPID int) ([]platform.PortConflict, bool, string) {
+	conflicts := make([]platform.PortConflict, 0, len(rawList))
 	var diagLines []string
 	hasSelfListener := false
 
@@ -101,7 +104,7 @@ func formatPortConflicts(rawList []nativePortListener, hasICS bool, icsPID int, 
 			diagLines = append(diagLines, diagnosis)
 		}
 
-		conflicts = append(conflicts, PortConflict{
+		conflicts = append(conflicts, platform.PortConflict{
 			Port:         53,
 			Protocol:     item.Protocol,
 			LocalAddress: item.LocalAddress,

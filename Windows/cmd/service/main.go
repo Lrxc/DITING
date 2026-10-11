@@ -15,7 +15,7 @@ import (
 	"github.com/haoze-evolluling/diting/windows/internal/core"
 	ditingdns "github.com/haoze-evolluling/diting/windows/internal/dns"
 	"github.com/haoze-evolluling/diting/windows/internal/ipc"
-	"github.com/haoze-evolluling/diting/windows/internal/platform/windows"
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 	"github.com/kardianos/service"
 )
 
@@ -37,10 +37,10 @@ type program struct {
 	resolver     *core.CoreResolver
 	cache        *core.DNSCache
 	filterEngine *core.RuleEngine
-	takeoverMgr  windows.DNSManager
-	adapterScan  windows.AdapterScanner
-	stateStore   windows.StateStore
-	portChecker  windows.PortChecker
+	takeoverMgr  platform.DNSManager
+	adapterScan  platform.AdapterScanner
+	stateStore   platform.StateStore
+	portChecker  platform.PortChecker
 	ipcServer    *ipc.Server
 	authMgr      *auth.Manager
 
@@ -85,11 +85,11 @@ func (p *program) run() error {
 	p.cfg = cfg
 
 	// 2. 初始化平台能力模块
-	executor := windows.NewDefaultExecutor()
-	p.stateStore = windows.NewFileStateStore(cfg.Takeover.StateFilePath)
-	p.takeoverMgr = windows.NewDNSManager(executor, p.stateStore, Version)
-	p.adapterScan = windows.NewAdapterScanner(executor)
-	p.portChecker = windows.NewPortChecker(executor)
+	executor := platform.NewDefaultExecutor()
+	p.stateStore = platform.NewFileStateStore(cfg.Takeover.StateFilePath)
+	p.takeoverMgr = newDNSManager(executor, p.stateStore, Version)
+	p.adapterScan = newAdapterScanner(executor)
+	p.portChecker = newPortChecker(executor)
 
 	// 3. 执行崩溃自愈与残留检查
 	healed, err := p.stateStore.CheckAndSelfHeal(context.Background(), p.takeoverMgr)
@@ -132,7 +132,7 @@ func (p *program) run() error {
 		go func(pt int) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			if err := windows.ConfigureFirewallPortWeb(ctx, executor, pt, true); err != nil {
+			if err := firewallConfigureWeb(ctx, pt, true); err != nil {
 				log.Printf("[防火墙] 同步 Web 端口入站规则警告: %v\n", err)
 			}
 		}(port)

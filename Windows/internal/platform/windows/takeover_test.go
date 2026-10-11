@@ -1,8 +1,11 @@
+//go:build windows
+
 package windows
 
 import (
 	"context"
 	"fmt"
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,12 +15,12 @@ import (
 func TestWindowsDNSManager_TakeoverAndRestore(t *testing.T) {
 	tmpDir := t.TempDir()
 	stateFile := filepath.Join(tmpDir, "dns_state.json")
-	store := NewFileStateStore(stateFile)
+	store := platform.NewFileStateStore(stateFile)
 	executor := &mockExecutor{}
 
 	mgr := NewDNSManager(executor, store, "0.1.0-test")
 
-	adapters := []AdapterInfo{
+	adapters := []platform.AdapterInfo{
 		{
 			ID:          "{GUID-WLAN}",
 			Name:        "WLAN",
@@ -80,12 +83,12 @@ func TestWindowsDNSManager_TakeoverAndRestore(t *testing.T) {
 func TestWindowsDNSManager_StaticAdapterRestore(t *testing.T) {
 	tmpDir := t.TempDir()
 	stateFile := filepath.Join(tmpDir, "dns_state.json")
-	store := NewFileStateStore(stateFile)
+	store := platform.NewFileStateStore(stateFile)
 	executor := &mockExecutor{}
 
 	mgr := NewDNSManager(executor, store, "0.1.0-test")
 
-	adapters := []AdapterInfo{
+	adapters := []platform.AdapterInfo{
 		{
 			ID:          "{GUID-STATIC}",
 			Name:        "以太网",
@@ -130,7 +133,7 @@ func TestWindowsDNSManager_StaticAdapterRestore(t *testing.T) {
 func TestWindowsDNSManager_TakeoverFailureRollback(t *testing.T) {
 	tmpDir := t.TempDir()
 	stateFile := filepath.Join(tmpDir, "dns_state.json")
-	store := NewFileStateStore(stateFile)
+	store := platform.NewFileStateStore(stateFile)
 
 	// 模拟执行失败的执行器
 	failExecutor := &mockExecutor{
@@ -142,7 +145,7 @@ func TestWindowsDNSManager_TakeoverFailureRollback(t *testing.T) {
 		return fmt.Errorf("access denied")
 	}
 
-	adapters := []AdapterInfo{
+	adapters := []platform.AdapterInfo{
 		{
 			ID:         "{GUID-FAIL}",
 			Name:       "FailAdapter",
@@ -167,12 +170,12 @@ func TestWindowsDNSManager_TakeoverFailureRollback(t *testing.T) {
 func TestWindowsDNSManager_TakeoverSingleAndRestoreSingle(t *testing.T) {
 	tmpDir := t.TempDir()
 	stateFile := filepath.Join(tmpDir, "dns_state.json")
-	store := NewFileStateStore(stateFile)
+	store := platform.NewFileStateStore(stateFile)
 	executor := &mockExecutor{}
 
 	mgr := NewDNSManager(executor, store, "0.1.0-test")
 
-	adapter1 := AdapterInfo{
+	adapter1 := platform.AdapterInfo{
 		ID:         "{GUID-1}",
 		Name:       "Adapter1",
 		Index:      1,
@@ -180,7 +183,7 @@ func TestWindowsDNSManager_TakeoverSingleAndRestoreSingle(t *testing.T) {
 		IsPhysical: true,
 		Status:     "Up",
 	}
-	adapter2 := AdapterInfo{
+	adapter2 := platform.AdapterInfo{
 		ID:         "{GUID-2}",
 		Name:       "Adapter2",
 		Index:      2,
@@ -228,7 +231,7 @@ func TestWindowsDNSManager_TakeoverSingleAndRestoreSingle(t *testing.T) {
 func TestWindowsDNSManager_TakeoverSingleRollback(t *testing.T) {
 	tmpDir := t.TempDir()
 	stateFile := filepath.Join(tmpDir, "dns_state.json")
-	store := NewFileStateStore(stateFile)
+	store := platform.NewFileStateStore(stateFile)
 
 	failExecutor := &mockExecutor{
 		cmdErr: fmt.Errorf("access denied"),
@@ -239,7 +242,7 @@ func TestWindowsDNSManager_TakeoverSingleRollback(t *testing.T) {
 		return fmt.Errorf("access denied")
 	}
 
-	adapter := AdapterInfo{
+	adapter := platform.AdapterInfo{
 		ID:         "{GUID-FAIL}",
 		Name:       "FailSingle",
 		Index:      5,
@@ -262,7 +265,7 @@ func TestWindowsDNSManager_TakeoverSingleRollback(t *testing.T) {
 }
 
 func TestCleanAdapterState(t *testing.T) {
-	dirty := AdapterState{
+	dirty := platform.AdapterState{
 		ID:          "{GUID-DIRTY}",
 		Name:        "WLAN",
 		Index:       7,
@@ -273,7 +276,7 @@ func TestCleanAdapterState(t *testing.T) {
 		IPv6DNS:     []string{"::1"},
 	}
 
-	cleaned := CleanAdapterState(dirty)
+	cleaned := platform.CleanAdapterState(dirty)
 	if !cleaned.IPv4DHCP {
 		t.Errorf("expected IPv4DHCP to be true after cleaning, got false")
 	}
@@ -288,16 +291,16 @@ func TestCleanAdapterState(t *testing.T) {
 	}
 
 	// 测试真实静态 DNS 保留
-	realStatic := AdapterState{
-		ID:          "{GUID-REAL}",
-		Name:        "以太网",
-		Index:       8,
-		IPv4DHCP:    false,
-		IPv6DHCP:    false,
-		IPv4DNS:     []string{"127.0.0.1", "8.8.8.8"},
-		IPv6DNS:     []string{"::1", "2001:4860:4860::8888"},
+	realStatic := platform.AdapterState{
+		ID:       "{GUID-REAL}",
+		Name:     "以太网",
+		Index:    8,
+		IPv4DHCP: false,
+		IPv6DHCP: false,
+		IPv4DNS:  []string{"127.0.0.1", "8.8.8.8"},
+		IPv6DNS:  []string{"::1", "2001:4860:4860::8888"},
 	}
-	cleanedStatic := CleanAdapterState(realStatic)
+	cleanedStatic := platform.CleanAdapterState(realStatic)
 	if cleanedStatic.IPv4DHCP {
 		t.Errorf("expected IPv4DHCP to remain false for real static DNS")
 	}
@@ -314,15 +317,15 @@ func TestGenerateRestoreScript_FilterLoopback(t *testing.T) {
 	batPath := filepath.Join(tmpDir, "restore-dns.bat")
 
 	// 模拟此前被误记录为静态 127.0.0.1 的残留网卡快照
-	dirtyStates := []AdapterState{
+	dirtyStates := []platform.AdapterState{
 		{
-			ID:          "{GUID-DIRTY}",
-			Name:        "WLAN",
-			Index:       7,
-			IPv4DHCP:    false,
-			IPv6DHCP:    false,
-			IPv4DNS:     []string{"127.0.0.1"},
-			IPv6DNS:     []string{"::1"},
+			ID:       "{GUID-DIRTY}",
+			Name:     "WLAN",
+			Index:    7,
+			IPv4DHCP: false,
+			IPv6DHCP: false,
+			IPv4DNS:  []string{"127.0.0.1"},
+			IPv6DNS:  []string{"::1"},
 		},
 	}
 
@@ -353,7 +356,7 @@ func TestGenerateRestoreScript_FilterLoopback(t *testing.T) {
 
 func TestRestoreAdapters_FiltersResidualLoopback(t *testing.T) {
 	mock := &mockExecutor{}
-	store := NewFileStateStore(filepath.Join(t.TempDir(), "dns_state.json"))
+	store := platform.NewFileStateStore(filepath.Join(t.TempDir(), "dns_state.json"))
 	mgr := NewDNSManager(mock, store, "0.1.0-test")
 
 	resetCalled := false
@@ -370,7 +373,7 @@ func TestRestoreAdapters_FiltersResidualLoopback(t *testing.T) {
 	}
 
 	// 传入残留 127.0.0.1 与 ::1 的网卡快照
-	dirtyAdapters := []AdapterState{
+	dirtyAdapters := []platform.AdapterState{
 		{
 			ID:       "{GUID-1}",
 			Name:     "WLAN",
@@ -398,7 +401,7 @@ func TestRestoreAdapters_FiltersResidualLoopback(t *testing.T) {
 
 func TestResetResidualLoopbackDNS(t *testing.T) {
 	mock := &mockExecutor{}
-	store := NewFileStateStore(filepath.Join(t.TempDir(), "dns_state.json"))
+	store := platform.NewFileStateStore(filepath.Join(t.TempDir(), "dns_state.json"))
 	mgr := NewDNSManager(mock, store, "0.1.0-test")
 
 	residualCalled := false
@@ -418,7 +421,7 @@ func TestResetResidualLoopbackDNS(t *testing.T) {
 
 func TestRestore_CleansResidualEvenWhenNoAdapters(t *testing.T) {
 	mock := &mockExecutor{}
-	store := NewFileStateStore(filepath.Join(t.TempDir(), "dns_state.json"))
+	store := platform.NewFileStateStore(filepath.Join(t.TempDir(), "dns_state.json"))
 	mgr := NewDNSManager(mock, store, "0.1.0-test")
 
 	residualCalled := false
@@ -439,7 +442,7 @@ func TestRestore_CleansResidualEvenWhenNoAdapters(t *testing.T) {
 
 func TestRestoreAdapters_MixedDualStack(t *testing.T) {
 	mock := &mockExecutor{}
-	store := NewFileStateStore(filepath.Join(t.TempDir(), "dns_state.json"))
+	store := platform.NewFileStateStore(filepath.Join(t.TempDir(), "dns_state.json"))
 	mgr := NewDNSManager(mock, store, "0.1.0-test")
 
 	var setterServers []string
@@ -449,7 +452,7 @@ func TestRestoreAdapters_MixedDualStack(t *testing.T) {
 	}
 
 	// 1. 测试单栈 IPv4 静态，单栈 IPv6 DHCP
-	mixedAdapter := []AdapterState{
+	mixedAdapter := []platform.AdapterState{
 		{
 			ID:       "{GUID-MIXED}",
 			Name:     "以太网",
@@ -468,7 +471,7 @@ func TestRestoreAdapters_MixedDualStack(t *testing.T) {
 
 	// 2. 测试单栈 IPv4 DHCP，单栈 IPv6 静态
 	setterServers = nil
-	mixedV6 := []AdapterState{
+	mixedV6 := []platform.AdapterState{
 		{
 			ID:       "{GUID-MIXED2}",
 			Name:     "以太网2",
@@ -485,4 +488,3 @@ func TestRestoreAdapters_MixedDualStack(t *testing.T) {
 		t.Errorf("expected [2001:4860:4860::8888], got %v", setterServers)
 	}
 }
-

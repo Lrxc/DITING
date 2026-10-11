@@ -14,7 +14,7 @@ import (
 	"github.com/haoze-evolluling/diting/windows/internal/config"
 	"github.com/haoze-evolluling/diting/windows/internal/core"
 	"github.com/haoze-evolluling/diting/windows/internal/ipc"
-	"github.com/haoze-evolluling/diting/windows/internal/platform/windows"
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 	miekgdns "github.com/miekg/dns"
 )
 
@@ -488,22 +488,22 @@ func TestController_WebAndAuthIntegration(t *testing.T) {
 }
 
 type mockTestPortChecker struct {
-	checkResult   *windows.PortCheckResult
-	autofixResult *windows.PortCheckResult
+	checkResult   *platform.PortCheckResult
+	autofixResult *platform.PortCheckResult
 	autofixErr    error
 	lastUDPAddrs  []string
 	lastTCPAddrs  []string
 }
 
-func (m *mockTestPortChecker) CheckPort53(ctx context.Context) (*windows.PortCheckResult, error) {
+func (m *mockTestPortChecker) CheckPort53(ctx context.Context) (*platform.PortCheckResult, error) {
 	return m.checkResult, nil
 }
-func (m *mockTestPortChecker) CheckPort53ForAddresses(ctx context.Context, udpAddrs, tcpAddrs []string) (*windows.PortCheckResult, error) {
+func (m *mockTestPortChecker) CheckPort53ForAddresses(ctx context.Context, udpAddrs, tcpAddrs []string) (*platform.PortCheckResult, error) {
 	m.lastUDPAddrs = udpAddrs
 	m.lastTCPAddrs = tcpAddrs
 	return m.checkResult, nil
 }
-func (m *mockTestPortChecker) AutofixPort53ForAddresses(ctx context.Context, udpAddrs, tcpAddrs []string) (*windows.PortCheckResult, error) {
+func (m *mockTestPortChecker) AutofixPort53ForAddresses(ctx context.Context, udpAddrs, tcpAddrs []string) (*platform.PortCheckResult, error) {
 	m.lastUDPAddrs = udpAddrs
 	m.lastTCPAddrs = tcpAddrs
 	return m.autofixResult, m.autofixErr
@@ -511,13 +511,13 @@ func (m *mockTestPortChecker) AutofixPort53ForAddresses(ctx context.Context, udp
 
 func TestController_PortConflictsAndAutofix(t *testing.T) {
 	mockChecker := &mockTestPortChecker{
-		checkResult: &windows.PortCheckResult{
+		checkResult: &platform.PortCheckResult{
 			Available:  false,
 			HasICS:     true,
 			CanAutofix: true,
 			Diagnostic: "ICS conflict on 0.0.0.0:53",
 		},
-		autofixResult: &windows.PortCheckResult{
+		autofixResult: &platform.PortCheckResult{
 			Available:  true,
 			HasICS:     false,
 			CanAutofix: false,

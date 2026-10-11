@@ -10,7 +10,7 @@ import (
 
 	"github.com/haoze-evolluling/diting/windows/internal/config"
 	"github.com/haoze-evolluling/diting/windows/internal/ipc"
-	"github.com/haoze-evolluling/diting/windows/internal/platform/windows"
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 )
 
 func (p *program) effectiveWebPort() int {
@@ -38,7 +38,7 @@ func (p *program) GetWebStatus(ctx context.Context) (*ipc.WebStatusResponse, err
 
 	effPort := p.effectiveWebPort()
 
-	lanAddrs, err := windows.GetLANAddresses()
+	lanAddrs, err := platform.GetLANAddresses()
 	if err != nil {
 		log.Printf("[Web] 获取本机局域网地址警告: %v\n", err)
 	}
@@ -51,7 +51,7 @@ func (p *program) GetWebStatus(ctx context.Context) (*ipc.WebStatusResponse, err
 		webURLs = append(webURLs, fmt.Sprintf("http://127.0.0.1:%d", effPort))
 	}
 
-	fwAllowed, _ := windows.CheckFirewallPortWeb(ctx, windows.NewDefaultExecutor())
+	fwAllowed, _ := firewallCheckWeb(ctx)
 
 	initialized := false
 	username := "admin"
@@ -101,8 +101,7 @@ func (p *program) ConfigureWeb(ctx context.Context, req ipc.ConfigureWebRequest)
 
 	// 按需同步配置 Windows 防火墙规则
 	if req.ConfigureFirewall {
-		executor := windows.NewDefaultExecutor()
-		if err := windows.ConfigureFirewallPortWeb(ctx, executor, port, req.Enabled); err != nil {
+		if err := firewallConfigureWeb(ctx, port, req.Enabled); err != nil {
 			log.Printf("[防火墙] 配置 Web 端口规则警告: %v\n", err)
 		} else {
 			log.Printf("[防火墙] 已成功同步 Web 端口入站规则 (端口: %d, 启用: %v)\n", port, req.Enabled)
@@ -139,7 +138,7 @@ func (p *program) ConfigureWeb(ctx context.Context, req ipc.ConfigureWebRequest)
 
 // ConfigureWebFirewall 实现 ServiceController 接口
 func (p *program) ConfigureWebFirewall(ctx context.Context, enable bool) error {
-	return windows.ConfigureFirewallPortWeb(ctx, windows.NewDefaultExecutor(), p.effectiveWebPort(), enable)
+	return firewallConfigureWeb(ctx, p.effectiveWebPort(), enable)
 }
 
 // GetAuthStatus 实现 ServiceController 接口

@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/haoze-evolluling/diting/windows/internal/platform/windows"
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 )
 
 // handlePortCheck 诊断 53 端口冲突
@@ -19,7 +19,7 @@ func (s *Server) handlePortCheck(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, Response[any]{Success: false, Error: err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, Response[*windows.PortCheckResult]{Success: true, Data: result})
+	writeJSON(w, http.StatusOK, Response[*platform.PortCheckResult]{Success: true, Data: result})
 }
 
 // handlePortAutofix 自动修复 53 端口冲突（如停止/禁用 ICS 服务）并可选拉起 DNS
@@ -34,7 +34,7 @@ func (s *Server) handlePortAutofix(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := s.controller.AutofixPortConflicts(r.Context(), req.StartDNS)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, Response[*windows.PortCheckResult]{
+		writeJSON(w, http.StatusInternalServerError, Response[*platform.PortCheckResult]{
 			Success:  false,
 			Error:    err.Error(),
 			Conflict: result,
@@ -44,7 +44,7 @@ func (s *Server) handlePortAutofix(w http.ResponseWriter, r *http.Request) {
 	if req.StartDNS && result != nil && result.Available {
 		s.Broadcast(Event{Type: "dns", Timestamp: time.Now().UnixMilli(), Data: "started"})
 	}
-	writeJSON(w, http.StatusOK, Response[*windows.PortCheckResult]{
+	writeJSON(w, http.StatusOK, Response[*platform.PortCheckResult]{
 		Success: true,
 		Message: "端口冲突已成功自动修复",
 		Data:    result,

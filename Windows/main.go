@@ -1,3 +1,5 @@
+//go:build windows
+
 package main
 
 import (
@@ -7,6 +9,7 @@ import (
 	"os"
 
 	"github.com/haoze-evolluling/diting/windows/frontend"
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 	"github.com/haoze-evolluling/diting/windows/internal/platform/windows"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -50,8 +53,8 @@ func (a *App) CaptureWindow(outputPath string) (string, error) {
 
 // RunEmergencyRestore 执行离线应急恢复
 func (a *App) RunEmergencyRestore() (string, error) {
-	store := windows.NewFileStateStore("")
-	exec := windows.NewDefaultExecutor()
+	store := platform.NewFileStateStore("")
+	exec := platform.NewDefaultExecutor()
 	mgr := windows.NewDNSManager(exec, store, Version)
 	healed, err := store.CheckAndSelfHeal(context.Background(), mgr)
 	if err != nil {
@@ -98,7 +101,7 @@ func (a *App) SetAutoStart(enable bool) (bool, error) {
 }
 
 // GetCoreServiceStatus 获取后台核心服务状态
-func (a *App) GetCoreServiceStatus() (*windows.CoreServiceStatus, error) {
+func (a *App) GetCoreServiceStatus() (*platform.CoreServiceStatus, error) {
 	if a.serviceMgr == nil {
 		a.serviceMgr = windows.NewServiceManager(nil, nil)
 	}
@@ -173,7 +176,7 @@ func (a *App) UninstallCoreService() (string, error) {
 
 // ConfigureFirewallForLAN 按需配置局域网 53 端口 Windows 防火墙规则
 func (a *App) ConfigureFirewallForLAN(enable bool) (string, error) {
-	err := windows.ConfigureFirewallPort53(context.Background(), windows.NewDefaultExecutor(), enable)
+	err := windows.ConfigureFirewallPort53(context.Background(), platform.NewDefaultExecutor(), enable)
 	if err != nil {
 		return "", fmt.Errorf("配置防火墙规则失败: %w", err)
 	}

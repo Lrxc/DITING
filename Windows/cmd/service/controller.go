@@ -14,7 +14,7 @@ import (
 	"github.com/haoze-evolluling/diting/windows/internal/config"
 	"github.com/haoze-evolluling/diting/windows/internal/core"
 	"github.com/haoze-evolluling/diting/windows/internal/ipc"
-	"github.com/haoze-evolluling/diting/windows/internal/platform/windows"
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 	miekgdns "github.com/miekg/dns"
 )
 
@@ -194,7 +194,7 @@ func (p *program) SetAdapterTakeover(ctx context.Context, req ipc.AdapterTakeove
 		if err != nil {
 			return err
 		}
-		var target *windows.AdapterInfo
+		var target *platform.AdapterInfo
 		for _, a := range adapters {
 			if a.ID == req.AdapterID || a.Name == req.AdapterID {
 				curr := a

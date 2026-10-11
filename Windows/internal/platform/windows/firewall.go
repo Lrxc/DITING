@@ -1,8 +1,11 @@
+//go:build windows
+
 package windows
 
 import (
 	"context"
 	"fmt"
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 	"strings"
 )
 
@@ -14,9 +17,9 @@ const (
 )
 
 // CheckFirewallPort53 检测 Windows 防火墙是否已放行 53 端口入站规则 (UDP 与 TCP 均需已启用且操作为允许)
-func CheckFirewallPort53(ctx context.Context, executor CommandExecutor) (bool, error) {
+func CheckFirewallPort53(ctx context.Context, executor platform.CommandExecutor) (bool, error) {
 	if executor == nil {
-		executor = NewDefaultExecutor()
+		executor = platform.NewDefaultExecutor()
 	}
 
 	outUDP, err := executor.RunCommand(ctx, "netsh", "advfirewall", "firewall", "show", "rule", fmt.Sprintf("name=%s", FirewallRuleNameUDP))
@@ -58,9 +61,9 @@ func isFirewallRuleActive(out string) bool {
 }
 
 // ConfigureFirewallPort53 配置 Windows 防火墙允许或禁止局域网访问 53 端口 (UDP 与 TCP)
-func ConfigureFirewallPort53(ctx context.Context, executor CommandExecutor, enable bool) error {
+func ConfigureFirewallPort53(ctx context.Context, executor platform.CommandExecutor, enable bool) error {
 	if executor == nil {
-		executor = NewDefaultExecutor()
+		executor = platform.NewDefaultExecutor()
 	}
 
 	// 无论开启还是关闭，先清理已存在的旧规则以确保操作幂等性
@@ -107,9 +110,9 @@ const (
 )
 
 // CheckFirewallPortWeb 检测 Windows 防火墙是否已放行 Web 管理端口入站规则
-func CheckFirewallPortWeb(ctx context.Context, executor CommandExecutor) (bool, error) {
+func CheckFirewallPortWeb(ctx context.Context, executor platform.CommandExecutor) (bool, error) {
 	if executor == nil {
-		executor = NewDefaultExecutor()
+		executor = platform.NewDefaultExecutor()
 	}
 
 	out, err := executor.RunCommand(ctx, "netsh", "advfirewall", "firewall", "show", "rule", fmt.Sprintf("name=%s", FirewallRuleNameWeb))
@@ -120,9 +123,9 @@ func CheckFirewallPortWeb(ctx context.Context, executor CommandExecutor) (bool, 
 }
 
 // ConfigureFirewallPortWeb 配置 Windows 防火墙允许或禁止局域网访问 Web 管理端口
-func ConfigureFirewallPortWeb(ctx context.Context, executor CommandExecutor, port int, enable bool) error {
+func ConfigureFirewallPortWeb(ctx context.Context, executor platform.CommandExecutor, port int, enable bool) error {
 	if executor == nil {
-		executor = NewDefaultExecutor()
+		executor = platform.NewDefaultExecutor()
 	}
 	if port <= 0 {
 		port = 15353
@@ -149,8 +152,7 @@ func ConfigureFirewallPortWeb(ctx context.Context, executor CommandExecutor, por
 	return nil
 }
 
-func deleteFirewallRule(ctx context.Context, executor CommandExecutor, ruleName string) error {
+func deleteFirewallRule(ctx context.Context, executor platform.CommandExecutor, ruleName string) error {
 	_, err := executor.RunCommand(ctx, "netsh", "advfirewall", "firewall", "delete", "rule", fmt.Sprintf("name=%s", ruleName))
 	return err
 }
-

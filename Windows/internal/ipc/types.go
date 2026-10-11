@@ -2,7 +2,7 @@ package ipc
 
 import (
 	"github.com/haoze-evolluling/diting/windows/internal/core"
-	"github.com/haoze-evolluling/diting/windows/internal/platform/windows"
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 )
 
 // Response 通用 API JSON 响应体
@@ -11,7 +11,7 @@ type Response[T any] struct {
 	Message  string                   `json:"message,omitempty"`
 	Data     T                        `json:"data,omitempty"`
 	Error    string                   `json:"error,omitempty"`
-	Conflict *windows.PortCheckResult `json:"conflict,omitempty"`
+	Conflict *platform.PortCheckResult `json:"conflict,omitempty"`
 }
 
 // UpstreamInfo 上游 DNS 解析节点运行态信息
@@ -41,7 +41,7 @@ type DNSStatus struct {
 // TakeoverStatus 物理网卡接管运行状态
 type TakeoverStatus struct {
 	Active   bool                   `json:"active"`
-	Adapters []windows.AdapterState `json:"adapters"`
+	Adapters []platform.AdapterState `json:"adapters"`
 }
 
 // MetricsStatus 性能与统计指标

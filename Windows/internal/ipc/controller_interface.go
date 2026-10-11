@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/haoze-evolluling/diting/windows/internal/core"
-	"github.com/haoze-evolluling/diting/windows/internal/platform/windows"
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 )
 
 // ServiceController 抽象服务核心控制操作接口
@@ -15,9 +15,9 @@ type ServiceController interface {
 	EnableTakeover(ctx context.Context) error
 	DisableTakeover(ctx context.Context) error
 	GetStatus(ctx context.Context) (*StatusResponse, error)
-	CheckPortConflicts(ctx context.Context) (*windows.PortCheckResult, error)
-	AutofixPortConflicts(ctx context.Context, startDNS bool) (*windows.PortCheckResult, error)
-	GetAdapters(ctx context.Context) ([]windows.AdapterInfo, error)
+	CheckPortConflicts(ctx context.Context) (*platform.PortCheckResult, error)
+	AutofixPortConflicts(ctx context.Context, startDNS bool) (*platform.PortCheckResult, error)
+	GetAdapters(ctx context.Context) ([]platform.AdapterInfo, error)
 	ConfigureUpstream(ctx context.Context, req ConfigureUpstreamRequest) error
 	TestUpstream(ctx context.Context, req TestUpstreamRequest) (*TestUpstreamResponse, error)
 	SetAdapterTakeover(ctx context.Context, req AdapterTakeoverRequest) error

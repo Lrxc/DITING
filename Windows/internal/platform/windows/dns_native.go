@@ -1,3 +1,5 @@
+//go:build windows
+
 package windows
 
 import (
@@ -14,7 +16,7 @@ import (
 var (
 	procSetInterfaceDnsSettings = modIphlpapi.NewProc("SetInterfaceDnsSettings")
 
-	modDnsapi                  = windows.NewLazySystemDLL("dnsapi.dll")
+	modDnsapi                 = windows.NewLazySystemDLL("dnsapi.dll")
 	procDnsFlushResolverCache = modDnsapi.NewProc("DnsFlushResolverCache")
 )
 
@@ -131,4 +133,3 @@ func resetResidualLoopbackDNSNative(ctx context.Context) error {
 	}
 	return nil
 }
-

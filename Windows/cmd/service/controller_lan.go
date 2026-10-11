@@ -6,7 +6,7 @@ import (
 
 	"github.com/haoze-evolluling/diting/windows/internal/config"
 	"github.com/haoze-evolluling/diting/windows/internal/ipc"
-	"github.com/haoze-evolluling/diting/windows/internal/platform/windows"
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 )
 
 // GetLANStatus 实现 ServiceController 接口
@@ -16,12 +16,12 @@ func (p *program) GetLANStatus(ctx context.Context) (*ipc.LANStatusResponse, err
 	udpAddrs, _ := p.cfg.DNS.EffectiveListenAddresses()
 	p.mu.Unlock()
 
-	lanAddrs, err := windows.GetLANAddresses()
+	lanAddrs, err := platform.GetLANAddresses()
 	if err != nil {
 		log.Printf("[LAN] 获取本机局域网地址警告: %v\n", err)
 	}
 
-	fwAllowed, _ := windows.CheckFirewallPort53(ctx, windows.NewDefaultExecutor())
+	fwAllowed, _ := firewallCheckPort53(ctx)
 
 	return &ipc.LANStatusResponse{
 		AllowLAN:        allowLAN,
@@ -48,7 +48,7 @@ func (p *program) ConfigureLAN(ctx context.Context, req ipc.ConfigureLANRequest)
 
 	// 按需自动配置 Windows 防火墙规则
 	if req.ConfigureFirewall {
-		if err := windows.ConfigureFirewallPort53(ctx, windows.NewDefaultExecutor(), req.AllowLAN); err != nil {
+		if err := firewallConfigurePort53(ctx, req.AllowLAN); err != nil {
 			log.Printf("[防火墙] 自动配置 53 端口规则警告: %v\n", err)
 		} else {
 			log.Printf("[防火墙] 已成功同步 53 端口入站规则 (启用: %v)\n", req.AllowLAN)
@@ -77,5 +77,5 @@ func (p *program) ConfigureLAN(ctx context.Context, req ipc.ConfigureLANRequest)
 
 // ConfigureFirewall 实现 ServiceController 接口
 func (p *program) ConfigureFirewall(ctx context.Context, enable bool) error {
-	return windows.ConfigureFirewallPort53(ctx, windows.NewDefaultExecutor(), enable)
+	return firewallConfigurePort53(ctx, enable)
 }

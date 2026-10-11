@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/haoze-evolluling/diting/windows/internal/platform/windows"
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 )
 
 // CheckPortConflicts 实现 ServiceController 接口
-func (p *program) CheckPortConflicts(ctx context.Context) (*windows.PortCheckResult, error) {
+func (p *program) CheckPortConflicts(ctx context.Context) (*platform.PortCheckResult, error) {
 	p.mu.Lock()
 	if p.portChecker == nil {
 		p.mu.Unlock()
@@ -25,7 +25,7 @@ func (p *program) CheckPortConflicts(ctx context.Context) (*windows.PortCheckRes
 }
 
 // AutofixPortConflicts 实现 ServiceController 接口，自动停止/禁用 ICS 并可选拉起 DNS
-func (p *program) AutofixPortConflicts(ctx context.Context, startDNS bool) (*windows.PortCheckResult, error) {
+func (p *program) AutofixPortConflicts(ctx context.Context, startDNS bool) (*platform.PortCheckResult, error) {
 	p.mu.Lock()
 	if p.portChecker == nil {
 		p.mu.Unlock()
@@ -55,9 +55,9 @@ func (p *program) AutofixPortConflicts(ctx context.Context, startDNS bool) (*win
 	return res, nil
 }
 
-func fallbackPortConflict(err error) *windows.PortConflictError {
-	return &windows.PortConflictError{
-		Result: &windows.PortCheckResult{
+func fallbackPortConflict(err error) *platform.PortConflictError {
+	return &platform.PortConflictError{
+		Result: &platform.PortCheckResult{
 			Available:  false,
 			Diagnostic: "本地 53 端口已被占用，无法启动 DNS 监听器。排查建议：请检查是否有其他 DNS 或代理软件占用该端口。",
 		},

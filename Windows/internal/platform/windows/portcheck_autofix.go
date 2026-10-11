@@ -1,3 +1,5 @@
+//go:build windows
+
 package windows
 
 import (
@@ -6,6 +8,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/haoze-evolluling/diting/windows/internal/platform"
 	"golang.org/x/sys/windows"
 )
 
@@ -102,7 +105,7 @@ func StopAndDisableSharedAccessNative() error {
 }
 
 // AutofixPort53ForAddresses 执行 53 端口冲突自动修复并重新探测指定目标地址的可用性
-func (c *WindowsPortChecker) AutofixPort53ForAddresses(ctx context.Context, udpAddrs, tcpAddrs []string) (*PortCheckResult, error) {
+func (c *WindowsPortChecker) AutofixPort53ForAddresses(ctx context.Context, udpAddrs, tcpAddrs []string) (*platform.PortCheckResult, error) {
 	if err := StopAndDisableSharedAccessNative(); err != nil {
 		return nil, err
 	}
