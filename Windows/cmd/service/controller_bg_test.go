@@ -122,6 +122,51 @@ func TestController_BackgroundWorkflow(t *testing.T) {
 		t.Fatalf("expected exactly one .png file, got %v", matches)
 	}
 
+	// 4.1 核心防护测试：仅微调暗度与模糊度时，必须保留已有磁盘图片，不得误删或重置
+	err = p.SetLoginBackground(ctx, ipc.SetLoginBackgroundRequest{
+		Type:    "custom",
+		URL:     "http://192.168.1.182:15353/api/v1/auth/background/image?t=123456",
+		Opacity: 88,
+		Blur:    12,
+	})
+	if err != nil {
+		t.Fatalf("updating visual config on existing custom background failed: %v", err)
+	}
+	retainedBg, err := p.GetLoginBackground(ctx)
+	if err != nil {
+		t.Fatalf("GetLoginBackground failed: %v", err)
+	}
+	if retainedBg.Type != "custom" || retainedBg.Opacity != 88 || retainedBg.Blur != 12 {
+		t.Fatalf("expected retained custom background with updated opacity/blur, got %+v", retainedBg)
+	}
+	// 验证磁盘上的 .png 图片依然存在且内容未变
+	retainedImg, mime, _, err := p.GetLoginBackgroundImage(ctx)
+	if err != nil {
+		t.Fatalf("retained image missing from disk: %v", err)
+	}
+	if mime != "image/png" || string(retainedImg) != string(fakePng) {
+		t.Fatalf("retained image corrupted: %s", mime)
+	}
+
+	// 4.2 SVG 矢量壁纸上传测试
+	svgContent := []byte(`<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><circle cx="50" cy="50" r="40"/></svg>`)
+	svgDataUrl := "data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString(svgContent)
+	err = p.SetLoginBackground(ctx, ipc.SetLoginBackgroundRequest{
+		URL:     svgDataUrl,
+		Opacity: 35,
+		Blur:    2,
+	})
+	if err != nil {
+		t.Fatalf("SetLoginBackground with svg failed: %v", err)
+	}
+	svgData, svgMime, _, err := p.GetLoginBackgroundImage(ctx)
+	if err != nil {
+		t.Fatalf("GetLoginBackgroundImage for svg failed: %v", err)
+	}
+	if svgMime != "image/svg+xml" || string(svgData) != string(svgContent) {
+		t.Fatalf("expected svg image/svg+xml, got %s", svgMime)
+	}
+
 	// 5. 模拟服务重启 (重启后从磁盘 config.json 读取并验证持久化)
 	reloadedAfterUpload, err := config.LoadConfig(cfgPath)
 	if err != nil {
@@ -160,11 +205,31 @@ func TestController_BackgroundWorkflow(t *testing.T) {
 		t.Fatalf("expected 0 image files after reset, got %v", matchesAfterReset)
 	}
 
-	// 7. 管理员密码校验测试
+	// 7. 管理员密码校验与 IP 频控防爆破测试
 	if !p.VerifyAdminPassword(ctx, "Admin1234") {
 		t.Fatalf("expected password verification to pass")
 	}
 	if p.VerifyAdminPassword(ctx, "WrongPassword") {
 		t.Fatalf("expected wrong password to fail")
 	}
+
+	remoteIP := "192.168.1.99"
+	ok, err := p.VerifyAdminPasswordWithIP(ctx, remoteIP, "Admin1234")
+	if err != nil || !ok {
+		t.Fatalf("expected VerifyAdminPasswordWithIP to pass: %v", err)
+	}
+
+	// 连续 5 次错误密码应触发锁定保护
+	for i := 0; i < 5; i++ {
+		ok, err = p.VerifyAdminPasswordWithIP(ctx, remoteIP, "bad-password")
+		if ok {
+			t.Fatalf("expected bad password to fail on attempt %d", i+1)
+		}
+	}
+	// 第 6 次调用应处于锁定状态
+	ok, err = p.VerifyAdminPasswordWithIP(ctx, remoteIP, "Admin1234")
+	if ok || err == nil || !strings.Contains(err.Error(), "重试") {
+		t.Fatalf("expected lockout protection to activate, got ok=%v, err=%v", ok, err)
+	}
 }
+

@@ -55,5 +55,7 @@ type ServiceController interface {
 	ResetLoginBackground(ctx context.Context) error
 	GetLoginBackgroundImage(ctx context.Context) ([]byte, string, time.Time, error)
 	VerifyAdminPassword(ctx context.Context, plainPassword string) bool
+	VerifyAdminPasswordWithIP(ctx context.Context, clientIP, plainPassword string) (bool, error)
 	IsAuthInitialized() bool
 }
+

@@ -76,6 +76,13 @@ func TestIPC_BackgroundEndpoints(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 with admin password, got %d: %s", rec.Code, rec.Body.String())
 	}
+	var postResp Response[LoginBackgroundResponse]
+	if err := json.Unmarshal(rec.Body.Bytes(), &postResp); err != nil {
+		t.Fatalf("unmarshal post response failed: %v", err)
+	}
+	if !postResp.Success || postResp.Data.URL != "https://example.com/wallpaper.jpg" {
+		t.Fatalf("unexpected post response data: %+v", postResp)
+	}
 
 	// 5. 远程访问携带错误管理员密码，期望返回 401
 	setPayload.AdminPassword = "wrong-pass"
@@ -97,6 +104,13 @@ func TestIPC_BackgroundEndpoints(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("delete background failed: %d", rec.Code)
+	}
+	var deleteResp Response[LoginBackgroundResponse]
+	if err := json.Unmarshal(rec.Body.Bytes(), &deleteResp); err != nil {
+		t.Fatalf("unmarshal delete response failed: %v", err)
+	}
+	if !deleteResp.Success || deleteResp.Data.Type != "none" || deleteResp.Data.URL != "" {
+		t.Fatalf("expected reset background in response: %+v", deleteResp)
 	}
 	if mockCtrl.bgConfig.Type != "none" || mockCtrl.bgConfig.URL != "" {
 		t.Fatalf("expected reset background, got: %+v", mockCtrl.bgConfig)

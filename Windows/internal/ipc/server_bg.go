@@ -3,6 +3,7 @@ package ipc
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 )
@@ -22,15 +23,15 @@ func (s *Server) handleAuthBackground(w http.ResponseWriter, r *http.Request) {
 }
 
 // verifyBackgroundPermission 检查修改或删除背景的接口权限
-func (s *Server) verifyBackgroundPermission(r *http.Request, passwordInBody string) bool {
+func (s *Server) verifyBackgroundPermission(r *http.Request, passwordInBody string) (bool, error) {
 	// 1. 本地回环免密直连或有效 session / IPC token 放行
 	if isLoopbackRequest(r) || s.verifyToken(r) {
-		return true
+		return true, nil
 	}
 
 	// 2. 若系统尚未初始化管理员账号密码，放行配置
 	if s.controller != nil && !s.controller.IsAuthInitialized() {
-		return true
+		return true, nil
 	}
 
 	// 3. 远程未登录请求：检查 X-Admin-Password 请求头或请求参数携带的密码
@@ -38,11 +39,26 @@ func (s *Server) verifyBackgroundPermission(r *http.Request, passwordInBody stri
 	if adminPass == "" {
 		adminPass = passwordInBody
 	}
-	if adminPass != "" && s.controller != nil && s.controller.VerifyAdminPassword(r.Context(), adminPass) {
-		return true
+	if adminPass == "" {
+		return false, fmt.Errorf("未授权：局域网远程修改全局背景需要验证管理员密码")
 	}
 
-	return false
+	clientIP, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		clientIP = r.RemoteAddr
+	}
+
+	if s.controller != nil {
+		ok, verifyErr := s.controller.VerifyAdminPasswordWithIP(r.Context(), clientIP, adminPass)
+		if verifyErr != nil {
+			return false, verifyErr
+		}
+		if ok {
+			return true, nil
+		}
+	}
+
+	return false, fmt.Errorf("未授权：管理员密码验证失败")
 }
 
 // handleGetBackground 获取当前全局登录背景
@@ -65,8 +81,8 @@ func (s *Server) handleSetBackground(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !s.verifyBackgroundPermission(r, req.AdminPassword) {
-		writeJSON(w, http.StatusUnauthorized, Response[any]{Success: false, Error: "未授权：局域网远程修改全局背景需要验证管理员密码"})
+	if ok, authErr := s.verifyBackgroundPermission(r, req.AdminPassword); !ok {
+		writeJSON(w, http.StatusUnauthorized, Response[any]{Success: false, Error: authErr.Error()})
 		return
 	}
 
@@ -82,7 +98,12 @@ func (s *Server) handleSetBackground(w http.ResponseWriter, r *http.Request) {
 		Data:      "updated",
 	})
 
-	writeJSON(w, http.StatusOK, Response[any]{Success: true, Message: "全局登录背景已保存并应用"})
+	resp, _ := s.controller.GetLoginBackground(r.Context())
+	writeJSON(w, http.StatusOK, Response[*LoginBackgroundResponse]{
+		Success: true,
+		Data:    resp,
+		Message: "全局登录背景已保存并应用",
+	})
 }
 
 // handleResetBackground 恢复默认系统背景
@@ -91,8 +112,8 @@ func (s *Server) handleResetBackground(w http.ResponseWriter, r *http.Request) {
 	if adminPass == "" {
 		adminPass = r.Header.Get("X-Admin-Password")
 	}
-	if !s.verifyBackgroundPermission(r, adminPass) {
-		writeJSON(w, http.StatusUnauthorized, Response[any]{Success: false, Error: "未授权：局域网远程恢复默认背景需要验证管理员密码"})
+	if ok, authErr := s.verifyBackgroundPermission(r, adminPass); !ok {
+		writeJSON(w, http.StatusUnauthorized, Response[any]{Success: false, Error: authErr.Error()})
 		return
 	}
 
@@ -107,7 +128,12 @@ func (s *Server) handleResetBackground(w http.ResponseWriter, r *http.Request) {
 		Data:      "reset",
 	})
 
-	writeJSON(w, http.StatusOK, Response[any]{Success: true, Message: "已恢复系统默认背景"})
+	resp, _ := s.controller.GetLoginBackground(r.Context())
+	writeJSON(w, http.StatusOK, Response[*LoginBackgroundResponse]{
+		Success: true,
+		Data:    resp,
+		Message: "已恢复系统默认背景",
+	})
 }
 
 // handleAuthBackgroundImage 提供服务端存储的背景图片二进制流

@@ -281,3 +281,41 @@ func (m *Manager) VerifyPassword(plainPassword string) bool {
 	return subtle.ConstantTimeCompare([]byte(calcHash), []byte(m.passwordHash)) == 1
 }
 
+// VerifyPasswordWithIP 校验管理员明文密码并实施客户端 IP 频控与防爆破锁定
+func (m *Manager) VerifyPasswordWithIP(clientIP, plainPassword string) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	now := time.Now()
+	// 1. 检查客户端 IP 是否已被锁定
+	if until, ok := m.ipLockedUntil[clientIP]; ok && now.Before(until) {
+		remaining := int64(until.Sub(now).Seconds())
+		return false, fmt.Errorf("%w，请在 %d 秒后重试", ErrLockedOut, remaining)
+	}
+
+	// 2. 检查系统是否已初始化
+	if m.passwordHash == "" {
+		return false, ErrNotInitialized
+	}
+
+	calcHash, _ := HashPassword(plainPassword, m.salt)
+	passMatch := (subtle.ConstantTimeCompare([]byte(calcHash), []byte(m.passwordHash)) == 1)
+
+	if !passMatch {
+		m.ipAttempts[clientIP]++
+		if m.ipAttempts[clientIP] >= MaxFailedAttempts {
+			m.ipLockedUntil[clientIP] = now.Add(LockoutDuration)
+			m.ipAttempts[clientIP] = 0
+			return false, fmt.Errorf("密码连续错误 %d 次，已临时锁定 5 分钟", MaxFailedAttempts)
+		}
+		remainingAttempts := MaxFailedAttempts - m.ipAttempts[clientIP]
+		return false, fmt.Errorf("%w (剩余重试次数: %d)", ErrInvalidCredentials, remainingAttempts)
+	}
+
+	// 密码匹配，清理频控计数
+	delete(m.ipAttempts, clientIP)
+	delete(m.ipLockedUntil, clientIP)
+	return true, nil
+}
+
+

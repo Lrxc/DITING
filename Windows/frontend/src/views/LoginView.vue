@@ -52,9 +52,10 @@ const showBgModal = ref(false);
 // 主题模式
 const currentThemeMode = ref<ThemeMode>(themeManager.getThemeMode());
 
-const hasCustomBg = computed(() => Boolean(bgConfig.value.url));
+const hasCustomBg = computed(() => bgConfig.value.type !== 'none' && Boolean(bgConfig.value.url));
 
 const bgStyle = computed(() => {
+
   if (!bgConfig.value.url) return {};
   const cfg = ipc.getConfig();
   const baseUrl = cfg.host ? `http://${cfg.host}:${cfg.port}` : undefined;
@@ -215,20 +216,34 @@ async function fetchServerBackground() {
       const baseUrl = cfg.host ? `http://${cfg.host}:${cfg.port}` : undefined;
       const resolved = resolveBackgroundUrl(remote.url, baseUrl);
       bgConfig.value = {
+        type: remote.type,
         url: resolved,
         opacity: remote.opacity ?? 40,
         blur: remote.blur ?? 0,
+        updatedAt: remote.updatedAt,
       };
-      saveLoginBgConfig(resolved, remote.opacity ?? 40, remote.blur ?? 0);
+      saveLoginBgConfig(remote.type, resolved, remote.opacity ?? 40, remote.blur ?? 0);
     }
   } catch {}
 }
 
 let unsubEvents: (() => void) | null = null;
+let syncTimer: ReturnType<typeof setInterval> | null = null;
+
+function handleVisibilityOrFocus() {
+  if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+    fetchServerBackground();
+  }
+}
 
 onMounted(() => {
   checkAuthStatus();
   fetchServerBackground();
+  syncTimer = setInterval(fetchServerBackground, 30000);
+  if (typeof window !== 'undefined') {
+    window.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+  }
   unsubEvents = ipc.onEvent((event) => {
     if (event.type === 'background') {
       fetchServerBackground();
@@ -238,6 +253,11 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (lockoutTimer) clearInterval(lockoutTimer);
+  if (syncTimer) clearInterval(syncTimer);
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.removeEventListener('focus', handleVisibilityOrFocus);
+  }
   if (unsubEvents) unsubEvents();
 });
 </script>

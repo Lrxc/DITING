@@ -9,6 +9,7 @@ import {
   validateImageUrl,
   saveLoginBgConfig,
   clearLoginBgConfig,
+  isInternalBgUrl,
   type LoginBgConfig,
 } from '../../utils/imageCompressor';
 
@@ -33,7 +34,8 @@ const emit = defineEmits<{
 }>();
 
 const activeTab = ref<'local' | 'url'>('local');
-const previewUrl = ref('');
+const localPreviewUrl = ref('');
+const urlPreviewUrl = ref('');
 const imageUrlInput = ref('');
 const opacity = ref(40);
 const blur = ref(0);
@@ -58,18 +60,47 @@ const needPasswordVerification = computed(() => {
   return true;
 });
 
+const isCurrentCustom = computed(() => {
+  return (
+    props.currentConfig.type === 'custom' ||
+    isInternalBgUrl(props.currentConfig.url) ||
+    props.currentConfig.url?.startsWith('data:')
+  );
+});
+
+const effectivePreviewUrl = computed(() => {
+  return activeTab.value === 'local' ? localPreviewUrl.value : urlPreviewUrl.value;
+});
+
 watch(
   () => props.open,
   (val) => {
     if (val) {
-      previewUrl.value = props.currentConfig.url || '';
-      imageUrlInput.value = props.currentConfig.url?.startsWith('data:') ? '' : props.currentConfig.url || '';
-      opacity.value = props.currentConfig.opacity ?? 40;
-      blur.value = props.currentConfig.blur ?? 0;
-      adminPasswordInput.value = props.adminPassword || '';
       errorMsg.value = '';
       successMsg.value = '';
-      activeTab.value = props.currentConfig.url?.startsWith('data:') ? 'local' : (props.currentConfig.url ? 'url' : 'local');
+      adminPasswordInput.value = props.adminPassword || '';
+      opacity.value = props.currentConfig.opacity ?? 40;
+      blur.value = props.currentConfig.blur ?? 0;
+
+      const currentUrl = props.currentConfig.url || '';
+      const isCustom = isCurrentCustom.value;
+
+      if (isCustom) {
+        activeTab.value = 'local';
+        localPreviewUrl.value = currentUrl;
+        imageUrlInput.value = '';
+        urlPreviewUrl.value = '';
+      } else if (props.currentConfig.type === 'url' || (currentUrl && !currentUrl.startsWith('data:'))) {
+        activeTab.value = 'url';
+        imageUrlInput.value = currentUrl;
+        urlPreviewUrl.value = currentUrl;
+        localPreviewUrl.value = '';
+      } else {
+        activeTab.value = 'local';
+        localPreviewUrl.value = '';
+        imageUrlInput.value = '';
+        urlPreviewUrl.value = '';
+      }
     }
   },
   { immediate: true }
@@ -91,8 +122,8 @@ async function handleFileSelect(e: Event) {
   isProcessing.value = true;
   try {
     const compressed = await compressImageFile(file, 1920, 1080, 0.82);
-    previewUrl.value = compressed;
-    successMsg.value = `图片读取成功（已智能压缩，分辨率自动适配）`;
+    localPreviewUrl.value = compressed;
+    successMsg.value = '图片读取成功（已智能压缩，分辨率自动适配）';
   } catch (err: any) {
     errorMsg.value = err.message || '图片读取与压缩失败，请重试';
   } finally {
@@ -120,17 +151,32 @@ async function handleApplyUrl() {
     return;
   }
 
-  previewUrl.value = url;
+  urlPreviewUrl.value = url;
   successMsg.value = '网络图片检测成功，已应用预览';
+}
+
+function clearActivePreview() {
+  if (activeTab.value === 'local') {
+    localPreviewUrl.value = '';
+  } else {
+    urlPreviewUrl.value = '';
+    imageUrlInput.value = '';
+  }
 }
 
 async function handleSave() {
   errorMsg.value = '';
 
-  // 若用户在网络图片标签页输入了新的 URL 但未单独点击“加载”按钮，自动进行校验与应用
+  let targetType: 'custom' | 'url' = 'custom';
+  let targetUrl = '';
+
   if (activeTab.value === 'url') {
     const inputUrl = imageUrlInput.value.trim();
-    if (inputUrl && inputUrl !== previewUrl.value) {
+    if (!inputUrl && !urlPreviewUrl.value) {
+      errorMsg.value = '请输入有效的网络图片链接并加载预览';
+      return;
+    }
+    if (inputUrl && inputUrl !== urlPreviewUrl.value) {
       isProcessing.value = true;
       const valid = await validateImageUrl(inputUrl);
       isProcessing.value = false;
@@ -138,25 +184,40 @@ async function handleSave() {
         errorMsg.value = '图片链接加载失败，请检查网络地址是否正确或是否存在跨域防盗链';
         return;
       }
-      previewUrl.value = inputUrl;
+      urlPreviewUrl.value = inputUrl;
     }
+    targetType = 'url';
+    targetUrl = urlPreviewUrl.value;
+  } else {
+    targetType = 'custom';
+    if (!localPreviewUrl.value) {
+      errorMsg.value = '请先选择本地图片文件或点击“恢复默认背景”';
+      return;
+    }
+    targetUrl = localPreviewUrl.value;
   }
 
   isProcessing.value = true;
   try {
     const passwordToUse = adminPasswordInput.value.trim() || props.adminPassword;
-    await ipc.setLoginBackground({
-      url: previewUrl.value,
+    const res = await ipc.setLoginBackground({
+      type: targetType,
+      url: targetUrl,
       opacity: opacity.value,
       blur: blur.value,
       adminPassword: passwordToUse,
     });
 
-    saveLoginBgConfig(previewUrl.value, opacity.value, blur.value);
+    const finalType = res?.type || targetType;
+    const finalUrl = res?.url || (finalType === 'custom' ? '/api/v1/auth/background/image' : targetUrl);
+
+    saveLoginBgConfig(finalType, finalUrl, opacity.value, blur.value);
     emit('change', {
-      url: previewUrl.value,
+      type: finalType,
+      url: finalUrl,
       opacity: opacity.value,
       blur: blur.value,
+      updatedAt: res?.updatedAt,
     });
     emit('close');
   } catch (err: any) {
@@ -171,18 +232,21 @@ async function handleResetDefault() {
   isProcessing.value = true;
   try {
     const passwordToUse = adminPasswordInput.value.trim() || props.adminPassword;
-    await ipc.resetLoginBackground(passwordToUse);
+    const res = await ipc.resetLoginBackground(passwordToUse);
     clearLoginBgConfig();
-    previewUrl.value = '';
+    localPreviewUrl.value = '';
+    urlPreviewUrl.value = '';
     imageUrlInput.value = '';
     opacity.value = 40;
     blur.value = 0;
     successMsg.value = '已恢复系统默认背景（不设置背景图）';
 
     emit('change', {
+      type: 'none',
       url: '',
       opacity: 40,
       blur: 0,
+      updatedAt: res?.updatedAt,
     });
     setTimeout(() => {
       emit('close');
@@ -209,7 +273,7 @@ async function handleResetDefault() {
         <div>
           <h3 class="section-title">自定义登录背景</h3>
           <p class="text-xs text-text-sub mt-0.5">
-            自由上传本地壁纸或指定网络图片，兼顾全屏视觉与卡片可读性
+            自由上传本地壁纸或指定网络图片，主服务器全局存储并多端同步
           </p>
         </div>
       </div>
@@ -263,11 +327,18 @@ async function handleResetDefault() {
             <M3Icon name="upload" :size="20" />
           </div>
           <div class="text-xs font-semibold text-text-main">
-            点击选择本地图片文件
+            {{ localPreviewUrl ? '点击更换本地壁纸文件' : '点击选择本地图片文件' }}
           </div>
           <div class="text-[11px] text-text-muted">
-            支持 PNG、JPG、WebP、SVG，客户端自动缩放压缩以节省存储
+            支持 PNG、JPG、WebP、SVG，客户端自动智能缩放并持久化存储于主服务器
           </div>
+        </div>
+        <div
+          v-if="localPreviewUrl && !localPreviewUrl.startsWith('data:')"
+          class="px-2.5 py-1.5 rounded bg-brand-container/20 text-brand-primary text-[11px] flex items-center gap-1.5"
+        >
+          <M3Icon name="cloud_done" :size="14" class="shrink-0" />
+          <span>当前已加载服务端存储的壁纸，微调暗度或模糊后直接点击保存即可</span>
         </div>
       </div>
 
@@ -297,9 +368,9 @@ async function handleResetDefault() {
       </div>
 
       <!-- 图片预览缩略图 -->
-      <div v-if="previewUrl" class="relative rounded-md overflow-hidden border border-surface-border bg-surface-card h-32 flex items-center justify-center group">
+      <div v-if="effectivePreviewUrl" class="relative rounded-md overflow-hidden border border-surface-border bg-surface-card h-32 flex items-center justify-center group">
         <img
-          :src="previewUrl"
+          :src="effectivePreviewUrl"
           alt="背景预览"
           class="w-full h-full object-cover transition-transform group-hover:scale-105"
         />
@@ -312,7 +383,7 @@ async function handleResetDefault() {
         </div>
         <button
           type="button"
-          @click="previewUrl = ''"
+          @click="clearActivePreview"
           class="absolute top-2 right-2 p-1 rounded-full bg-black/60 hover:bg-black/80 text-white transition-colors cursor-pointer"
           title="移除选定图片"
         >
@@ -321,7 +392,7 @@ async function handleResetDefault() {
       </div>
 
       <!-- 视觉微调滑块 -->
-      <div v-if="previewUrl" class="space-y-3 p-3 rounded-md bg-surface-card-sub/60 border border-surface-border-sub text-xs">
+      <div v-if="effectivePreviewUrl" class="space-y-3 p-3 rounded-md bg-surface-card-sub/60 border border-surface-border-sub text-xs">
         <div class="space-y-1.5">
           <div class="flex items-center justify-between text-text-sub font-medium">
             <span>背景遮罩暗度</span>
@@ -390,7 +461,7 @@ async function handleResetDefault() {
     <template #actions>
       <div class="flex flex-wrap items-center justify-between gap-2.5 w-full">
         <button
-          v-if="currentConfig.url || previewUrl"
+          v-if="currentConfig.url || effectivePreviewUrl"
           type="button"
           @click="handleResetDefault"
           :disabled="isProcessing"

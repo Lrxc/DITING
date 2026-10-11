@@ -102,6 +102,13 @@ func (m *mockController) VerifyAdminPassword(ctx context.Context, plainPassword 
 	return plainPassword == "correct-pass"
 }
 
+func (m *mockController) VerifyAdminPasswordWithIP(ctx context.Context, clientIP, plainPassword string) (bool, error) {
+	if plainPassword == "correct-pass" {
+		return true, nil
+	}
+	return false, errors.New("管理员密码错误")
+}
+
 func (m *mockController) IsAuthInitialized() bool {
 	return m.authInitialized
 }

@@ -76,26 +76,27 @@ export class WebAuthApi {
     return this.http.request<LoginBackgroundConfig>('/api/v1/auth/background');
   }
 
-  public async setLoginBackground(req: SetLoginBackgroundRequest): Promise<void> {
+  public async setLoginBackground(req: SetLoginBackgroundRequest): Promise<LoginBackgroundConfig> {
     const headers: Record<string, string> = {};
     if (req.adminPassword) {
       headers['X-Admin-Password'] = req.adminPassword;
     }
-    await this.http.request<void>('/api/v1/auth/background', {
+    return this.http.request<LoginBackgroundConfig>('/api/v1/auth/background', {
       method: 'POST',
       body: JSON.stringify(req),
       headers,
     });
   }
 
-  public async resetLoginBackground(adminPassword?: string): Promise<void> {
+  public async resetLoginBackground(adminPassword?: string): Promise<LoginBackgroundConfig> {
     const headers: Record<string, string> = {};
     if (adminPassword) {
       headers['X-Admin-Password'] = adminPassword;
     }
-    await this.http.request<void>('/api/v1/auth/background', {
+    return this.http.request<LoginBackgroundConfig>('/api/v1/auth/background', {
       method: 'DELETE',
       headers,
     });
   }
 }
+

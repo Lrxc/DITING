@@ -3,15 +3,19 @@
  * 支持本地图片客户端 Canvas 智能压缩、网络图片预检及 LocalStorage 容灾
  */
 
+export const BG_STORAGE_KEY_TYPE = 'diting_login_bg_type';
 export const BG_STORAGE_KEY_URL = 'diting_login_custom_bg';
 export const BG_STORAGE_KEY_OPACITY = 'diting_login_bg_opacity';
 export const BG_STORAGE_KEY_BLUR = 'diting_login_bg_blur';
 
 export interface LoginBgConfig {
+  type: 'none' | 'url' | 'custom';
   url: string;
   opacity: number; // 0 - 100
   blur: number; // 0 - 20 px
+  updatedAt?: number;
 }
+
 
 /**
  * 客户端 Canvas 图像缩放与智能压缩：
@@ -152,11 +156,20 @@ export function validateImageUrl(url: string, timeoutMs = 8000): Promise<boolean
 }
 
 /**
+ * 判断 URL 是否指向服务端内置的自定义背景图片接口
+ */
+export function isInternalBgUrl(url?: string): boolean {
+  if (!url) return false;
+  return url.includes('/api/v1/auth/background/image');
+}
+
+/**
  * 读取本地保存的登录页背景配置
  * 默认情况下不设置背景图片 (url 为空)
  */
 export function loadLoginBgConfig(): LoginBgConfig {
   try {
+    const rawType = localStorage.getItem(BG_STORAGE_KEY_TYPE) as 'none' | 'url' | 'custom' | null;
     const url = localStorage.getItem(BG_STORAGE_KEY_URL) || '';
     const rawOpacity = localStorage.getItem(BG_STORAGE_KEY_OPACITY);
     const rawBlur = localStorage.getItem(BG_STORAGE_KEY_BLUR);
@@ -164,27 +177,48 @@ export function loadLoginBgConfig(): LoginBgConfig {
     const opacity = rawOpacity !== null ? Number(rawOpacity) : 40;
     const blur = rawBlur !== null ? Number(rawBlur) : 0;
 
+    let type: 'none' | 'url' | 'custom' = rawType || (url ? (isInternalBgUrl(url) ? 'custom' : 'url') : 'none');
+    if (!url) {
+      type = 'none';
+    }
+
     return {
+      type,
       url,
       opacity: Number.isNaN(opacity) ? 40 : Math.min(100, Math.max(0, opacity)),
       blur: Number.isNaN(blur) ? 0 : Math.min(20, Math.max(0, blur)),
     };
   } catch {
-    return { url: '', opacity: 40, blur: 0 };
+    return { type: 'none', url: '', opacity: 40, blur: 0 };
   }
 }
 
 /**
- * 持久化登录页背景配置至 LocalStorage
+ * 持久化登录页背景配置至 LocalStorage（仅作轻量化秒开缓存，不存放 Base64 避免 QuotaExceededError）
  */
-export function saveLoginBgConfig(url: string, opacity = 40, blur = 0): { success: boolean; error?: string } {
+export function saveLoginBgConfig(
+  type: 'none' | 'url' | 'custom',
+  url: string,
+  opacity = 40,
+  blur = 0
+): { success: boolean; error?: string } {
   try {
     const clampedOpacity = Math.min(100, Math.max(0, opacity));
     const clampedBlur = Math.min(20, Math.max(0, blur));
-    if (url) {
-      localStorage.setItem(BG_STORAGE_KEY_URL, url);
-    } else {
+
+    // 关键优化：若为服务端存储的自定义背景，避免在 LocalStorage 中存放数兆 Base64，
+    // 仅保存服务端路由标记或网络链接，彻底避免超过 LocalStorage 5MB 配额。
+    let storageUrl = url;
+    if (url.startsWith('data:image/')) {
+      storageUrl = '/api/v1/auth/background/image';
+    }
+
+    if (type === 'none' || !storageUrl) {
       localStorage.removeItem(BG_STORAGE_KEY_URL);
+      localStorage.removeItem(BG_STORAGE_KEY_TYPE);
+    } else {
+      localStorage.setItem(BG_STORAGE_KEY_TYPE, type);
+      localStorage.setItem(BG_STORAGE_KEY_URL, storageUrl);
     }
     localStorage.setItem(BG_STORAGE_KEY_OPACITY, String(clampedOpacity));
     localStorage.setItem(BG_STORAGE_KEY_BLUR, String(clampedBlur));
@@ -192,7 +226,7 @@ export function saveLoginBgConfig(url: string, opacity = 40, blur = 0): { succes
   } catch (err: any) {
     return {
       success: false,
-      error: '保存背景配置失败：可能超过了浏览器本地存储容量配额，请尝试使用网络图片地址。',
+      error: '保存本地背景配置缓存失败',
     };
   }
 }
@@ -202,6 +236,7 @@ export function saveLoginBgConfig(url: string, opacity = 40, blur = 0): { succes
  */
 export function clearLoginBgConfig(): void {
   try {
+    localStorage.removeItem(BG_STORAGE_KEY_TYPE);
     localStorage.removeItem(BG_STORAGE_KEY_URL);
     localStorage.removeItem(BG_STORAGE_KEY_OPACITY);
     localStorage.removeItem(BG_STORAGE_KEY_BLUR);
