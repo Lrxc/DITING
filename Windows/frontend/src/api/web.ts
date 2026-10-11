@@ -6,6 +6,8 @@ import type {
   ChangePasswordRequest,
   WebStatusResponse,
   ConfigureWebRequest,
+  LoginBackgroundConfig,
+  SetLoginBackgroundRequest,
 } from './types';
 import type { HttpTransport } from './http';
 import type { EventChannel } from './ws';
@@ -67,6 +69,33 @@ export class WebAuthApi {
     await this.http.request<void>('/api/v1/web/configure', {
       method: 'POST',
       body: JSON.stringify(req),
+    });
+  }
+
+  public getLoginBackground(): Promise<LoginBackgroundConfig> {
+    return this.http.request<LoginBackgroundConfig>('/api/v1/auth/background');
+  }
+
+  public async setLoginBackground(req: SetLoginBackgroundRequest): Promise<void> {
+    const headers: Record<string, string> = {};
+    if (req.adminPassword) {
+      headers['X-Admin-Password'] = req.adminPassword;
+    }
+    await this.http.request<void>('/api/v1/auth/background', {
+      method: 'POST',
+      body: JSON.stringify(req),
+      headers,
+    });
+  }
+
+  public async resetLoginBackground(adminPassword?: string): Promise<void> {
+    const headers: Record<string, string> = {};
+    if (adminPassword) {
+      headers['X-Admin-Password'] = adminPassword;
+    }
+    await this.http.request<void>('/api/v1/auth/background', {
+      method: 'DELETE',
+      headers,
     });
   }
 }

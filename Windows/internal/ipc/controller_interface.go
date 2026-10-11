@@ -2,6 +2,7 @@ package ipc
 
 import (
 	"context"
+	"time"
 
 	"github.com/haoze-evolluling/diting/windows/internal/core"
 	"github.com/haoze-evolluling/diting/windows/internal/platform/windows"
@@ -49,4 +50,10 @@ type ServiceController interface {
 	SetupAuth(ctx context.Context, req SetupAuthRequest) error
 	ChangePassword(ctx context.Context, req ChangePasswordRequest, bypassOldAuth bool) error
 	ValidateSession(token string) bool
+	GetLoginBackground(ctx context.Context) (*LoginBackgroundResponse, error)
+	SetLoginBackground(ctx context.Context, req SetLoginBackgroundRequest) error
+	ResetLoginBackground(ctx context.Context) error
+	GetLoginBackgroundImage(ctx context.Context) ([]byte, string, time.Time, error)
+	VerifyAdminPassword(ctx context.Context, plainPassword string) bool
+	IsAuthInitialized() bool
 }

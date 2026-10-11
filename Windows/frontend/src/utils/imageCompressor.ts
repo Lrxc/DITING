@@ -207,3 +207,32 @@ export function clearLoginBgConfig(): void {
     localStorage.removeItem(BG_STORAGE_KEY_BLUR);
   } catch {}
 }
+
+/**
+ * 解析并规范化背景图片 URL：
+ * 若为服务端相对路径（如 /api/v1/auth/background/image），结合 baseUrl 拼装为多端可访问的完整 URL。
+ */
+export function resolveBackgroundUrl(rawUrl: string, baseUrl?: string): string {
+  if (!rawUrl || !rawUrl.trim()) return '';
+  const trimmed = rawUrl.trim();
+  if (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('data:') ||
+    trimmed.startsWith('blob:')
+  ) {
+    return trimmed;
+  }
+
+  if (trimmed.startsWith('/')) {
+    if (baseUrl) {
+      return `${baseUrl.replace(/\/+$/, '')}${trimmed}`;
+    }
+    if (typeof window !== 'undefined' && window.location.origin) {
+      return `${window.location.origin}${trimmed}`;
+    }
+  }
+
+  return trimmed;
+}
+

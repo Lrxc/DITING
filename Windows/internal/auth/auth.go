@@ -268,3 +268,16 @@ func (m *Manager) CheckIPLockout(clientIP string) (bool, int64) {
 	}
 	return false, 0
 }
+
+// VerifyPassword 常量时间安全校验明文密码是否与管理员密码相匹配
+func (m *Manager) VerifyPassword(plainPassword string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.passwordHash == "" {
+		return false
+	}
+	calcHash, _ := HashPassword(plainPassword, m.salt)
+	return subtle.ConstantTimeCompare([]byte(calcHash), []byte(m.passwordHash)) == 1
+}
+

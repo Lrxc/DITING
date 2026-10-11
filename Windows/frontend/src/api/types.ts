@@ -225,7 +225,7 @@ export interface CheckHostResult {
 }
 
 export interface WebSocketEvent {
-  type: 'query' | 'metrics' | 'takeover' | 'dns' | 'alert' | 'upstream';
+  type: 'query' | 'metrics' | 'takeover' | 'dns' | 'alert' | 'upstream' | 'background';
   timestamp: number;
   data: any;
 }
@@ -326,3 +326,20 @@ export interface ConfigureWebRequest {
   port?: number;
   configureFirewall?: boolean;
 }
+
+export interface LoginBackgroundConfig {
+  type: 'none' | 'url' | 'custom';
+  url: string;
+  opacity: number;
+  blur: number;
+  updatedAt: number;
+}
+
+export interface SetLoginBackgroundRequest {
+  type?: 'none' | 'url' | 'custom';
+  url: string;
+  opacity: number;
+  blur: number;
+  adminPassword?: string;
+}
+

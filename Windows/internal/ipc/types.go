@@ -220,3 +220,21 @@ type ConfigureWebRequest struct {
 type AutofixPortRequest struct {
 	StartDNS bool `json:"startDNS,omitempty"` // 修复成功后是否立即拉起 DNS 监听器
 }
+
+// LoginBackgroundResponse 获取全局登录背景配置响应
+type LoginBackgroundResponse struct {
+	Type      string `json:"type"`      // 类型: "none" | "url" | "custom"
+	URL       string `json:"url"`       // 外部网络图片 URL 或服务端本地图片接口相对路径
+	Opacity   int    `json:"opacity"`   // 遮罩暗度 0 - 100
+	Blur      int    `json:"blur"`      // 毛玻璃模糊 0 - 20 px
+	UpdatedAt int64  `json:"updatedAt"` // 最近配置更新时间戳
+}
+
+// SetLoginBackgroundRequest 设置全局登录背景请求
+type SetLoginBackgroundRequest struct {
+	Type          string `json:"type,omitempty"`          // 可选类型指定
+	URL           string `json:"url"`                     // 外部图片 URL 或 "data:image/..." Base64 编码，为空表示清除
+	Opacity       int    `json:"opacity"`                 // 遮罩暗度 0 - 100
+	Blur          int    `json:"blur"`                    // 毛玻璃模糊 0 - 20 px
+	AdminPassword string `json:"adminPassword,omitempty"` // 远程未登录客户端鉴权密码（可选）
+}

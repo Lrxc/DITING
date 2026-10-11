@@ -118,6 +118,19 @@ func normalizeConfig(cfg *Config) {
 	if cfg.Web.ListenPort <= 0 {
 		cfg.Web.ListenPort = 15353
 	}
+	if cfg.Web.Background.Opacity <= 0 && cfg.Web.Background.Type == "" {
+		cfg.Web.Background.Opacity = 40
+	}
+	if cfg.Web.Background.Opacity < 0 {
+		cfg.Web.Background.Opacity = 0
+	} else if cfg.Web.Background.Opacity > 100 {
+		cfg.Web.Background.Opacity = 100
+	}
+	if cfg.Web.Background.Blur < 0 {
+		cfg.Web.Background.Blur = 0
+	} else if cfg.Web.Background.Blur > 20 {
+		cfg.Web.Background.Blur = 20
+	}
 	core.NormalizeCacheConfig(&cfg.Cache)
 	core.NormalizeFilterConfig(&cfg.Filter)
 }

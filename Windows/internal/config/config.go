@@ -122,6 +122,15 @@ type TakeoverConfig struct {
 	StateFilePath       string `json:"stateFilePath"`       // 接管状态持久化文件路径
 }
 
+// LoginBgConfig 登录页面自定义背景与视觉全局持久化配置
+type LoginBgConfig struct {
+	Type      string `json:"type"`      // 类型: "none" | "url" | "custom"
+	URL       string `json:"url"`       // 外部网络图片 URL 或服务端本地图片路由相对路径
+	Opacity   int    `json:"opacity"`   // 遮罩暗度 0 - 100（默认 40）
+	Blur      int    `json:"blur"`      // 毛玻璃模糊 0 - 20 px（默认 0）
+	UpdatedAt int64  `json:"updatedAt"` // 最近配置更新时间戳（秒）
+}
+
 // WebConfig 局域网 Web 管理控制台配置
 type WebConfig struct {
 	Enabled        bool          `json:"enabled"`        // 是否启用局域网 Web 远程管理
@@ -130,6 +139,7 @@ type WebConfig struct {
 	PasswordHash   string        `json:"passwordHash"`   // 加盐密码哈希
 	Salt           string        `json:"salt"`           // 盐值
 	SessionTimeout time.Duration `json:"sessionTimeout"` // 会话有效时长（默认 7 * 24h）
+	Background     LoginBgConfig `json:"background"`     // 登录页面自定义背景与视觉配置
 }
 
 // UnmarshalJSON 支持字符串 (如 "168h") 与数字纳秒对 time.Duration 的反序列化
@@ -206,6 +216,13 @@ func DefaultConfig() *Config {
 			PasswordHash:   "",
 			Salt:           "",
 			SessionTimeout: 7 * 24 * time.Hour,
+			Background: LoginBgConfig{
+				Type:      "none",
+				URL:       "",
+				Opacity:   40,
+				Blur:      0,
+				UpdatedAt: 0,
+			},
 		},
 	}
 }

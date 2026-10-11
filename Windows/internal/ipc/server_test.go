@@ -25,6 +25,9 @@ type mockController struct {
 	portResult   *windows.PortCheckResult
 	cacheConfig  *core.CacheConfig
 	filterConfig *core.FilterConfig
+	bgConfig        *LoginBackgroundResponse
+	bgImageData     []byte
+	authInitialized bool
 }
 
 func (m *mockController) StartDNS(ctx context.Context) error {

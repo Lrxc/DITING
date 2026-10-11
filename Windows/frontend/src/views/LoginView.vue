@@ -4,6 +4,8 @@ import { ipc } from '../api/ipc';
 import { themeManager, type ThemeMode } from '../theme/theme';
 import {
   loadLoginBgConfig,
+  saveLoginBgConfig,
+  resolveBackgroundUrl,
   type LoginBgConfig,
 } from '../utils/imageCompressor';
 import M3Icon from '../components/M3Icon.vue';
@@ -54,7 +56,10 @@ const hasCustomBg = computed(() => Boolean(bgConfig.value.url));
 
 const bgStyle = computed(() => {
   if (!bgConfig.value.url) return {};
-  const safeUrl = bgConfig.value.url.replace(/'/g, "\\'");
+  const cfg = ipc.getConfig();
+  const baseUrl = cfg.host ? `http://${cfg.host}:${cfg.port}` : undefined;
+  const fullUrl = resolveBackgroundUrl(bgConfig.value.url, baseUrl);
+  const safeUrl = fullUrl.replace(/'/g, "\\'");
   return {
     backgroundImage: `url('${safeUrl}')`,
     filter: bgConfig.value.blur > 0 ? `blur(${bgConfig.value.blur}px)` : 'none',
@@ -82,9 +87,12 @@ const themeLabel = computed(() => {
   return '跟随系统';
 });
 
+const isAuthInitialized = ref(true);
+
 async function checkAuthStatus() {
   try {
     const status = await ipc.getAuthStatus();
+    isAuthInitialized.value = Boolean(status.initialized);
     if (!status.initialized) {
       currentMode.value = 'setup';
     } else {
@@ -190,15 +198,47 @@ async function handleSubmit() {
 }
 
 function handleBgChange(newCfg: LoginBgConfig) {
-  bgConfig.value = { ...newCfg };
+  const cfg = ipc.getConfig();
+  const baseUrl = cfg.host ? `http://${cfg.host}:${cfg.port}` : undefined;
+  const resolved = resolveBackgroundUrl(newCfg.url, baseUrl);
+  bgConfig.value = {
+    ...newCfg,
+    url: resolved,
+  };
 }
+
+async function fetchServerBackground() {
+  try {
+    const remote = await ipc.getLoginBackground();
+    if (remote) {
+      const cfg = ipc.getConfig();
+      const baseUrl = cfg.host ? `http://${cfg.host}:${cfg.port}` : undefined;
+      const resolved = resolveBackgroundUrl(remote.url, baseUrl);
+      bgConfig.value = {
+        url: resolved,
+        opacity: remote.opacity ?? 40,
+        blur: remote.blur ?? 0,
+      };
+      saveLoginBgConfig(resolved, remote.opacity ?? 40, remote.blur ?? 0);
+    }
+  } catch {}
+}
+
+let unsubEvents: (() => void) | null = null;
 
 onMounted(() => {
   checkAuthStatus();
+  fetchServerBackground();
+  unsubEvents = ipc.onEvent((event) => {
+    if (event.type === 'background') {
+      fetchServerBackground();
+    }
+  });
 });
 
 onUnmounted(() => {
   if (lockoutTimer) clearInterval(lockoutTimer);
+  if (unsubEvents) unsubEvents();
 });
 </script>
 
@@ -422,6 +462,9 @@ onUnmounted(() => {
     <LoginBgModal
       :open="showBgModal"
       :current-config="bgConfig"
+      :admin-password="password"
+      :is-auth-initialized="isAuthInitialized"
+      :is-authenticated="Boolean(ipc.isConnected && ipc.token)"
       @close="showBgModal = false"
       @change="handleBgChange"
     />

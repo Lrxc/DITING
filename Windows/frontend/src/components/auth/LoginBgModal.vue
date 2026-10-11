@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import AppModal from '../AppModal.vue';
 import M3Icon from '../M3Icon.vue';
+import { ipc } from '../../api/ipc';
+import { isDesktopApp } from '../../utils/env';
 import {
   compressImageFile,
   validateImageUrl,
@@ -10,10 +12,20 @@ import {
   type LoginBgConfig,
 } from '../../utils/imageCompressor';
 
-const props = defineProps<{
-  open: boolean;
-  currentConfig: LoginBgConfig;
-}>();
+const props = withDefaults(
+  defineProps<{
+    open: boolean;
+    currentConfig: LoginBgConfig;
+    adminPassword?: string;
+    isAuthInitialized?: boolean;
+    isAuthenticated?: boolean;
+  }>(),
+  {
+    adminPassword: '',
+    isAuthInitialized: true,
+    isAuthenticated: false,
+  }
+);
 
 const emit = defineEmits<{
   (e: 'close'): void;
@@ -25,11 +37,26 @@ const previewUrl = ref('');
 const imageUrlInput = ref('');
 const opacity = ref(40);
 const blur = ref(0);
+const adminPasswordInput = ref('');
+const showAdminPassword = ref(false);
 
 const isProcessing = ref(false);
 const errorMsg = ref('');
 const successMsg = ref('');
 const fileInput = ref<HTMLInputElement | null>(null);
+
+const needPasswordVerification = computed(() => {
+  if (isDesktopApp()) return false;
+  if (!props.isAuthInitialized) return false;
+  if (props.isAuthenticated) return false;
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
+      return false;
+    }
+  }
+  return true;
+});
 
 watch(
   () => props.open,
@@ -39,6 +66,7 @@ watch(
       imageUrlInput.value = props.currentConfig.url?.startsWith('data:') ? '' : props.currentConfig.url || '';
       opacity.value = props.currentConfig.opacity ?? 40;
       blur.value = props.currentConfig.blur ?? 0;
+      adminPasswordInput.value = props.adminPassword || '';
       errorMsg.value = '';
       successMsg.value = '';
       activeTab.value = props.currentConfig.url?.startsWith('data:') ? 'local' : (props.currentConfig.url ? 'url' : 'local');
@@ -114,37 +142,56 @@ async function handleSave() {
     }
   }
 
-  const result = saveLoginBgConfig(previewUrl.value, opacity.value, blur.value);
-  if (!result.success) {
-    errorMsg.value = result.error || '保存配置失败';
-    return;
-  }
+  isProcessing.value = true;
+  try {
+    const passwordToUse = adminPasswordInput.value.trim() || props.adminPassword;
+    await ipc.setLoginBackground({
+      url: previewUrl.value,
+      opacity: opacity.value,
+      blur: blur.value,
+      adminPassword: passwordToUse,
+    });
 
-  emit('change', {
-    url: previewUrl.value,
-    opacity: opacity.value,
-    blur: blur.value,
-  });
-  emit('close');
+    saveLoginBgConfig(previewUrl.value, opacity.value, blur.value);
+    emit('change', {
+      url: previewUrl.value,
+      opacity: opacity.value,
+      blur: blur.value,
+    });
+    emit('close');
+  } catch (err: any) {
+    errorMsg.value = err.message || '保存配置失败，请检查网络或服务端连接状态';
+  } finally {
+    isProcessing.value = false;
+  }
 }
 
-function handleResetDefault() {
-  clearLoginBgConfig();
-  previewUrl.value = '';
-  imageUrlInput.value = '';
-  opacity.value = 40;
-  blur.value = 0;
+async function handleResetDefault() {
   errorMsg.value = '';
-  successMsg.value = '已恢复系统默认背景（不设置背景图）';
+  isProcessing.value = true;
+  try {
+    const passwordToUse = adminPasswordInput.value.trim() || props.adminPassword;
+    await ipc.resetLoginBackground(passwordToUse);
+    clearLoginBgConfig();
+    previewUrl.value = '';
+    imageUrlInput.value = '';
+    opacity.value = 40;
+    blur.value = 0;
+    successMsg.value = '已恢复系统默认背景（不设置背景图）';
 
-  emit('change', {
-    url: '',
-    opacity: 40,
-    blur: 0,
-  });
-  setTimeout(() => {
-    emit('close');
-  }, 400);
+    emit('change', {
+      url: '',
+      opacity: 40,
+      blur: 0,
+    });
+    setTimeout(() => {
+      emit('close');
+    }, 400);
+  } catch (err: any) {
+    errorMsg.value = err.message || '恢复默认背景失败';
+  } finally {
+    isProcessing.value = false;
+  }
 }
 </script>
 
@@ -307,6 +354,37 @@ function handleResetDefault() {
           <div class="text-[11px] text-text-muted">适度模糊可使复杂背景更柔和，凸显前景登录表单</div>
         </div>
       </div>
+
+      <!-- 局域网远程管理员凭据验证（仅远程未登录时要求） -->
+      <div
+        v-if="needPasswordVerification"
+        class="space-y-2 p-3 rounded-md bg-surface-card-sub/80 border border-surface-border-sub text-xs"
+      >
+        <div class="flex items-center justify-between text-text-sub font-medium">
+          <div class="flex items-center gap-1.5 text-accent-seal">
+            <M3Icon name="lock" :size="14" />
+            <span>局域网远程管理员密码验证</span>
+          </div>
+          <span class="text-[11px] text-text-muted">跨端保存全局生效</span>
+        </div>
+        <div class="relative flex items-center">
+          <input
+            v-model="adminPasswordInput"
+            :type="showAdminPassword ? 'text' : 'password'"
+            autocomplete="current-password"
+            placeholder="请输入管理员密码以授权全局变更"
+            class="w-full h-8 px-2.5 pr-8 text-xs rounded border border-surface-border bg-surface-card text-text-main focus:outline-none focus:border-brand-primary placeholder:text-text-muted"
+          />
+          <button
+            type="button"
+            @click="showAdminPassword = !showAdminPassword"
+            class="absolute right-2 text-text-muted hover:text-text-main cursor-pointer"
+            title="显隐密码"
+          >
+            <M3Icon :name="showAdminPassword ? 'visibility_off' : 'visibility'" :size="14" />
+          </button>
+        </div>
+      </div>
     </div>
 
     <template #actions>
@@ -315,10 +393,11 @@ function handleResetDefault() {
           v-if="currentConfig.url || previewUrl"
           type="button"
           @click="handleResetDefault"
-          class="app-btn-secondary text-status-error border-status-error/40 hover:bg-status-error-bg"
+          :disabled="isProcessing"
+          class="app-btn-secondary text-status-error border-status-error/40 hover:bg-status-error-bg disabled:opacity-50"
           title="清除自定义背景并还原默认极简背景"
         >
-          <M3Icon name="refresh" :size="14" />
+          <M3Icon :name="isProcessing ? 'sync' : 'refresh'" :size="14" :class="isProcessing ? 'animate-spin' : ''" />
           <span>恢复默认背景</span>
         </button>
         <div v-else />

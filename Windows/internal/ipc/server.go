@@ -101,6 +101,8 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/v1/auth/logout", s.withAuth(s.handleAuthLogout))
 	mux.HandleFunc("/api/v1/auth/setup", s.handleAuthSetup)
 	mux.HandleFunc("/api/v1/auth/password", s.withAuth(s.handleAuthPassword))
+	mux.HandleFunc("/api/v1/auth/background", s.handleAuthBackground)
+	mux.HandleFunc("/api/v1/auth/background/image", s.handleAuthBackgroundImage)
 	mux.HandleFunc("/api/v1/web/status", s.withAuth(s.handleWebStatus))
 	mux.HandleFunc("/api/v1/web/configure", s.withAuth(s.handleWebConfigure))
 	mux.HandleFunc("/api/v1/web/firewall", s.withAuth(s.handleWebFirewall))

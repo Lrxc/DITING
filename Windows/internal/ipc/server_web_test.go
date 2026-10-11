@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"testing"
 	"testing/fstest"
+	"time"
 )
 
 // 为 mockController 补充 Web 与 Auth 相关实现
@@ -65,6 +66,44 @@ func (m *mockController) ChangePassword(ctx context.Context, req ChangePasswordR
 
 func (m *mockController) ValidateSession(token string) bool {
 	return token == "mock-session-token"
+}
+
+func (m *mockController) GetLoginBackground(ctx context.Context) (*LoginBackgroundResponse, error) {
+	if m.bgConfig != nil {
+		return m.bgConfig, nil
+	}
+	return &LoginBackgroundResponse{Type: "none", URL: "", Opacity: 40, Blur: 0}, nil
+}
+
+func (m *mockController) SetLoginBackground(ctx context.Context, req SetLoginBackgroundRequest) error {
+	m.bgConfig = &LoginBackgroundResponse{
+		Type:      req.Type,
+		URL:       req.URL,
+		Opacity:   req.Opacity,
+		Blur:      req.Blur,
+		UpdatedAt: 1730000000,
+	}
+	return nil
+}
+
+func (m *mockController) ResetLoginBackground(ctx context.Context) error {
+	m.bgConfig = &LoginBackgroundResponse{Type: "none", URL: "", Opacity: 40, Blur: 0}
+	return nil
+}
+
+func (m *mockController) GetLoginBackgroundImage(ctx context.Context) ([]byte, string, time.Time, error) {
+	if m.bgImageData != nil {
+		return m.bgImageData, "image/webp", time.Unix(1730000000, 0), nil
+	}
+	return nil, "", time.Time{}, errors.New("file not found")
+}
+
+func (m *mockController) VerifyAdminPassword(ctx context.Context, plainPassword string) bool {
+	return plainPassword == "correct-pass"
+}
+
+func (m *mockController) IsAuthInitialized() bool {
+	return m.authInitialized
 }
 
 func TestIPC_WebAndAuthEndpoints(t *testing.T) {

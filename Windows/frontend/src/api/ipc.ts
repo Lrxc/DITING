@@ -37,6 +37,10 @@ class IPCService {
     return this.http.isConnected;
   }
 
+  get token(): string {
+    return this.http.token;
+  }
+
   // --- 连接配置 ---
   public loadConfig = () => this.http.loadConfig();
   public saveConfig = (host: string, port: string, token: string) => this.http.saveConfig(host, port, token);
@@ -93,6 +97,9 @@ class IPCService {
   public changePassword = (req: Parameters<WebAuthApi['changePassword']>[0]) => this.webAuth.changePassword(req);
   public getWebStatus = () => this.webAuth.getWebStatus();
   public configureWeb = (req: Parameters<WebAuthApi['configureWeb']>[0]) => this.webAuth.configureWeb(req);
+  public getLoginBackground = () => this.webAuth.getLoginBackground();
+  public setLoginBackground = (req: Parameters<WebAuthApi['setLoginBackground']>[0]) => this.webAuth.setLoginBackground(req);
+  public resetLoginBackground = (adminPassword?: string) => this.webAuth.resetLoginBackground(adminPassword);
 
   // --- Wails 原生平台委托 ---
   public runNativeEmergencyRestore = () => nativeBridge.runNativeEmergencyRestore();
