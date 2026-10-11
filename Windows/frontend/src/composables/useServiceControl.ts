@@ -25,25 +25,48 @@ function isUACCancelled(err: any): boolean {
 }
 
 /**
- * 后台核心服务的状态查询与生命周期操作（含 UAC 取消提示与操作后状态刷新）。
+ * 后台核心服务的状态查询与生命周期操作（含单例缓存、UAC 取消提示与操作后状态刷新）。
  */
-export function useServiceControl() {
-  const status = ref<CoreServiceStatus | null>(null);
-  const loading = ref(false);
-  const operating = ref(false);
-  const opMessage = ref('');
-  const opError = ref('');
+const status = ref<CoreServiceStatus | null>(null);
+const loading = ref(false);
+const operating = ref(false);
+const opMessage = ref('');
+const opError = ref('');
+const hasFetched = ref(false);
+let inflightPromise: Promise<CoreServiceStatus | null> | null = null;
 
-  async function fetchStatus() {
-    loading.value = true;
-    opError.value = '';
-    try {
-      status.value = await ipc.getCoreServiceStatus();
-    } catch (err: any) {
-      opError.value = err.message || '获取服务状态失败';
-    } finally {
-      loading.value = false;
+export interface FetchStatusOptions {
+  silent?: boolean;
+}
+
+export function useServiceControl() {
+  async function fetchStatus(options?: FetchStatusOptions | Event): Promise<CoreServiceStatus | null> {
+    if (inflightPromise) {
+      return inflightPromise;
     }
+
+    const isSilent = Boolean(options && 'silent' in options && options.silent);
+    if (!isSilent) {
+      loading.value = true;
+    }
+    opError.value = '';
+
+    inflightPromise = (async () => {
+      try {
+        const res = await ipc.getCoreServiceStatus();
+        status.value = res;
+        hasFetched.value = true;
+        return res;
+      } catch (err: any) {
+        opError.value = err.message || '获取服务状态失败';
+        return null;
+      } finally {
+        loading.value = false;
+        inflightPromise = null;
+      }
+    })();
+
+    return inflightPromise;
   }
 
   async function run(action: ServiceAction): Promise<boolean> {
@@ -88,5 +111,6 @@ export function useServiceControl() {
     }
   }
 
-  return { status, loading, operating, opMessage, opError, fetchStatus, run };
+  return { status, loading, operating, opMessage, opError, hasFetched, fetchStatus, run };
 }
+

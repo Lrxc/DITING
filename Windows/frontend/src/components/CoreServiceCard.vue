@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onMounted } from 'vue';
 import M3Icon from './M3Icon.vue';
 import StatusBadge from './StatusBadge.vue';
 import ToastBanner from './ToastBanner.vue';
@@ -10,8 +11,16 @@ const { status: serviceStatus, loading, operating, opMessage, opError, fetchStat
 
 const webMode = isWebMode();
 
+onMounted(() => {
+  fetchStatus({ silent: Boolean(serviceStatus.value) });
+});
+
 function handleAction(action: ServiceAction) {
   run(action);
+}
+
+function handleRefresh() {
+  fetchStatus();
 }
 </script>
 
@@ -24,7 +33,7 @@ function handleAction(action: ServiceAction) {
       </h3>
       <button
         type="button"
-        @click="fetchStatus"
+        @click="handleRefresh"
         :disabled="loading || operating"
         class="app-btn-secondary app-btn-compact"
         title="刷新核心服务状态"
@@ -62,7 +71,7 @@ function handleAction(action: ServiceAction) {
             text="检测中..."
           />
           <span class="text-xs text-text-muted">
-            ({{ serviceStatus?.stateText || '未知' }})
+            ({{ serviceStatus?.stateText || (loading ? '检测中...' : '未知') }})
           </span>
         </div>
         <p class="text-[11px] text-text-sub leading-tight">
@@ -74,10 +83,13 @@ function handleAction(action: ServiceAction) {
       <div class="p-4 rounded-md border border-surface-border-sub bg-surface-card-sub space-y-2">
         <span class="text-xs font-semibold text-text-sub">组件文件位置</span>
         <div class="font-mono text-[11px] text-text-main break-all line-clamp-2 pt-1" :title="serviceStatus?.executablePath">
-          {{ serviceStatus?.executablePath || '未检测到可执行程序' }}
+          <span v-if="!serviceStatus && loading" class="text-text-muted animate-pulse">正在检测组件文件路径...</span>
+          <span v-else>{{ serviceStatus?.executablePath || '未检测到可执行程序' }}</span>
         </div>
-        <p class="text-[11px]" :class="serviceStatus?.canInstall ? 'text-status-success' : 'text-status-warning'">
-          {{ serviceStatus?.canInstall ? '✔ 服务核心文件就绪' : '⚠ 未检测到 diting-service.exe' }}
+        <p class="text-[11px]" :class="serviceStatus?.canInstall ? 'text-status-success' : (!serviceStatus && loading ? 'text-text-muted' : 'text-status-warning')">
+          <span v-if="!serviceStatus && loading" class="animate-pulse">⏳ 正在扫描核心程序文件...</span>
+          <span v-else-if="serviceStatus?.canInstall">✔ 服务核心文件就绪</span>
+          <span v-else>⚠ 未检测到 diting-service.exe</span>
         </p>
       </div>
 
@@ -87,11 +99,13 @@ function handleAction(action: ServiceAction) {
         <div class="flex items-center gap-1.5 pt-1">
           <M3Icon name="shield" :size="16" :class="serviceStatus?.isElevated ? 'text-status-success' : 'text-text-main'" />
           <span class="text-xs font-bold text-text-main">
-            {{ serviceStatus?.isElevated ? '管理员特权模式' : '标准用户 (按需授权)' }}
+            <span v-if="!serviceStatus && loading" class="text-text-muted font-normal animate-pulse">检测权限中...</span>
+            <span v-else>{{ serviceStatus?.isElevated ? '管理员特权模式' : '标准用户 (按需授权)' }}</span>
           </span>
         </div>
         <p class="text-[11px] text-text-sub leading-tight">
-          {{ serviceStatus?.isElevated ? '已具备管理员权限，操作无需弹窗' : '点击操作时将自动唤起 Windows 提权弹窗' }}
+          <span v-if="!serviceStatus && loading" class="text-text-muted">正在检测当前用户与运行权限...</span>
+          <span v-else>{{ serviceStatus?.isElevated ? '已具备管理员权限，操作无需弹窗' : '点击操作时将自动唤起 Windows 提权弹窗' }}</span>
         </p>
       </div>
     </div>
@@ -113,8 +127,13 @@ function handleAction(action: ServiceAction) {
         </div>
 
         <div class="flex items-center gap-2">
+          <!-- 首次加载中占位 -->
+          <span v-if="!serviceStatus && loading" class="text-xs text-text-muted animate-pulse">
+            正在检测服务状态...
+          </span>
+
           <!-- 未安装状态：提供安装服务 -->
-          <template v-if="serviceStatus && !serviceStatus.installed">
+          <template v-else-if="serviceStatus && !serviceStatus.installed">
             <button
               type="button"
               @click="handleAction('install')"
