@@ -64,9 +64,22 @@ func (s *Server) handleStaticSPA(w http.ResponseWriter, r *http.Request) {
 	ext := filepath.Ext(reqPath)
 	ctype := mime.TypeByExtension(ext)
 	if ctype == "" {
-		if ext == ".woff2" {
+		switch ext {
+		case ".svg":
+			ctype = "image/svg+xml"
+		case ".ico":
+			ctype = "image/x-icon"
+		case ".png":
+			ctype = "image/png"
+		case ".woff2":
 			ctype = "font/woff2"
-		} else {
+		case ".js", ".mjs":
+			ctype = "text/javascript; charset=utf-8"
+		case ".css":
+			ctype = "text/css; charset=utf-8"
+		case ".json":
+			ctype = "application/json"
+		default:
 			ctype = "application/octet-stream"
 		}
 	}

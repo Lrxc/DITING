@@ -9,6 +9,7 @@ import NavItem from './components/NavItem.vue';
 import StatusBadge from './components/StatusBadge.vue';
 import ServiceAlertModal from './components/ServiceAlertModal.vue';
 import LoginModal from './components/LoginModal.vue';
+import appLogo from './assets/images/logo-universal.png';
 import OverviewView from './views/OverviewView.vue';
 import NetworkView from './views/NetworkView.vue';
 import AccelView from './views/AccelView.vue';
@@ -33,6 +34,7 @@ const webMode = isWebMode();
 const currentUser = ref(localStorage.getItem('diting_session_user') || '');
 const showAuthModal = ref(false);
 const authModalMode = ref<'login' | 'setup'>('login');
+const isAuthInitialized = ref(true);
 
 let unsubConn: (() => void) | null = null;
 let unsubAuth: (() => void) | null = null;
@@ -74,6 +76,7 @@ async function checkWebAuth() {
   if (!webMode) return;
   try {
     const status = await ipc.getAuthStatus();
+    isAuthInitialized.value = Boolean(status.initialized);
     if (!status.initialized) {
       authModalMode.value = 'setup';
       showAuthModal.value = true;
@@ -88,7 +91,11 @@ async function checkWebAuth() {
     }
   } catch (err: any) {
     if (err.message && (err.message.includes('未授权') || err.message.includes('401'))) {
-      authModalMode.value = 'login';
+      if (isAuthInitialized.value) {
+        authModalMode.value = 'login';
+      } else {
+        authModalMode.value = 'setup';
+      }
       showAuthModal.value = true;
     }
   }
@@ -103,6 +110,7 @@ async function handleLogout() {
 
 function handleAuthSuccess() {
   showAuthModal.value = false;
+  isAuthInitialized.value = true;
   currentUser.value = localStorage.getItem('diting_session_user') || 'admin';
   ipc.reconnectWS();
   ipc.checkHealth();
@@ -122,7 +130,11 @@ onMounted(() => {
 
   unsubAuth = ipc.onAuthRequired((required) => {
     if (webMode && required) {
-      authModalMode.value = 'login';
+      if (!isAuthInitialized.value) {
+        authModalMode.value = 'setup';
+      } else {
+        authModalMode.value = 'login';
+      }
       showAuthModal.value = true;
     }
   });
@@ -163,22 +175,24 @@ onUnmounted(() => {
       class="hidden md:flex shrink-0 flex-col py-4 border-r border-surface-border bg-surface-base z-20"
       :class="wideSidebar ? 'w-56' : 'w-16'"
     >
-      <!-- 品牌：朱色印章 + 宋体字标 -->
+      <!-- 品牌：软件 Logo + 宋体字标 -->
       <div
         class="flex items-center gap-2.5 px-4 mb-5 cursor-pointer"
         :class="wideSidebar ? '' : 'justify-center px-0'"
         @click="handleNavigate('overview')"
       >
-        <span
-          class="relative w-8 h-8 shrink-0 rounded-md bg-accent-seal text-white font-serif text-[16px] flex items-center justify-center"
-        >
-          谛
+        <div class="relative w-8 h-8 shrink-0 flex items-center justify-center">
+          <img
+            :src="appLogo"
+            alt="谛听 Logo"
+            class="w-8 h-8 object-contain rounded-md"
+          />
           <span
             class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-surface-base"
             :class="isConnected ? 'bg-status-success' : 'bg-status-error'"
             :title="isConnected ? '后台服务已连接' : '后台服务未连接'"
           />
-        </span>
+        </div>
         <div v-if="wideSidebar" class="flex flex-col leading-none min-w-0">
           <span class="font-serif text-[15px] font-semibold text-text-main">谛听</span>
           <span class="label-quiet mt-1">DITING DNS</span>

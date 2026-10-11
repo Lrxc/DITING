@@ -58,8 +58,10 @@ watch(
 async function checkInitialAuth() {
   try {
     const status = await ipc.getAuthStatus();
-    if (!status.initialized && currentMode.value === 'login') {
+    if (!status.initialized) {
       currentMode.value = 'setup';
+    } else if (props.mode) {
+      currentMode.value = props.mode;
     }
     if (status.username) {
       username.value = status.username;
@@ -150,9 +152,15 @@ async function handleSubmit() {
         emit('close');
       }, 800);
     } catch (err: any) {
-      errorMsg.value = err.message || '登录失败，请检查账号密码';
-      if (err.message && err.message.includes('锁定')) {
-        startLockoutCountdown(300);
+      const msg = err.message || '登录失败，请检查账号密码';
+      if (msg.includes('未初始化')) {
+        currentMode.value = 'setup';
+        errorMsg.value = '检测到管理员账号尚未初始化，请在此处设置初始密码以完成配置';
+      } else {
+        errorMsg.value = msg;
+        if (msg.includes('锁定')) {
+          startLockoutCountdown(300);
+        }
       }
     } finally {
       loading.value = false;

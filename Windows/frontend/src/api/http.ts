@@ -91,23 +91,32 @@ export class HttpTransport {
       'Content-Type': 'application/json',
       ...(options.headers as Record<string, string>),
     };
-    if (this.token) {
+    // 对于登录、首次初始化等认证接口，不自动携带已过期的旧 Token
+    const isAuthRoute = path.startsWith('/api/v1/auth/login') || path.startsWith('/api/v1/auth/setup');
+    if (this.token && !isAuthRoute) {
       headers['Authorization'] = `Bearer ${this.token}`;
       headers['X-API-Token'] = this.token;
     }
 
     try {
       const resp = await fetch(`${this.baseURL}${path}`, { ...options, headers });
-      if (resp.status === 401) {
-        this.notifyAuthRequired(true);
-        throw new Error('未授权或登录已过期，请重新登录');
-      }
-
-      let json: ApiResponse<T>;
       const text = await resp.text();
+      let json: ApiResponse<T> | null = null;
       try {
         json = JSON.parse(text);
-      } catch {
+      } catch {}
+
+      if (resp.status === 401) {
+        const serverError = json?.error || json?.message;
+        if (isAuthRoute) {
+          // 登录接口自身的凭证错误，不触发全局重新登录弹窗广播，精准呈现具体原因
+          throw new Error(serverError || '登录失败，用户名或密码错误');
+        }
+        this.notifyAuthRequired(true);
+        throw new Error(serverError || '未授权或登录已过期，请重新登录');
+      }
+
+      if (!json) {
         if (!resp.ok) {
           throw new Error(`服务请求异常 (${resp.status}): ${text.slice(0, 100)}`);
         }
@@ -125,7 +134,7 @@ export class HttpTransport {
       this.setConnected(true);
       return json.data as T;
     } catch (err: any) {
-      if (err.message && err.message.includes('未授权')) {
+      if (err.message && (err.message.includes('未授权') || err.message.includes('登录已过期'))) {
         throw err;
       }
       if (
