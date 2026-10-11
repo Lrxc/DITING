@@ -96,8 +96,24 @@ async function handleApplyUrl() {
   successMsg.value = '网络图片检测成功，已应用预览';
 }
 
-function handleSave() {
+async function handleSave() {
   errorMsg.value = '';
+
+  // 若用户在网络图片标签页输入了新的 URL 但未单独点击“加载”按钮，自动进行校验与应用
+  if (activeTab.value === 'url') {
+    const inputUrl = imageUrlInput.value.trim();
+    if (inputUrl && inputUrl !== previewUrl.value) {
+      isProcessing.value = true;
+      const valid = await validateImageUrl(inputUrl);
+      isProcessing.value = false;
+      if (!valid) {
+        errorMsg.value = '图片链接加载失败，请检查网络地址是否正确或是否存在跨域防盗链';
+        return;
+      }
+      previewUrl.value = inputUrl;
+    }
+  }
+
   const result = saveLoginBgConfig(previewUrl.value, opacity.value, blur.value);
   if (!result.success) {
     errorMsg.value = result.error || '保存配置失败';
@@ -152,7 +168,7 @@ function handleResetDefault() {
       </div>
     </template>
 
-    <div class="space-y-4 py-1 select-none">
+    <div class="space-y-4 py-1 select-none max-h-[65vh] overflow-y-auto px-0.5">
       <!-- 提示信息 -->
       <div v-if="errorMsg" class="p-2.5 rounded-md bg-status-error-bg border border-status-error/30 text-status-error text-xs flex items-center gap-2">
         <M3Icon name="error" :size="16" class="shrink-0" />
@@ -294,7 +310,7 @@ function handleResetDefault() {
     </div>
 
     <template #actions>
-      <div class="flex items-center justify-between w-full">
+      <div class="flex flex-wrap items-center justify-between gap-2.5 w-full">
         <button
           v-if="currentConfig.url || previewUrl"
           type="button"
@@ -307,7 +323,7 @@ function handleResetDefault() {
         </button>
         <div v-else />
 
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 ml-auto">
           <button
             type="button"
             @click="emit('close')"
@@ -318,9 +334,10 @@ function handleResetDefault() {
           <button
             type="button"
             @click="handleSave"
+            :disabled="isProcessing"
             class="app-btn-primary"
           >
-            <M3Icon name="check" :size="16" />
+            <M3Icon :name="isProcessing ? 'sync' : 'check'" :size="16" :class="isProcessing ? 'animate-spin' : ''" />
             <span>保存并应用</span>
           </button>
         </div>

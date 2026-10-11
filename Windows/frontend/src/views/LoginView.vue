@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { ipc } from '../api/ipc';
 import { themeManager, type ThemeMode } from '../theme/theme';
 import {
@@ -24,6 +24,13 @@ const emit = defineEmits<{
 }>();
 
 const currentMode = ref<'login' | 'setup'>(props.initialMode);
+
+watch(
+  () => props.initialMode,
+  (val) => {
+    if (val) currentMode.value = val;
+  }
+);
 const username = ref('admin');
 const password = ref('');
 const confirmPassword = ref('');
@@ -44,6 +51,16 @@ const showBgModal = ref(false);
 const currentThemeMode = ref<ThemeMode>(themeManager.getThemeMode());
 
 const hasCustomBg = computed(() => Boolean(bgConfig.value.url));
+
+const bgStyle = computed(() => {
+  if (!bgConfig.value.url) return {};
+  const safeUrl = bgConfig.value.url.replace(/'/g, "\\'");
+  return {
+    backgroundImage: `url('${safeUrl}')`,
+    filter: bgConfig.value.blur > 0 ? `blur(${bgConfig.value.blur}px)` : 'none',
+    transform: bgConfig.value.blur > 0 ? 'scale(1.05)' : 'none',
+  };
+});
 
 function cycleTheme() {
   const modes: ThemeMode[] = ['light', 'dark', 'system'];
@@ -186,16 +203,12 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="relative min-h-screen w-full flex flex-col justify-between overflow-x-hidden font-sans select-none bg-surface-base text-text-main">
+  <div class="relative min-h-screen w-full flex flex-col justify-between overflow-x-hidden overflow-y-auto font-sans select-none bg-surface-base text-text-main">
     <!-- 1. 自定义壁纸背景层 (支持平滑过渡与模糊) -->
     <div
       v-if="hasCustomBg"
       class="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat transition-all duration-700 pointer-events-none"
-      :style="{
-        backgroundImage: `url(${bgConfig.url})`,
-        filter: bgConfig.blur > 0 ? `blur(${bgConfig.blur}px)` : 'none',
-        transform: bgConfig.blur > 0 ? 'scale(1.05)' : 'none',
-      }"
+      :style="bgStyle"
     />
 
     <!-- 2. 背景遮罩层 (保证前景卡片文字高清晰度) -->
@@ -216,7 +229,10 @@ onUnmounted(() => {
 
     <!-- 顶栏辅助操作：主题切换与自定义壁纸入口 -->
     <header class="relative z-10 w-full px-4 sm:px-8 py-4 flex items-center justify-between">
-      <div class="flex items-center gap-2.5">
+      <div
+        class="flex items-center gap-2.5 transition-all duration-300"
+        :class="hasCustomBg ? 'px-3 py-1.5 rounded-lg bg-surface-card/75 backdrop-blur-md border border-surface-border/60 shadow-xs' : ''"
+      >
         <img :src="appLogo" alt="Logo" class="w-7 h-7 object-contain rounded-md" />
         <span class="font-serif text-sm font-semibold tracking-wide text-text-main">谛听 DITING</span>
       </div>
@@ -253,7 +269,7 @@ onUnmounted(() => {
     </header>
 
     <!-- 中部主登录卡片容器（自适应不同屏幕尺寸） -->
-    <main class="relative z-10 flex-1 flex items-center justify-center p-4 sm:p-6 my-auto">
+    <main class="relative z-10 flex-1 flex items-center justify-center p-4 sm:p-6 py-6 sm:py-8">
       <div
         class="w-full max-w-sm sm:max-w-md rounded-xl transition-all duration-300"
         :class="[
@@ -393,8 +409,13 @@ onUnmounted(() => {
     </main>
 
     <!-- 底部版权信息 -->
-    <footer class="relative z-10 py-3 text-center text-[11px] text-text-muted">
-      <span>谛听 (DITING) DNS 解析加速与安全防护系统</span>
+    <footer class="relative z-10 py-3 text-center text-[11px] px-4">
+      <span
+        class="transition-all duration-300"
+        :class="hasCustomBg ? 'inline-block px-3.5 py-1 rounded-full bg-surface-card/75 backdrop-blur-md border border-surface-border/60 text-text-sub shadow-2xs' : 'text-text-muted'"
+      >
+        谛听 (DITING) DNS 解析加速与安全防护系统
+      </span>
     </footer>
 
     <!-- 自定义背景弹窗 -->

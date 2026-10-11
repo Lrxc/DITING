@@ -62,16 +62,44 @@ export async function compressImageFile(
 
         ctx.drawImage(img, 0, 0, width, height);
 
-        // 优先使用 WebP 编码以获得更小体积与高画质，降级使用 JPEG
+        // 优先使用 WebP 编码以获得更小体积与高画质，降级使用 JPEG/PNG
+        let dataUrl = '';
         try {
-          const dataUrl = canvas.toDataURL('image/webp', quality);
-          if (dataUrl.startsWith('data:image/webp')) {
-            resolve(dataUrl);
-            return;
+          const webp = canvas.toDataURL('image/webp', quality);
+          if (webp.startsWith('data:image/webp')) {
+            dataUrl = webp;
           }
         } catch {}
 
-        resolve(canvas.toDataURL('image/jpeg', quality));
+        if (!dataUrl) {
+          if (file.type === 'image/png') {
+            dataUrl = canvas.toDataURL('image/png');
+          } else {
+            dataUrl = canvas.toDataURL('image/jpeg', quality);
+          }
+        }
+
+        // 智能体积容灾：若 Base64 编码依然过大（超过 1.5MB），二次降采样以严格避免 LocalStorage 5MB 配额溢出
+        if (dataUrl.length > 1.5 * 1024 * 1024) {
+          try {
+            const scaledCanvas = document.createElement('canvas');
+            const targetRatio = Math.min(1280 / width, 720 / height, 0.75);
+            scaledCanvas.width = Math.max(320, Math.round(width * targetRatio));
+            scaledCanvas.height = Math.max(180, Math.round(height * targetRatio));
+            const sCtx = scaledCanvas.getContext('2d');
+            if (sCtx) {
+              sCtx.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+              const secondWebp = scaledCanvas.toDataURL('image/webp', 0.72);
+              if (secondWebp.startsWith('data:image/webp')) {
+                dataUrl = secondWebp;
+              } else {
+                dataUrl = scaledCanvas.toDataURL('image/jpeg', 0.72);
+              }
+            }
+          } catch {}
+        }
+
+        resolve(dataUrl);
       };
       img.src = e.target?.result as string;
     };
@@ -80,18 +108,46 @@ export async function compressImageFile(
 }
 
 /**
- * 校验网络图片地址是否可用
+ * 校验网络图片地址是否可用（含严格协议校验与超时保护）
  */
-export function validateImageUrl(url: string): Promise<boolean> {
+export function validateImageUrl(url: string, timeoutMs = 8000): Promise<boolean> {
   return new Promise((resolve) => {
     if (!url || !url.trim()) {
       resolve(false);
       return;
     }
+    const cleanUrl = url.trim();
+    // 仅允许 http/https 绝对网络地址或安全 data/blob 链接，拦截相对路径或危险协议
+    if (!/^https?:\/\//i.test(cleanUrl) && !cleanUrl.startsWith('data:') && !cleanUrl.startsWith('blob:')) {
+      resolve(false);
+      return;
+    }
+
+    let isSettled = false;
     const img = new Image();
-    img.onload = () => resolve(true);
-    img.onerror = () => resolve(false);
-    img.src = url.trim();
+    const timer = setTimeout(() => {
+      if (!isSettled) {
+        isSettled = true;
+        img.src = '';
+        resolve(false);
+      }
+    }, timeoutMs);
+
+    img.onload = () => {
+      if (!isSettled) {
+        isSettled = true;
+        clearTimeout(timer);
+        resolve(true);
+      }
+    };
+    img.onerror = () => {
+      if (!isSettled) {
+        isSettled = true;
+        clearTimeout(timer);
+        resolve(false);
+      }
+    };
+    img.src = cleanUrl;
   });
 }
 
@@ -123,13 +179,15 @@ export function loadLoginBgConfig(): LoginBgConfig {
  */
 export function saveLoginBgConfig(url: string, opacity = 40, blur = 0): { success: boolean; error?: string } {
   try {
+    const clampedOpacity = Math.min(100, Math.max(0, opacity));
+    const clampedBlur = Math.min(20, Math.max(0, blur));
     if (url) {
       localStorage.setItem(BG_STORAGE_KEY_URL, url);
     } else {
       localStorage.removeItem(BG_STORAGE_KEY_URL);
     }
-    localStorage.setItem(BG_STORAGE_KEY_OPACITY, String(opacity));
-    localStorage.setItem(BG_STORAGE_KEY_BLUR, String(blur));
+    localStorage.setItem(BG_STORAGE_KEY_OPACITY, String(clampedOpacity));
+    localStorage.setItem(BG_STORAGE_KEY_BLUR, String(clampedBlur));
     return { success: true };
   } catch (err: any) {
     return {
