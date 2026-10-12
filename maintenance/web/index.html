@@ -98,6 +98,13 @@
               </label>
             </div>
           </div>
+          <div class="dns-preset-row">
+            <span class="preset-label">快捷预设:</span>
+            <button type="button" class="btn btn-xs btn-chip" data-dns="127.0.0.1">127.0.0.1 (本地)</button>
+            <button type="button" class="btn btn-xs btn-chip" data-dns="223.5.5.5">223.5.5.5 (阿里)</button>
+            <button type="button" class="btn btn-xs btn-chip" data-dns="119.29.29.29">119.29.29.29 (腾讯)</button>
+            <button type="button" class="btn btn-xs btn-chip" data-dns="8.8.8.8">8.8.8.8 (Google)</button>
+          </div>
           <div class="btn-group">
             <button class="btn btn-primary" id="btn-dns-query">单次诊断查询</button>
             <button class="btn btn-secondary" id="btn-dns-bench">批量性能压测 (5 次)</button>
@@ -107,7 +114,10 @@
         <div class="result-area" id="dns-result-container" style="display: none;">
           <div class="stats-grid" id="dns-stats-grid"></div>
           <div class="card table-card" id="dns-answers-card" style="display: none;">
-            <div class="card-title">解析结果记录列表</div>
+            <div class="card-title flex-between">
+              <span>解析结果记录列表</span>
+              <button class="btn btn-sm btn-ghost" id="btn-dns-copy-answers">复制记录</button>
+            </div>
             <table class="data-table" id="dns-table">
               <thead>
                 <tr><th>域名</th><th>类型</th><th>TTL</th><th>记录值</th></tr>
@@ -153,7 +163,13 @@
         <div class="result-area" id="scan-result-container" style="display: none;">
           <div class="stats-grid" id="scan-stats-grid"></div>
           <div class="card table-card">
-            <div class="card-title">文件清单列表 (<span id="scan-matched-count">0</span> 个)</div>
+            <div class="card-title flex-between">
+              <span>文件清单列表 (<span id="scan-matched-count">0</span> 个)</span>
+              <div class="filter-pills" id="scan-filter-pills">
+                <button class="btn btn-xs btn-ghost active" id="btn-filter-all">全部扫描文件</button>
+                <button class="btn btn-xs btn-ghost" id="btn-filter-exceeded">仅看超标文件</button>
+              </div>
+            </div>
             <div class="table-scroll">
               <table class="data-table" id="scan-table">
                 <thead>
@@ -212,8 +228,8 @@
       <!-- 4. Windows / Linux 构建打包 -->
       <section class="tab-pane" id="pane-build">
         <header class="pane-header">
-          <h2>Windows / Linux 构建与打包流水线</h2>
-          <p class="desc">一键编译特权服务 diting-service、Wails GUI 客户端并打包独立 NSIS 安装包；亦可交叉编译 Linux 端单二进制。</p>
+          <h2>纯净安装包构建流水线 (Windows / Linux)</h2>
+          <p class="desc">极简一键输出生产级安装包。构建完成后自动剔除多余中间二进制，仅输出独立 EXE 安装包或 Linux DEB 安装包。</p>
         </header>
 
         <div class="card toolchain-card">
@@ -226,15 +242,12 @@
 
         <div class="card form-card">
           <div class="form-row">
-            <div class="form-group flex-1">
+            <div class="form-group flex-2">
               <label>构建目标</label>
               <select id="build-target">
-                <option value="all" selected>all (完整安装包)</option>
-                <option value="service">service (仅特权服务)</option>
-                <option value="gui">gui (仅GUI客户端)</option>
-                <option value="installer">installer (仅NSIS安装包)</option>
-                <option value="linux">linux (仅Linux服务)</option>
-                <option value="deb">deb (Linux .deb 安装包)</option>
+                <option value="exe" selected>Windows EXE 安装包 (仅输出安装包)</option>
+                <option value="deb">Linux DEB 安装包 (仅输出安装包)</option>
+                <option value="both">双平台安装包 (EXE + DEB)</option>
               </select>
             </div>
             <div class="form-group flex-1">
@@ -258,7 +271,7 @@
             </div>
             <div class="form-group flex-1 flex-center">
               <label class="checkbox-label">
-                <input type="checkbox" id="build-clean"> 清理旧产物
+                <input type="checkbox" id="build-clean" checked> 清理旧安装包
               </label>
             </div>
           </div>
@@ -281,7 +294,11 @@
           <div class="form-row">
             <div class="form-group flex-2">
               <label>目标新版本号</label>
-              <input type="text" id="target-version-input" placeholder="例如 1.4.0">
+              <div class="version-input-wrap">
+                <input type="text" id="target-version-input" placeholder="例如 1.4.0">
+                <button type="button" class="btn btn-xs btn-chip" id="btn-ver-bump-patch">+0.0.1 (Patch)</button>
+                <button type="button" class="btn btn-xs btn-chip" id="btn-ver-bump-minor">+0.1.0 (Minor)</button>
+              </div>
             </div>
             <div class="form-group flex-1 flex-center">
               <label class="checkbox-label">
@@ -329,17 +346,18 @@
               <label>截图目标标签页</label>
               <select id="cap-tab">
                 <option value="all" selected>all (全部标签页及弹窗)</option>
+                <option value="login">登录/初始化 (login)</option>
                 <option value="overview/status">状态总览 (overview/status)</option>
                 <option value="overview/queries">实时查询 (overview/queries)</option>
                 <option value="network/adapters">网卡接管 (network/adapters)</option>
                 <option value="network/upstream">上游解析 (network/upstream)</option>
                 <option value="network/lan">局域网 DNS (network/lan)</option>
-                <option value="accel">智能加速 (accel)</option>
+                <option value="accel/cache">缓存加速 (accel/cache)</option>
                 <option value="rules/lists">规则订阅 (rules/lists)</option>
                 <option value="rules/custom">自定义规则 (rules/custom)</option>
                 <option value="rules/test">规则检测 (rules/test)</option>
                 <option value="rules/config">拦截方式 (rules/config)</option>
-                <option value="system">系统设置 (system)</option>
+                <option value="system/settings">系统设置 (system/settings)</option>
                 <option value="modal-alert">警报弹窗 (modal-alert)</option>
               </select>
             </div>
@@ -372,17 +390,18 @@
         </div>
       </section>
 
-      <!-- 底部流式终端控制台 -->
-      <footer class="terminal-container" id="terminal-section">
+      <!-- 底部流式终端自适应抽屉控制台 -->
+      <footer class="terminal-container collapsed" id="terminal-section">
         <div class="terminal-bar">
           <div class="terminal-title">
             <span>实时执行日志</span>
             <span class="spinner" id="terminal-spinner" style="display: none;"></span>
+            <span class="badge" id="terminal-badge" style="display: none;">0 条</span>
           </div>
           <div class="terminal-actions">
             <button class="btn btn-sm btn-ghost" id="btn-log-copy">复制日志</button>
             <button class="btn btn-sm btn-ghost" id="btn-log-clear">清空</button>
-            <button class="btn btn-sm btn-ghost" id="btn-log-toggle">折叠/展开</button>
+            <button class="btn btn-sm btn-ghost" id="btn-log-toggle">展开/收起</button>
           </div>
         </div>
         <div class="terminal-body" id="terminal-output">

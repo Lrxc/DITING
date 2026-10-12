@@ -1,6 +1,8 @@
 // 谛听 (DITING) 开发者工具箱各模块业务逻辑控制器
 
 window.DNSModule = {
+  lastAnswers: [],
+
   async query() {
     const domain = document.getElementById('dns-domain').value.trim();
     const server = document.getElementById('dns-server').value.trim();
@@ -36,6 +38,24 @@ window.DNSModule = {
     await window.pywebview.api.dns_benchmark(domain, server, port, qtype, 5, tcp);
   },
 
+  setPreset(server) {
+    const sInput = document.getElementById('dns-server');
+    if (sInput) sInput.value = server;
+    const pInput = document.getElementById('dns-port');
+    if (pInput) pInput.value = '53';
+    App.toast(`已应用 DNS 服务器: ${server}`, 'ok');
+  },
+
+  copyAnswers() {
+    if (!this.lastAnswers || this.lastAnswers.length === 0) {
+      return App.toast('当前没有可复制的解析记录', 'warn');
+    }
+    const lines = this.lastAnswers.map(a => `${a.name}\t${a.type}\t${a.ttl}s\t${a.value}`);
+    navigator.clipboard.writeText(lines.join('\n')).then(() => {
+      App.toast('解析结果已成功复制到剪贴板', 'ok');
+    });
+  },
+
   renderQueryResult(res) {
     const container = document.getElementById('dns-result-container');
     container.style.display = 'block';
@@ -64,9 +84,10 @@ window.DNSModule = {
     const answersCard = document.getElementById('dns-answers-card');
     const tbody = document.querySelector('#dns-table tbody');
     tbody.innerHTML = '';
-    if (res.answers && res.answers.length > 0) {
+    this.lastAnswers = res.answers || [];
+    if (this.lastAnswers.length > 0) {
       answersCard.style.display = 'block';
-      res.answers.forEach(a => {
+      this.lastAnswers.forEach(a => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td>${a.name}</td>
@@ -102,11 +123,15 @@ window.DNSModule = {
       <div class="stat-box">
         <span class="stat-label">极值 (Min/Max)</span>
         <span class="stat-value" style="font-size: 16px;">${d.min_ms} / ${d.max_ms} ms</span>
-      </div>    `;
+      </div>
+    `;
   }
 };
 
 window.ScannerModule = {
+  currentFiles: [],
+  filterMode: 'all',
+
   async startScan() {
     const dir = document.getElementById('scan-dir').value.trim();
     const exts = document.getElementById('scan-exts').value.trim() || '.kt,.go,.ts,.vue,.py';
@@ -115,6 +140,35 @@ window.ScannerModule = {
 
     App.setBusy(true, '正在扫描项目源文件规模...');
     await window.pywebview.api.scan_files(dir, exts, threshold, showAll);
+  },
+
+  setFilter(mode) {
+    this.filterMode = mode;
+    document.getElementById('btn-filter-all').classList.toggle('active', mode === 'all');
+    document.getElementById('btn-filter-exceeded').classList.toggle('active', mode === 'exceeded');
+    this.renderTable();
+  },
+
+  renderTable() {
+    const tbody = document.querySelector('#scan-table tbody');
+    tbody.innerHTML = '';
+    const filesToDisplay = this.filterMode === 'exceeded'
+      ? this.currentFiles.filter(item => item.exceeded)
+      : this.currentFiles;
+
+    document.getElementById('scan-matched-count').textContent = filesToDisplay.length;
+
+    filesToDisplay.forEach((item, idx) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${idx + 1}</td>
+        <td class="${item.exceeded ? 'is-fail' : ''}" style="font-weight: 600;">${item.line_count} 行</td>
+        <td><span class="badge ${item.ext === '.kt' ? '' : 'badge-warn'}">${item.ext.toUpperCase()}</span></td>
+        <td class="mono">${item.rel_path}${item.exceeded ? ' <strong style="color:var(--seal);font-size:11px;">[超标]</strong>' : ''}</td>
+        <td><button class="btn btn-sm btn-ghost" onclick="window.pywebview.api.open_explorer('${item.full_path.replace(/\\/g, '\\\\')}')">打开</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
   },
 
   onScanDone(payload) {
@@ -143,20 +197,8 @@ window.ScannerModule = {
       </div>
     `;
 
-    document.getElementById('scan-matched-count').textContent = d.matched_files.length;
-    const tbody = document.querySelector('#scan-table tbody');
-    tbody.innerHTML = '';
-    d.matched_files.forEach((item, idx) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${idx + 1}</td>
-        <td class="${item.exceeded ? 'is-fail' : ''}" style="font-weight: 600;">${item.line_count} 行</td>
-        <td><span class="badge ${item.ext === '.kt' ? '' : 'badge-warn'}">${item.ext.toUpperCase()}</span></td>
-        <td class="mono">${item.rel_path}</td>
-        <td><button class="btn btn-sm btn-ghost" onclick="window.pywebview.api.open_explorer('${item.full_path.replace(/\\/g, '\\\\')}')">打开</button></td>
-      `;
-      tbody.appendChild(tr);
-    });
+    this.currentFiles = d.matched_files || [];
+    this.renderTable();
   }
 };
 
@@ -226,7 +268,10 @@ window.BuildModule = {
     const archEl = document.getElementById('build-arch');
     const arch = archEl ? archEl.value : 'amd64';
 
-    App.setBusy(true, `正在执行 ${target} 构建流水线...`);
+    const labelMap = { exe: 'Windows EXE 安装包', deb: 'Linux DEB 安装包', both: '双平台安装包 (EXE + DEB)' };
+    const taskLabel = labelMap[target] || `${target} 安装包`;
+
+    App.setBusy(true, `正在执行 ${taskLabel} 构建流水线...`);
     document.getElementById('btn-build-cancel').disabled = false;
     await window.pywebview.api.build_start(target, version, buildType, clean, false, arch);
   },
@@ -239,7 +284,8 @@ window.BuildModule = {
     App.setBusy(false);
     document.getElementById('btn-build-cancel').disabled = true;
     if (payload.success) {
-      App.toast('构建流水线完成，产物已输出至 build/bin 目录', 'ok');
+      const count = payload.artifacts ? payload.artifacts.length : 1;
+      App.toast(`纯净安装包构建完成！已输出 ${count} 个独立安装包至 build/bin 目录`, 'ok');
     } else {
       App.toast(`构建未成功: ${payload.message || '未知错误'}`, 'error');
     }
@@ -247,6 +293,8 @@ window.BuildModule = {
 };
 
 window.VersionModule = {
+  latestDetectedVersion: '1.3.5',
+
   async refreshVersions() {
     try {
       const res = await window.pywebview.api.version_inspect();
@@ -261,10 +309,29 @@ window.VersionModule = {
           <td class="mono">${item.rel_path}</td>
         `;
         tbody.appendChild(tr);
+        if (item.version && item.version !== '未知' && item.version !== '文件不存在') {
+          this.latestDetectedVersion = item.version;
+        }
       });
     } catch (e) {
       console.error(e);
     }
+  },
+
+  bumpVersion(type) {
+    const base = this.latestDetectedVersion || '1.0.0';
+    const parts = base.split('.').map(x => parseInt(x) || 0);
+    while (parts.length < 3) parts.push(0);
+    if (type === 'patch') {
+      parts[2] += 1;
+    } else if (type === 'minor') {
+      parts[1] += 1;
+      parts[2] = 0;
+    }
+    const nextVer = parts.join('.');
+    const input = document.getElementById('target-version-input');
+    if (input) input.value = nextVer;
+    App.toast(`已推导目标版本号: v${nextVer}`, 'ok');
   },
 
   async syncVersion() {
@@ -284,6 +351,7 @@ window.VersionModule = {
     this.refreshVersions();
     if (payload.success) {
       if (payload.target_version) {
+        this.latestDetectedVersion = payload.target_version;
         const buildVerInput = document.getElementById('build-version');
         if (buildVerInput) buildVerInput.value = payload.target_version;
       }

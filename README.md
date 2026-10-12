@@ -89,7 +89,7 @@ DITING/
 │   ├── app/                    # Android 应用层源码（UI、Room 数据库、极速模式模块）
 │   ├── tunnel/                 # Go 用户态网络栈与 DNS 隧道模块（编译为 tunnel.aar）
 │   └── build_apk.bat           # Android 交互式构建、版本归档与 ADB 安装脚本
-├── Windows/                    # Windows / Linux 桌面与服务端工程
+├── Desktop/                    # Windows / Linux 桌面与服务端工程
 │   ├── cmd/
 │   │   ├── gui/                # Wails GUI 调试入口
 │   │   └── service/            # 特权核心服务（Windows 服务 / Linux systemd）源码
@@ -101,9 +101,10 @@ DITING/
 │   ├── build/                  # 构建输出、图标、NSIS 与 Linux systemd 打包脚本
 │   ├── main.go                 # Wails 桌面客户端应用主入口（Windows）
 │   ├── main_linux.go           # Linux 端入口提示（服务端以 diting-service 交付）
-│   ├── build.bat               # Windows 端多目标流水线构建脚本
-│   ├── build_linux.sh          # Linux 端构建脚本（支持 .deb / .tar.gz 发行包）
-│   ├── set_version.bat         # Windows 端版本同步与检测脚本
+│   ├── build.bat               # Windows 端 EXE 安装包构建脚本（纯净输出）
+│   ├── build_deb.bat           # Linux 端 DEB 安装包构建脚本（纯净输出）
+│   ├── build_linux.sh          # Linux 端构建脚本（支持 .deb 发行包）
+│   ├── set_version.bat         # 桌面端版本同步与检测脚本
 │   └── wails.json              # Wails 项目配置文件
 ├── maintenance/                # 开发者桌面交互式工具箱 (Python + PyWebView)
 │   ├── api.py                  # 工具箱前后端通信桥接层
@@ -163,38 +164,35 @@ cd Android
 #### 构建方式
 
 ##### 1. 使用构建脚本（推荐）
-在 `Windows/` 目录下运行 `build.bat`（自动调度 Python 构建引擎）：
+在 `Desktop/` 目录下运行 `build.bat` 或 `build_deb.bat`（自动调度 Python 构建引擎，仅输出最终安装包）：
 
 ```cmd
-cd Windows
+cd Desktop
 
-# 构建全部产物（特权服务 + GUI 客户端 + NSIS 安装包）
-build.bat -t all -b release
+# 一键构建 Windows EXE 独立安装包（完成后自动清理临时二进制，仅保留安装包）
+build.bat
 
-# 仅构建特权服务 (diting-service.exe)
-build.bat -t service -b release
+# 一键构建 Linux DEB 发行安装包（WSL 联动，仅保留 .deb）
+build_deb.bat
 
-# 仅构建 GUI 客户端 (diting-gui.exe)
-build.bat -t gui -b release
-
-# 仅打包 NSIS 独立安装包
-build.bat -t installer -b release
+# 或通过构建引擎指定参数与双平台打包
+python ..\maintenance\core\build_manager.py -t both -b release
 ```
 
-构建产物默认生成在 `Windows/build/bin/` 目录下。
+构建产物默认纯净输出在 `Desktop/build/bin/` 目录下（仅保留 `DITING-release-v*.exe` 与 `diting_*_linux_*.deb`）。
 
 ##### 2. 手动分步构建
 ```cmd
-cd Windows
+cd Desktop
 
 # 1. 编译特权服务
-go build -ldflags "-s -w -H windowsgui -X main.Version=1.3.1" -o build/bin/diting-service.exe ./cmd/service
+go build -ldflags "-s -w -H windowsgui -X main.Version=1.3.5" -o build/bin/diting-service.exe ./cmd/service
 
 # 2. 编译 GUI 客户端
 wails build -platform windows/amd64 -o diting-gui.exe
 
 # 3. 打包 NSIS 安装包（需预先编译好服务与 GUI）
-makensis -DPRODUCT_VERSION=1.3.1 -DOUTPUT_FILENAME=build/bin/DITING-release-v1.3.1.exe build/windows/installer/project.nsi
+makensis -DPRODUCT_VERSION=1.3.5 -DOUTPUT_FILENAME=build/bin/DITING-release-v1.3.5.exe build/windows/installer/project.nsi
 ```
 
 ---
@@ -204,52 +202,47 @@ makensis -DPRODUCT_VERSION=1.3.1 -DOUTPUT_FILENAME=build/bin/DITING-release-v1.3
 #### 构建环境要求
 - **Go**：Go 1.23 或更高版本（Linux 主机，或在 WSL 中开发）。
 - **交叉编译**：在 Windows 宿主上亦可直接交叉编译 Linux 二进制（`CGO_ENABLED=0`）。
-- **打包**（可选）：`dpkg-deb`（生成 `.deb`）、`tar`（生成 `.tar.gz`）。
+- **打包**（可选）：`dpkg-deb`（生成 `.deb`）。
 
 #### 构建方式
 
 ##### 1. 使用构建脚本（推荐）
-在 Linux（或 WSL）中运行 `Windows/build_linux.sh`：
+在 Linux（或 WSL）中运行 `Desktop/build_linux.sh`：
 
 ```bash
-cd Windows
+cd Desktop
 
-# 构建 amd64 单二进制
-./build_linux.sh
+# 编译并组装生成 .deb 发行包（自动清理中间单二进制）
+./build_linux.sh --package
 
-# 构建 arm64 单二进制并生成 .deb / .tar.gz 发行包
+# 构建指定架构（amd64 / arm64 / arm）
 ./build_linux.sh -a arm64 --package
 
-# 指定版本号与输出目录
+# 仅编译单二进制用于快速测试
 ./build_linux.sh -v 1.3.5 -o build/bin
 ```
 
-亦可在 Windows 宿主上通过维护工具箱或 `build.bat` 交叉编译：
+亦可在 Windows 宿主上通过维护工具箱或 `build_deb.bat` 联动 WSL 打包：
 
 ```cmd
-cd Windows
-
-# 通过构建引擎交叉编译 Linux amd64 二进制
-build.bat -t linux -b release
-
-# 指定架构（arm64 / arm）
-python ..\maintenance\core\build_manager.py -t linux -a arm64
+cd Desktop
+build_deb.bat
 ```
 
 ##### 2. 手动构建
 ```bash
-cd Windows
+cd Desktop
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
   -trimpath -ldflags "-s -w -X main.Version=1.3.5" \
   -o build/bin/diting-service ./cmd/service
 ```
 
-构建产物：`Windows/build/bin/diting-service`。
+构建产物：`Desktop/build/bin/diting-service`。
 
 #### 安装为 systemd 服务
 
 ```bash
-cd Windows/build/linux
+cd Desktop/build/linux
 
 # 一键安装（自动写入二进制、systemd 单元、创建目录并启动）
 sudo ./install.sh --bin ../../build/bin/diting-service
@@ -268,7 +261,7 @@ journalctl -u diting-dnsservice -f
 #### 卸载
 
 ```bash
-cd Windows/build/linux
+cd Desktop/build/linux
 sudo ./uninstall.sh           # 保留 /etc/diting 与 /var/lib/diting
 sudo ./uninstall.sh --purge   # 一并清理配置与数据
 ```

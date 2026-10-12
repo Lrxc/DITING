@@ -212,28 +212,42 @@ def build_pipeline(
     # 1. 终止可能正在运行的实例，防止文件写锁
     stop_running_processes(on_log)
 
+    # 规范化构建目标
+    tgt = target.lower().strip()
+    if tgt in ("all", "installer"):
+        tgt = "exe"
+
+    if tgt not in ("exe", "deb", "both"):
+        on_log("error", f"未知的构建目标: {target} (支持: exe, deb, both)")
+        return {"success": False, "message": f"不支持的构建目标: {target}"}
+
     # 2. 前置依赖检查
     tools = check_toolchain()
-    if target in ("linux", "deb"):
-        if not tools["go"]["found"] and sys.platform != "win32":
-            on_log("error", "未找到 Go 环境，无法继续编译。")
-            return {"success": False, "message": "缺少 Go 环境"}
-        if target == "deb" and sys.platform == "win32" and not shutil.which("wsl"):
-            on_log("error", "未检测到 WSL 环境。在 Windows 上打包 deb 安装包需要 WSL 支持。")
-            return {"success": False, "message": "缺少 WSL 环境"}
-    elif not skip_check:
-        if not tools["go"]["found"]:
-            on_log("error", "未找到 Go 环境，无法继续编译。")
-            return {"success": False, "message": "缺少 Go 环境"}
-        if target in ("all", "gui", "installer") and not tools["wails"]["found"]:
-            on_log("error", "未找到 Wails CLI，请执行: go install github.com/wailsapp/wails/v2/cmd/wails@latest")
-            return {"success": False, "message": "缺少 Wails CLI"}
-        if target in ("all", "gui", "installer") and not tools["node"]["found"]:
-            on_log("error", "未找到 Node.js，前端客户端编译需要 Node.js。")
-            return {"success": False, "message": "缺少 Node.js"}
-        if target in ("all", "installer") and not tools["nsis"]["found"]:
-            on_log("error", "未找到 makensis，无法打包 NSIS 安装包。")
-            return {"success": False, "message": "缺少 NSIS"}
+    need_win = tgt in ("exe", "both")
+    need_deb = tgt in ("deb", "both")
+
+    if not skip_check:
+        if need_win:
+            if not tools["go"]["found"]:
+                on_log("error", "未找到 Go 环境，无法继续编译。")
+                return {"success": False, "message": "缺少 Go 环境"}
+            if not tools["wails"]["found"]:
+                on_log("error", "未找到 Wails CLI，请执行: go install github.com/wailsapp/wails/v2/cmd/wails@latest")
+                return {"success": False, "message": "缺少 Wails CLI"}
+            if not tools["node"]["found"]:
+                on_log("error", "未找到 Node.js，前端客户端编译需要 Node.js。")
+                return {"success": False, "message": "缺少 Node.js"}
+            if not tools["nsis"]["found"]:
+                on_log("error", "未找到 makensis，无法打包 NSIS 安装包。")
+                return {"success": False, "message": "缺少 NSIS"}
+
+        if need_deb:
+            if sys.platform == "win32" and not shutil.which("wsl"):
+                on_log("error", "未检测到 WSL 环境。在 Windows 上打包 deb 安装包需要 WSL 支持。")
+                return {"success": False, "message": "缺少 WSL 环境"}
+            if sys.platform != "win32" and not tools["go"]["found"]:
+                on_log("error", "未找到 Go 环境，无法继续编译。")
+                return {"success": False, "message": "缺少 Go 环境"}
 
     # 3. 清理旧产物
     if clean and os.path.exists(bin_dir):
@@ -249,117 +263,31 @@ def build_pipeline(
     build_time = datetime.datetime.now().astimezone().isoformat()
 
     is_rel = build_type.lower() == "release"
-    ldflags = f"-s -w -X 'main.Version={version}' -X 'main.GitCommit={git_commit}' -X 'main.BuildTime={build_time}'" if is_rel else f"-X 'main.Version={version}' -X 'main.GitCommit={git_commit}' -X 'main.BuildTime={build_time}'"
+    ldflags = (
+        f"-s -w -X 'main.Version={version}' -X 'main.GitCommit={git_commit}' -X 'main.BuildTime={build_time}'"
+        if is_rel
+        else f"-X 'main.Version={version}' -X 'main.GitCommit={git_commit}' -X 'main.BuildTime={build_time}'"
+    )
 
     built_artifacts = []
 
-    # 3.1 Linux 目标：交叉编译单一二进制（Windows 宿主亦可执行）
-    if target == "linux":
-        if arch not in ("amd64", "arm64", "arm"):
-            return {"success": False, "message": f"不支持的 Linux 架构: {arch}"}
-        linux_bin = os.path.join(bin_dir, "diting-service")
-        on_log("info", f">>> 正在交叉编译 Linux 特权服务 (linux/{arch})...")
-        linux_ldflags = (
-            f"-s -w -X main.Version={version} -X main.GitCommit={git_commit} -X main.BuildTime={build_time}"
-            if is_rel
-            else f"-X main.Version={version} -X main.GitCommit={git_commit} -X main.BuildTime={build_time}"
-        )
-        cmd_linux = ["go", "build", "-trimpath", "-ldflags", linux_ldflags, "-o", linux_bin, "./cmd/service"]
-        env_linux = {"GOOS": "linux", "GOARCH": arch, "CGO_ENABLED": "0"}
-        ok = run_cmd_live(cmd_linux, cwd=desktop_dir, on_log=on_log, is_cancelled=is_cancelled, env=env_linux)
-        if not ok:
-            return {"success": False, "message": "Linux 特权服务编译失败"}
-        if os.path.exists(linux_bin):
-            sz = os.path.getsize(linux_bin)
-            on_log("info", f"[OK] Linux 特权服务编译成功: {linux_bin} ({format_size(sz)})")
-            built_artifacts.append(linux_bin)
-        else:
-            return {"success": False, "message": "未生成预期的 Linux 二进制产物"}
-
-        on_log("info", f"=== 构建流水线执行完毕，生成 {len(built_artifacts)} 个产物 ===")
-        return {
-            "success": True,
-            "bin_dir": bin_dir,
-            "artifacts": built_artifacts,
-            "target": target,
-            "version": version,
-            "arch": arch,
-        }
-
-    # 3.2 Linux 发行包 (deb / tar.gz)
-    if target == "deb":
-        if arch not in ("amd64", "arm64", "arm"):
-            return {"success": False, "message": f"不支持的 Linux 架构: {arch}"}
-        on_log("info", f">>> 正在打包 Linux 发行包 (.deb / .tar.gz, linux/{arch})...")
-        if sys.platform == "win32":
-            if not shutil.which("wsl"):
-                on_log("error", "未检测到 WSL 环境。在 Windows 上打包 deb 安装包需要 WSL 支持。")
-                return {"success": False, "message": "缺少 WSL 环境"}
-            wsl_dir = desktop_dir.replace("\\", "/")
-            cmd_pkg = ["wsl.exe", "-e", "bash", "-c", f"cd \"$(wslpath '{wsl_dir}')\" && ./build_linux.sh --package -a {arch} -v {version} -b {build_type}"]
-            ok = run_cmd_live(cmd_pkg, cwd=desktop_dir, on_log=on_log, is_cancelled=is_cancelled)
-        else:
-            cmd_pkg = ["./build_linux.sh", "--package", "-a", arch, "-v", version, "-b", build_type]
-            ok = run_cmd_live(cmd_pkg, cwd=desktop_dir, on_log=on_log, is_cancelled=is_cancelled)
-
-        if not ok:
-            return {"success": False, "message": "Linux 发行包打包失败"}
-
-        deb_name = f"diting_{version}_linux_{arch}.deb"
-        deb_file = os.path.join(bin_dir, deb_name)
-        if os.path.exists(deb_file):
-            sz = os.path.getsize(deb_file)
-            on_log("info", f"[OK] Debian 安装包生成成功: {deb_file} ({format_size(sz)})")
-            built_artifacts.append(deb_file)
-
-        tar_name = f"diting_{version}_linux_{arch}.tar.gz"
-        tar_file = os.path.join(bin_dir, tar_name)
-        if os.path.exists(tar_file):
-            sz = os.path.getsize(tar_file)
-            on_log("info", f"[OK] Linux 压缩包生成成功: {tar_file} ({format_size(sz)})")
-            built_artifacts.append(tar_file)
-
-        on_log("info", f"=== 构建流水线执行完毕，生成 {len(built_artifacts)} 个产物 ===")
-        return {
-            "success": True,
-            "bin_dir": bin_dir,
-            "artifacts": built_artifacts,
-            "target": target,
-            "version": version,
-            "arch": arch,
-        }
-
-    # 4. 编译特权服务
-    need_service = target in ("all", "service") or (target == "installer" and not os.path.exists(service_bin))
-    if need_service:
-        on_log("info", ">>> 正在编译 Windows 特权服务 (diting-service.exe)...")
+    # 4. 构建 Windows EXE 安装包
+    if need_win:
+        on_log("info", ">>> [1/3] 正在编译 Windows 特权服务 (diting-service.exe)...")
         cmd_svc = ["go", "build", "-ldflags", f"-s -w -H windowsgui -X main.Version={version}", "-o", service_bin, "./cmd/service"]
         ok = run_cmd_live(cmd_svc, cwd=desktop_dir, on_log=on_log, is_cancelled=is_cancelled)
-        if not ok:
+        if not ok or not os.path.exists(service_bin):
             return {"success": False, "message": "特权服务编译失败"}
-        if os.path.exists(service_bin):
-            sz = os.path.getsize(service_bin)
-            on_log("info", f"[OK] 特权服务编译成功: {service_bin} ({format_size(sz)})")
-            built_artifacts.append(service_bin)
 
-    # 5. 编译 Wails GUI
-    need_gui = target in ("all", "gui") or (target == "installer" and not os.path.exists(gui_bin))
-    if need_gui:
-        on_log("info", ">>> 正在使用 Wails 编译 GUI 客户端 (diting-gui.exe)...")
+        on_log("info", ">>> [2/3] 正在使用 Wails 编译 GUI 客户端 (diting-gui.exe)...")
         wails_cmd = [tools["wails"]["cmd"] or "wails", "build", "-platform", "windows/amd64", "-o", "diting-gui.exe", "-ldflags", ldflags]
         if not is_rel:
             wails_cmd.append("-debug")
         ok = run_cmd_live(wails_cmd, cwd=desktop_dir, on_log=on_log, is_cancelled=is_cancelled)
-        if not ok:
+        if not ok or not os.path.exists(gui_bin):
             return {"success": False, "message": "GUI 客户端编译失败"}
-        if os.path.exists(gui_bin):
-            sz = os.path.getsize(gui_bin)
-            on_log("info", f"[OK] GUI 客户端编译成功: {gui_bin} ({format_size(sz)})")
-            built_artifacts.append(gui_bin)
 
-    # 6. 打包 NSIS 安装包
-    if target in ("all", "installer"):
-        on_log("info", ">>> 正在打包 NSIS 独立安装包...")
+        on_log("info", ">>> [3/3] 正在打包 NSIS 独立安装包...")
         nsis_exe = tools["nsis"]["cmd"] or "makensis"
         nsi_script = os.path.join(desktop_dir, "build", "windows", "installer", "project.nsi")
         installer_name = f"DITING-{build_type.lower()}-v{version}.exe"
@@ -380,34 +308,85 @@ def build_pipeline(
         if not ok:
             return {"success": False, "message": "NSIS 安装包打包失败"}
 
-        # 若生成到了默认名称，规范命名
         if not os.path.exists(installer_path) and os.path.exists(fallback_installer):
             try:
                 shutil.move(fallback_installer, installer_path)
             except Exception:
                 pass
 
-        if os.path.exists(installer_path):
-            sz = os.path.getsize(installer_path)
-            on_log("info", f"[OK] 安装包打包成功: {installer_path} ({format_size(sz)})")
-            built_artifacts.append(installer_path)
-        else:
+        if not os.path.exists(installer_path):
             on_log("error", f"未找到生成的安装包文件: {installer_path}")
-            return {"success": False, "message": "未生成预期的安装包产物"}
+            return {"success": False, "message": "未生成预期的 EXE 安装包产物"}
 
-    on_log("info", f"=== 全部构建流水线执行完毕，生成 {len(built_artifacts)} 个产物 ===")
+        # 仅保留最终安装包，清理所有中间编译二进制
+        for temp_bin in (service_bin, gui_bin, fallback_installer):
+            if os.path.exists(temp_bin):
+                try:
+                    os.remove(temp_bin)
+                except Exception:
+                    pass
+
+        sz = os.path.getsize(installer_path)
+        on_log("info", f"[OK] Windows 安装包生成成功 (仅输出安装包): {installer_path} ({format_size(sz)})")
+        built_artifacts.append(installer_path)
+
+    # 5. 构建 Linux DEB 安装包
+    if need_deb:
+        if arch not in ("amd64", "arm64", "arm"):
+            return {"success": False, "message": f"不支持的 Linux 架构: {arch}"}
+        on_log("info", f">>> 正在打包 Linux 发行包 (.deb, linux/{arch})...")
+        if sys.platform == "win32":
+            wsl_dir = desktop_dir.replace("\\", "/")
+            cmd_pkg = ["wsl.exe", "-e", "bash", "-c", f"cd \"$(wslpath '{wsl_dir}')\" && ./build_linux.sh --package -a {arch} -v {version} -b {build_type}"]
+            ok = run_cmd_live(cmd_pkg, cwd=desktop_dir, on_log=on_log, is_cancelled=is_cancelled)
+        else:
+            cmd_pkg = ["./build_linux.sh", "--package", "-a", arch, "-v", version, "-b", build_type]
+            ok = run_cmd_live(cmd_pkg, cwd=desktop_dir, on_log=on_log, is_cancelled=is_cancelled)
+
+        if not ok:
+            return {"success": False, "message": "Linux 发行包打包失败"}
+
+        deb_name = f"diting_{version}_linux_{arch}.deb"
+        deb_file = os.path.join(bin_dir, deb_name)
+        if not os.path.exists(deb_file):
+            return {"success": False, "message": "未找到生成的 DEB 安装包产物"}
+
+        # 确保产物目录纯净：清理可能残留的 Linux 单二进制、tar.gz 压缩包及临时目录
+        raw_linux_bin = os.path.join(bin_dir, "diting-service")
+        raw_tarball = os.path.join(bin_dir, f"diting_{version}_linux_{arch}.tar.gz")
+        leftover_dir = os.path.join(bin_dir, f"diting_{version}_linux_{arch}")
+        for p in (raw_linux_bin, raw_tarball):
+            if os.path.exists(p):
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
+        if os.path.isdir(leftover_dir):
+            try:
+                shutil.rmtree(leftover_dir, ignore_errors=True)
+            except Exception:
+                pass
+
+        sz = os.path.getsize(deb_file)
+        on_log("info", f"[OK] Debian 安装包生成成功 (仅输出安装包): {deb_file} ({format_size(sz)})")
+        built_artifacts.append(deb_file)
+
+    on_log("info", f"=== 全部构建完成，共保留 {len(built_artifacts)} 个纯净安装包 ===")
+    for art in built_artifacts:
+        on_log("info", f"  * {os.path.basename(art)} ({format_size(os.path.getsize(art))})")
+
     return {
         "success": True,
         "bin_dir": bin_dir,
         "artifacts": built_artifacts,
-        "target": target,
+        "target": tgt,
         "version": version,
     }
 
 
 def main():
-    parser = argparse.ArgumentParser(description="谛听构建工具")
-    parser.add_argument("-t", "--target", choices=["all", "service", "gui", "installer", "linux", "deb"], default="all")
+    parser = argparse.ArgumentParser(description="谛听 (DITING) 纯净安装包构建工具")
+    parser.add_argument("-t", "--target", choices=["exe", "deb", "both", "all", "installer"], default="exe", help="构建目标 (默认 exe)")
     parser.add_argument("-v", "--version", default=None, help="目标版本号 (默认自动读取)")
     parser.add_argument("-b", "--build-type", choices=["release", "debug"], default="release")
     parser.add_argument("-a", "--arch", choices=["amd64", "arm64", "arm"], default="amd64", help="Linux 目标架构")
@@ -421,3 +400,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

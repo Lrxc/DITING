@@ -320,6 +320,15 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--seal); c
 .btn-ghost { background: transparent; color: var(--fg-muted); }
 .btn-ghost:hover:not(:disabled) { color: var(--fg); border-color: var(--line); }
 .btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn-xs { padding: 2px 7px; font-size: 11px; }
+.btn-chip { background: var(--surface-2); border-color: var(--line); color: var(--fg); cursor: pointer; }
+.btn-chip:hover:not(:disabled) { border-color: var(--fg-muted); }
+
+.dns-preset-row { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.preset-label { font-size: 11.5px; color: var(--fg-muted); }
+.version-input-wrap { display: flex; align-items: center; gap: 6px; }
+.filter-pills { display: flex; gap: 4px; }
+.filter-pills .btn.active { background: var(--surface-2); border-color: var(--line-strong); color: var(--fg); font-weight: 600; }
 
 /* ============ 台账式统计 ============ */
 .stats-grid {

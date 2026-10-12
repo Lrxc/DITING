@@ -74,9 +74,14 @@ window.App = {
     }, 2600);
   },
 
+  logCount: 0,
+
   bindTerminal() {
     document.getElementById('btn-log-clear').addEventListener('click', () => {
       document.getElementById('terminal-output').innerHTML = '';
+      this.logCount = 0;
+      const badge = document.getElementById('terminal-badge');
+      if (badge) badge.style.display = 'none';
     });
 
     document.getElementById('btn-log-copy').addEventListener('click', () => {
@@ -98,11 +103,15 @@ window.App = {
     const dot = indicator.querySelector('.dot');
     const text = indicator.querySelector('.text');
     const spinner = document.getElementById('terminal-spinner');
+    const sec = document.getElementById('terminal-section');
 
     if (busy) {
       dot.className = 'dot busy';
       text.textContent = label || '处理中...';
       spinner.style.display = 'inline-block';
+      if (sec && sec.classList.contains('collapsed')) {
+        sec.classList.remove('collapsed');
+      }
     } else {
       dot.className = 'dot idle';
       text.textContent = '就绪';
@@ -118,6 +127,13 @@ window.App = {
     div.textContent = `[${timeStr}] [${level.toUpperCase()}] ${msg}`;
     output.appendChild(div);
     output.scrollTop = output.scrollHeight;
+
+    this.logCount += 1;
+    const badge = document.getElementById('terminal-badge');
+    if (badge) {
+      badge.style.display = 'inline-block';
+      badge.textContent = `${this.logCount} 条`;
+    }
   },
 
   handleBackendEvent(event) {
@@ -145,9 +161,18 @@ window.App = {
     // DNS
     document.getElementById('btn-dns-query').addEventListener('click', () => DNSModule.query());
     document.getElementById('btn-dns-bench').addEventListener('click', () => DNSModule.benchmark());
+    document.querySelectorAll('.dns-preset-row button').forEach(btn => {
+      btn.addEventListener('click', () => DNSModule.setPreset(btn.getAttribute('data-dns')));
+    });
+    const copyAnsBtn = document.getElementById('btn-dns-copy-answers');
+    if (copyAnsBtn) copyAnsBtn.addEventListener('click', () => DNSModule.copyAnswers());
 
     // Scanner
     document.getElementById('btn-scan-start').addEventListener('click', () => ScannerModule.startScan());
+    const filterAllBtn = document.getElementById('btn-filter-all');
+    if (filterAllBtn) filterAllBtn.addEventListener('click', () => ScannerModule.setFilter('all'));
+    const filterExcBtn = document.getElementById('btn-filter-exceeded');
+    if (filterExcBtn) filterExcBtn.addEventListener('click', () => ScannerModule.setFilter('exceeded'));
 
     // Logo
     const syncColor = (pickerId, textId) => {
@@ -175,6 +200,10 @@ window.App = {
     // Version
     document.getElementById('btn-ver-refresh').addEventListener('click', () => VersionModule.refreshVersions());
     document.getElementById('btn-ver-sync').addEventListener('click', () => VersionModule.syncVersion());
+    const bumpPatchBtn = document.getElementById('btn-ver-bump-patch');
+    if (bumpPatchBtn) bumpPatchBtn.addEventListener('click', () => VersionModule.bumpVersion('patch'));
+    const bumpMinorBtn = document.getElementById('btn-ver-bump-minor');
+    if (bumpMinorBtn) bumpMinorBtn.addEventListener('click', () => VersionModule.bumpVersion('minor'));
 
     // Capture
     document.getElementById('btn-cap-start').addEventListener('click', () => CaptureModule.startCapture());

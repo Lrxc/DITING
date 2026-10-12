@@ -174,18 +174,17 @@ EOF
         chmod 0755 "$PKG_DIR/DEBIAN/postinst" "$PKG_DIR/DEBIAN/prerm"
     fi
 
-    # .tar.gz（始终生成）
-    TARBALL="$OUTPUT_DIR/${PKG_NAME}.tar.gz"
-    tar -C "$TMP_STAGE" -czf "$TARBALL" "$PKG_NAME"
-    echo "[OK] 已生成压缩包: $TARBALL"
-
-    # .deb（仅在具备 dpkg-deb 时生成）
+    # .deb 安装包（仅保留此最终产物）
     if [ -d "$PKG_DIR/DEBIAN" ] && command -v dpkg-deb >/dev/null 2>&1; then
         DEB="$OUTPUT_DIR/${PKG_NAME}.deb"
         dpkg-deb --build --root-owner-group "$PKG_DIR" "$DEB" >/dev/null
         echo "[OK] 已生成 Debian 安装包: $DEB"
+        # 仅保留 .deb 安装包，清理临时中间二进制
+        rm -f "$BIN_PATH"
     else
-        echo "[提示] 未找到 dpkg-deb，跳过 .deb 生成（仅保留 tar.gz）。"
+        echo "[错误] 未找到 dpkg-deb 工具，无法生成 .deb 安装包。" >&2
+        rm -rf "$TMP_STAGE"
+        exit 1
     fi
 
     rm -rf "$TMP_STAGE"

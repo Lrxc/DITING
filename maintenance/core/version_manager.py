@@ -30,6 +30,7 @@ def get_file_targets() -> List[Dict[str, str]]:
     frontend = os.path.join(desktop, "frontend")
     return [
         {"name": "桌面端主程序", "path": os.path.join(desktop, "main.go"), "type": "go"},
+        {"name": "Linux 端主程序", "path": os.path.join(desktop, "main_linux.go"), "type": "go"},
         {"name": "特权服务", "path": os.path.join(desktop, "cmd", "service", "main.go"), "type": "go"},
         {"name": "NSIS 主配置", "path": os.path.join(desktop, "build", "windows", "installer", "project.nsi"), "type": "nsi"},
         {"name": "Wails 配置", "path": os.path.join(desktop, "wails.json"), "type": "wails"},

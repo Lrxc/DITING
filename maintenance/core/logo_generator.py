@@ -10,6 +10,11 @@ import sys
 import xml.etree.ElementTree as ET
 from typing import Callable, List, Optional, Tuple
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
+
 try:
     from PIL import Image
     from PyQt6.QtCore import QByteArray

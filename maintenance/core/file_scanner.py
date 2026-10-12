@@ -119,6 +119,7 @@ def format_table(
     root_dir: str,
     stats: Dict,
     sort_by: str = "lines",
+    show_all: bool = False,
 ) -> str:
     if sort_by == "lines":
         matched_files.sort(key=lambda x: x["line_count"], reverse=True)
@@ -141,9 +142,14 @@ def format_table(
     ]
 
     exceeded_count = sum(1 for f in matched_files if f["exceeded"])
-    if exceeded_count == 0:
+    if not matched_files:
+        lines.append("未找到符合条件的目标源文件。")
+    elif exceeded_count == 0 and not show_all:
         lines.append(f"🎉 恭喜！未发现代码行数大于 {threshold} 行的目标文件。")
     else:
+        if exceeded_count == 0:
+            lines.append(f"🎉 恭喜！未发现代码行数大于 {threshold} 行的目标文件（已列出全部源文件清单）。")
+            lines.append("-" * total_w)
         header = (
             pad_str("序号", col_idx_w, align="left")
             + pad_str("行数", col_lines_w, align="left")
@@ -154,14 +160,15 @@ def format_table(
         lines.append("-" * total_w)
 
         for idx, item in enumerate(matched_files, start=1):
-            if not item["exceeded"]:
+            if not show_all and not item["exceeded"]:
                 continue
             type_label = f"[{item['ext'].upper().lstrip('.')}]"
+            tag = " [超标!]" if item["exceeded"] else ""
             row = (
                 pad_str(str(idx), col_idx_w, align="left")
                 + pad_str(f"{item['line_count']:,} 行", col_lines_w, align="left")
                 + pad_str(type_label, col_type_w, align="left")
-                + item["rel_path"]
+                + item["rel_path"] + tag
             )
             lines.append(row)
 
@@ -194,7 +201,7 @@ def run_scan_analysis(
 
     exceeded_files = [f for f in matched if f["exceeded"]]
     max_file = matched[0] if matched else None
-    report_text = format_table(matched, threshold, root_dir, stats, sort_by=sort_by)
+    report_text = format_table(matched, threshold, root_dir, stats, sort_by=sort_by, show_all=show_all)
 
     return {
         "success": True,

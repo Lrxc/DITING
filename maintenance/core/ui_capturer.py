@@ -93,17 +93,18 @@ def capture_screenshots(
 
     # 五大类信息架构；多段类别用 "大类/子页签" 表示
     all_tabs = [
+        "login",
         "overview/status",
         "overview/queries",
         "network/adapters",
         "network/upstream",
         "network/lan",
-        "accel",
+        "accel/cache",
         "rules/lists",
         "rules/custom",
         "rules/test",
         "rules/config",
-        "system",
+        "system/settings",
     ]
     target_tabs = all_tabs + ["modal-alert"] if tab == "all" else [tab]
     target_themes = ["dark", "light"] if theme == "both" else [theme]
@@ -120,10 +121,12 @@ def capture_screenshots(
                     break
 
                 slug = item.replace("/", "-")
-                file_name = f"{t}_modal_alert.png" if item == "modal-alert" else f"{t}_tab_{slug}.png"
+                file_name = f"{t}_modal_alert.png" if item == "modal-alert" else f"{t}_{slug}.png"
                 out_path = os.path.join(output_dir, file_name)
                 if item == "modal-alert":
                     target_url = f"{base_url}/?modal=alert&theme={t}"
+                elif item == "login":
+                    target_url = f"{base_url}/?theme={t}#/login"
                 elif "/" in item:
                     tab_id, sub_id = item.split("/", 1)
                     target_url = f"{base_url}/?noalert=1&theme={t}#/{tab_id}/{sub_id}"
@@ -172,7 +175,7 @@ def capture_screenshots(
 
 def main():
     parser = argparse.ArgumentParser(description="谛听自动化界面截图工具")
-    parser.add_argument("-t", "--tab", choices=["all", "overview/status", "overview/queries", "network/adapters", "network/upstream", "network/lan", "accel", "rules/lists", "rules/custom", "rules/test", "rules/config", "system", "modal-alert"], default="all")
+    parser.add_argument("-t", "--tab", choices=["all", "login", "overview/status", "overview/queries", "network/adapters", "network/upstream", "network/lan", "accel/cache", "rules/lists", "rules/custom", "rules/test", "rules/config", "system/settings", "modal-alert"], default="all")
     parser.add_argument("-m", "--theme", choices=["both", "dark", "light"], default="both")
     parser.add_argument("-o", "--output", default=None)
     parser.add_argument("-W", "--width", type=int, default=1280)
