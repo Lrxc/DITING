@@ -101,7 +101,7 @@ internal fun translateDynamicPattern(text: String): String? = when {
     text.startsWith("通知用于显示 DNS VPN") -> "Notifications show the running and stopped state of the DNS VPN. Denying this permission will not block core features, but you may not receive timely connection status updates."
     text.startsWith("谛听需要建立本地 VPN") -> "DITING needs a local VPN to process and filter DNS requests. This permission lets the app handle DNS traffic on the device; it does not send all network traffic to a remote VPN server."
     text.startsWith("已下载 ") -> text.replace("已下载 ", "Downloaded ")
-    text.startsWith("交流群：") -> text.replace("交流群：", "Group: ").replace("（入群答案：", " (join answer: ").replace("）", ")")
+    text.startsWith("交流群：") -> text.replace("交流群：", "Group: ")
     text.startsWith("整体表现") -> "Overall performance"
     text.startsWith("成功 ") && text.contains(" · 平均 ") && text.contains(" · 备用 ") -> text.replace("成功 ", "Success ").replace(" · 平均 ", " · Average ").replace(" · 备用 ", " · Fallback ").replace(" 次", " times")
     text.endsWith(" 次") -> text.removeSuffix(" 次") + " times"

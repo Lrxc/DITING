@@ -28,7 +28,7 @@ internal fun translateAboutAndUpdateExact(text: String): String? = when (text) {
     "导入 DNS 过滤规则和白名单，创建不可更新的本地订阅" -> "Import DNS filtering and allow rules as a non-updatable local subscription."
     "导入 IP 地址映射规则，创建不可更新的本地覆写订阅" -> "Import IP address mappings as a non-updatable local rewrite subscription."
     "DNS 规则和 hosts 规则导入后均为不可更新的本地订阅；地址 JSON 备份会恢复为手动 URL 规则。" -> "DNS and hosts rules become non-updatable local subscriptions after import; address JSON restores manual URL rules."
-    "未检测到 QQ，请搜索群号 1090225658 加入。" -> "QQ was not found. Search for group 1090225658 to join."
+    "未检测到 QQ，请搜索群号 1078502371 加入。" -> "QQ was not found. Search for group 1078502371 to join."
     "正在检查 GitHub Release" -> "Checking GitHub Releases"
     "检查 GitHub Release 中的最新版本" -> "Check GitHub Releases for the latest version"
     "更新规则" -> "Update rules"

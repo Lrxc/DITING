@@ -292,11 +292,11 @@ class SettingsRouteActivity : AppLocalizedActivity() {
             startActivity(
                 Intent(
                     Intent.ACTION_VIEW,
-                    Uri.parse("mqqapi://card/show_pslcard?src_type=internal&version=1&uin=1090225658&card_type=group&source=qrcode"),
+                    Uri.parse("mqqapi://card/show_pslcard?src_type=internal&version=1&uin=1078502371&card_type=group&source=qrcode"),
                 ),
             )
         } catch (_: Exception) {
-            this.showToast("未检测到 QQ，请搜索群号 1090225658 加入。", Toast.LENGTH_LONG)
+            this.showToast("未检测到 QQ，请搜索群号 1078502371 加入。", Toast.LENGTH_LONG)
         }
     }
 

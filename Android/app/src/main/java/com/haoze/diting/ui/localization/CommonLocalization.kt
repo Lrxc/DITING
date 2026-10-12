@@ -456,7 +456,7 @@ internal fun translateCommonExact(text: String): String? = when (text) {
     "默认通过 Android VpnService 建立仅处理 DNS 的本地通道；启用 HTTPS 流量检查或禁止联网后，Go 隧道使用 Go 用户态网络栈接管 TCP、UDP、DNS 和 HTTP(S) 流量。" -> "By default, an Android VpnService establishes a local tunnel that handles DNS only. When HTTPS traffic inspection or network blocking is enabled, the Go tunnel uses a Go userspace network stack to take over TCP, UDP, DNS, and HTTP(S) traffic."
     "通知用于显示 DNS VPN 的运行和停止状态。拒绝不会阻止核心功能运行，但你可能无法及时看到连接状态提醒。" -> "Notifications show the running and stopped states of the DNS VPN. Denying does not stop core features, but you may miss connection status alerts."
     "谛听需要建立本地 VPN 来处理和过滤 DNS 请求。此权限用于在设备上接管 DNS 流量，不会将全部网络流量发送到远程 VPN 服务器。" -> "DITING needs a local VPN to process and filter DNS requests. This permission takes over DNS traffic on the device; it does not send all network traffic to a remote VPN server."
-    "交流群：1090225658 （入群答案：造梦）" -> "QQ group: 1090225658 (join answer: 造梦)"
+    "交流群：1078502371" -> "QQ group: 1078502371"
     "下载" -> "Download"
     "清空" -> "Clear"
     "完成" -> "Done"

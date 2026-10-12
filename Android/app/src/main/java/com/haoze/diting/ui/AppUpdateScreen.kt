@@ -72,7 +72,7 @@ fun AppUpdateScreen(
                     add {
                         SettingsTextItem(
                             title = localizedText("加入 QQ 群"),
-                            subtitle = localizedText("交流群：1090225658 （入群答案：造梦）"),
+                            subtitle = localizedText("交流群：1078502371"),
                             onClick = onJoinQqGroup,
                         )
                     }
