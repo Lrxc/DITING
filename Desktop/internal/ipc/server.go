@@ -1,4 +1,4 @@
-﻿package ipc
+package ipc
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -110,7 +111,11 @@ func (s *Server) Start() error {
 	// SPA 静态资源路由回退
 	mux.HandleFunc("/", s.handleStaticSPA)
 
-	ln, err := net.Listen("tcp", s.addr)
+	network := "tcp"
+	if strings.HasPrefix(s.addr, "0.0.0.0:") || strings.HasPrefix(s.addr, "127.0.0.1:") {
+		network = "tcp4"
+	}
+	ln, err := net.Listen(network, s.addr)
 	if err != nil {
 		return fmt.Errorf("绑定 IPC 端口失败 (%s): %w", s.addr, err)
 	}
