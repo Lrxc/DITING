@@ -100,7 +100,8 @@ echo "[OK] 编译成功: $BIN_PATH ($(du -h "$BIN_PATH" | cut -f1))"
 # ---------------------------------------------------------------------------
 if [ "$PACKAGE" -eq 1 ]; then
     PKG_NAME="diting_${VERSION}_linux_${ARCH}"
-    PKG_DIR="$OUTPUT_DIR/$PKG_NAME"
+    TMP_STAGE="$(mktemp -d /tmp/diting-pkg.XXXXXX 2>/dev/null || mktemp -d)"
+    PKG_DIR="$TMP_STAGE/$PKG_NAME"
 
     echo ">>> 正在组装发行包: $PKG_NAME"
     rm -rf "$PKG_DIR"
@@ -108,15 +109,38 @@ if [ "$PACKAGE" -eq 1 ]; then
     mkdir -p "$PKG_DIR/usr/share/diting"
     mkdir -p "$PKG_DIR/lib/systemd/system"
     mkdir -p "$PKG_DIR/etc/diting"
+    mkdir -p "$PKG_DIR/usr/share/applications"
+    mkdir -p "$PKG_DIR/usr/share/pixmaps"
 
     cp "$BIN_PATH" "$PKG_DIR/usr/local/bin/$BIN_NAME"
     cp "build/linux/diting-dnsservice.service" "$PKG_DIR/lib/systemd/system/"
+    chmod 0644 "$PKG_DIR/lib/systemd/system/diting-dnsservice.service"
     cp "build/linux/install.sh" "$PKG_DIR/usr/share/diting/install.sh"
     cp "build/linux/uninstall.sh" "$PKG_DIR/usr/share/diting/uninstall.sh"
     chmod 0755 "$PKG_DIR/usr/share/diting/install.sh" "$PKG_DIR/usr/share/diting/uninstall.sh"
 
+    if [ -f "build/appicon.png" ]; then
+        cp "build/appicon.png" "$PKG_DIR/usr/share/pixmaps/diting.png"
+        chmod 0644 "$PKG_DIR/usr/share/pixmaps/diting.png"
+    fi
+
+    cat > "$PKG_DIR/usr/share/applications/diting.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Diting DNS
+Name[zh_CN]=谛听 DNS
+Comment=Diting DNS Management Console
+Comment[zh_CN]=谛听 DNS 管理控制台
+Exec=xdg-open http://127.0.0.1:15353
+Icon=diting
+Terminal=false
+Categories=Network;System;
+EOF
+    chmod 0644 "$PKG_DIR/usr/share/applications/diting.desktop"
+
     if command -v dpkg-deb >/dev/null 2>&1; then
         mkdir -p "$PKG_DIR/DEBIAN"
+        chmod 0755 "$PKG_DIR/DEBIAN"
         cat > "$PKG_DIR/DEBIAN/control" <<EOF
 Package: diting
 Version: $VERSION
@@ -152,7 +176,7 @@ EOF
 
     # .tar.gz（始终生成）
     TARBALL="$OUTPUT_DIR/${PKG_NAME}.tar.gz"
-    tar -C "$OUTPUT_DIR" -czf "$TARBALL" "$PKG_NAME"
+    tar -C "$TMP_STAGE" -czf "$TARBALL" "$PKG_NAME"
     echo "[OK] 已生成压缩包: $TARBALL"
 
     # .deb（仅在具备 dpkg-deb 时生成）
@@ -164,7 +188,7 @@ EOF
         echo "[提示] 未找到 dpkg-deb，跳过 .deb 生成（仅保留 tar.gz）。"
     fi
 
-    rm -rf "$PKG_DIR"
+    rm -rf "$TMP_STAGE"
 fi
 
 echo "============================================================"

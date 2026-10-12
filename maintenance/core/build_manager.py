@@ -214,10 +214,13 @@ def build_pipeline(
 
     # 2. 前置依赖检查
     tools = check_toolchain()
-    if target == "linux":
-        if not tools["go"]["found"]:
+    if target in ("linux", "deb"):
+        if not tools["go"]["found"] and sys.platform != "win32":
             on_log("error", "未找到 Go 环境，无法继续编译。")
             return {"success": False, "message": "缺少 Go 环境"}
+        if target == "deb" and sys.platform == "win32" and not shutil.which("wsl"):
+            on_log("error", "未检测到 WSL 环境。在 Windows 上打包 deb 安装包需要 WSL 支持。")
+            return {"success": False, "message": "缺少 WSL 环境"}
     elif not skip_check:
         if not tools["go"]["found"]:
             on_log("error", "未找到 Go 环境，无法继续编译。")
@@ -272,6 +275,49 @@ def build_pipeline(
             built_artifacts.append(linux_bin)
         else:
             return {"success": False, "message": "未生成预期的 Linux 二进制产物"}
+
+        on_log("info", f"=== 构建流水线执行完毕，生成 {len(built_artifacts)} 个产物 ===")
+        return {
+            "success": True,
+            "bin_dir": bin_dir,
+            "artifacts": built_artifacts,
+            "target": target,
+            "version": version,
+            "arch": arch,
+        }
+
+    # 3.2 Linux 发行包 (deb / tar.gz)
+    if target == "deb":
+        if arch not in ("amd64", "arm64", "arm"):
+            return {"success": False, "message": f"不支持的 Linux 架构: {arch}"}
+        on_log("info", f">>> 正在打包 Linux 发行包 (.deb / .tar.gz, linux/{arch})...")
+        if sys.platform == "win32":
+            if not shutil.which("wsl"):
+                on_log("error", "未检测到 WSL 环境。在 Windows 上打包 deb 安装包需要 WSL 支持。")
+                return {"success": False, "message": "缺少 WSL 环境"}
+            wsl_dir = desktop_dir.replace("\\", "/")
+            cmd_pkg = ["wsl.exe", "-e", "bash", "-c", f"cd \"$(wslpath '{wsl_dir}')\" && ./build_linux.sh --package -a {arch} -v {version} -b {build_type}"]
+            ok = run_cmd_live(cmd_pkg, cwd=desktop_dir, on_log=on_log, is_cancelled=is_cancelled)
+        else:
+            cmd_pkg = ["./build_linux.sh", "--package", "-a", arch, "-v", version, "-b", build_type]
+            ok = run_cmd_live(cmd_pkg, cwd=desktop_dir, on_log=on_log, is_cancelled=is_cancelled)
+
+        if not ok:
+            return {"success": False, "message": "Linux 发行包打包失败"}
+
+        deb_name = f"diting_{version}_linux_{arch}.deb"
+        deb_file = os.path.join(bin_dir, deb_name)
+        if os.path.exists(deb_file):
+            sz = os.path.getsize(deb_file)
+            on_log("info", f"[OK] Debian 安装包生成成功: {deb_file} ({format_size(sz)})")
+            built_artifacts.append(deb_file)
+
+        tar_name = f"diting_{version}_linux_{arch}.tar.gz"
+        tar_file = os.path.join(bin_dir, tar_name)
+        if os.path.exists(tar_file):
+            sz = os.path.getsize(tar_file)
+            on_log("info", f"[OK] Linux 压缩包生成成功: {tar_file} ({format_size(sz)})")
+            built_artifacts.append(tar_file)
 
         on_log("info", f"=== 构建流水线执行完毕，生成 {len(built_artifacts)} 个产物 ===")
         return {
@@ -361,7 +407,7 @@ def build_pipeline(
 
 def main():
     parser = argparse.ArgumentParser(description="谛听构建工具")
-    parser.add_argument("-t", "--target", choices=["all", "service", "gui", "installer", "linux"], default="all")
+    parser.add_argument("-t", "--target", choices=["all", "service", "gui", "installer", "linux", "deb"], default="all")
     parser.add_argument("-v", "--version", default=None, help="目标版本号 (默认自动读取)")
     parser.add_argument("-b", "--build-type", choices=["release", "debug"], default="release")
     parser.add_argument("-a", "--arch", choices=["amd64", "arm64", "arm"], default="amd64", help="Linux 目标架构")
