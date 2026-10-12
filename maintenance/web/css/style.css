@@ -472,6 +472,8 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--seal); c
   border-top: 1px solid var(--line-strong);
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
   transition: height 0.2s ease;
 }
 
@@ -479,12 +481,15 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--seal); c
 
 .terminal-bar {
   height: 38px;
+  flex-shrink: 0;
   padding: 0 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid var(--ink-line);
 }
+
+.terminal-container.collapsed .terminal-bar { border-bottom: none; }
 
 .terminal-title {
   display: flex;
