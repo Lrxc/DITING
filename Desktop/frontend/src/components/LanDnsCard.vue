@@ -263,8 +263,20 @@ onMounted(() => {
             <p>
               进入「局域网 LAN 设置」或「DHCP 服务器」，将「主 DNS 服务器」修改为本机局域网 IP：
             </p>
-            <div class="app-card-sub p-2.5 font-mono text-[12px] font-bold text-text-main select-all text-center">
-              {{ lanAddresses[0] || '192.168.x.x' }}
+            <div class="app-card-sub p-2.5 flex items-center justify-between gap-2">
+              <span class="font-mono text-[12px] font-bold text-text-main select-all truncate">
+                {{ lanAddresses[0] || '192.168.x.x' }}
+              </span>
+              <button
+                v-if="lanAddresses[0]"
+                type="button"
+                @click="copy(lanAddresses[0])"
+                class="app-btn-secondary app-btn-compact shrink-0"
+                title="复制此 DNS IP 地址"
+              >
+                <M3Icon :name="isCopied(lanAddresses[0]) ? 'check' : 'content_copy'" :size="13" />
+                <span>{{ isCopied(lanAddresses[0]) ? '已复制' : '复制' }}</span>
+              </button>
             </div>
             <p class="text-[11px] text-text-muted">
               保存并重启路由器或手机 Wi-Fi，全屋所有设备即可统一生效，享受广告拦截与极速解析！
@@ -293,8 +305,20 @@ onMounted(() => {
             <p>
               将「IP 设置」从 DHCP 切换为「静态 / 手动」，在「DNS 1」输入本机局域网 IP：
             </p>
-            <div class="app-card-sub p-2.5 font-mono text-[12px] font-bold text-text-main select-all text-center">
-              {{ lanAddresses[0] || '192.168.x.x' }}
+            <div class="app-card-sub p-2.5 flex items-center justify-between gap-2">
+              <span class="font-mono text-[12px] font-bold text-text-main select-all truncate">
+                {{ lanAddresses[0] || '192.168.x.x' }}
+              </span>
+              <button
+                v-if="lanAddresses[0]"
+                type="button"
+                @click="copy(lanAddresses[0])"
+                class="app-btn-secondary app-btn-compact shrink-0"
+                title="复制此 DNS IP 地址"
+              >
+                <M3Icon :name="isCopied(lanAddresses[0]) ? 'check' : 'content_copy'" :size="13" />
+                <span>{{ isCopied(lanAddresses[0]) ? '已复制' : '复制' }}</span>
+              </button>
             </div>
             <p class="text-[11px] text-text-muted">
               适用于不具备路由器管理权限，或仅希望特定设备单独体验谛听防护效果的使用场景。

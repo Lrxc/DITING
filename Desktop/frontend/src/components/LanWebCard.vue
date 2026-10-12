@@ -198,158 +198,155 @@ onMounted(() => {
     <ToastBanner v-if="errorMessage" :message="errorMessage" type="error" compact dismissible @dismiss="errorMessage = ''" />
 
     <!-- 展开详情面板 (当开启 Web 远程管理时) -->
-    <div v-if="isEnabled" class="space-y-4 pt-1">
-      <!-- 1. 局域网管理地址与手机扫码 -->
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <!-- 左侧: 局域网访问地址列表 -->
-        <div class="lg:col-span-2 space-y-3">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-bold text-text-main flex items-center gap-1.5">
-              <M3Icon name="link" :size="16" class="text-text-main" />
-              局域网 Web 访问地址 (浏览器直接打开)
-            </span>
-            <span class="text-[11px] text-text-sub font-mono">
-              端口: {{ webStatus?.port || 15353 }}
-            </span>
-          </div>
-
-          <div v-if="webUrls.length === 0" class="p-4 rounded-md bg-surface-card-sub text-center text-xs text-text-sub">
-            未探测到可用的局域网网卡 IPv4 地址
-          </div>
-          <div v-else class="space-y-2">
-            <div
-              v-for="url in webUrls"
-              :key="url"
-              class="flex flex-wrap items-center justify-between gap-3 p-3 rounded-md bg-surface-card-sub border border-surface-border hover:border-accent-seal/40 transition-all"
-            >
-              <div class="flex items-center gap-2.5 min-w-0">
-                <span class="w-2 h-2 rounded-full bg-status-success shrink-0"></span>
-                <span class="font-mono text-xs font-semibold text-text-main truncate select-all">
-                  {{ url }}
-                </span>
-              </div>
-
-              <div class="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  @click="copy(url)"
-                  class="app-btn-secondary app-btn-compact"
-                  :title="isCopied(url) ? '已复制！' : '复制网址'"
-                >
-                  <M3Icon :name="isCopied(url) ? 'check' : 'content_copy'" :size="14" />
-                  <span>{{ isCopied(url) ? '已复制' : '复制' }}</span>
-                </button>
-                <button
-                  type="button"
-                  @click="openInBrowser(url)"
-                  class="app-btn-primary app-btn-compact"
-                  title="在默认浏览器中打开"
-                >
-                  <M3Icon name="open_in_new" :size="14" />
-                  <span>打开</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- 安全凭据与密码修改 -->
-          <div class="flex items-center justify-between p-3.5 rounded-md bg-brand-container/20 border border-accent-seal/20 mt-3">
-            <div class="flex items-center gap-2.5">
-              <M3Icon name="key" :size="18" class="text-text-main" />
-              <div>
-                <span class="text-xs font-bold text-text-main">
-                  管理员账号: <span class="font-mono text-text-main font-semibold">{{ adminUser }}</span>
-                </span>
-                <p class="text-[11px] text-text-sub">
-                  {{ isInitialized ? '密码保护已启用，局域网设备需输入密码登录' : '尚未设置初始密码，首次访问将进入设置向导' }}
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              @click="showPasswordModal = true"
-              class="app-btn-secondary app-btn-compact"
-            >
-              <M3Icon name="lock_reset" :size="14" />
-              <span>{{ isInitialized ? '修改管理员密码' : '设置初始密码' }}</span>
-            </button>
-          </div>
+    <div v-if="isEnabled" class="space-y-3 pt-1">
+      <!-- 1. 局域网访问地址列表 -->
+      <div class="space-y-2">
+        <div class="flex items-center justify-between text-xs">
+          <span class="font-bold text-text-main flex items-center gap-1.5">
+            <M3Icon name="link" :size="15" class="text-text-main" />
+            局域网访问网址 (浏览器直连)
+          </span>
+          <span class="text-[11px] text-text-muted font-mono">
+            端口: {{ webStatus?.port || 15353 }}
+          </span>
         </div>
 
-        <!-- 右侧: 手机快速扫码直达卡片 -->
-        <div class="rounded-md bg-surface-card-sub border border-surface-border p-4 flex flex-col items-center justify-center text-center gap-2.5">
-          <span class="text-xs font-bold text-text-main flex items-center gap-1.5">
-            <M3Icon name="qr_code" :size="16" class="text-text-main" />
-            手机扫码即刻管理
-          </span>
-          <div class="p-2 rounded-md bg-white border border-surface-border">
+        <div v-if="webUrls.length === 0" class="p-3 rounded-md bg-surface-card-sub text-center text-xs text-text-sub">
+          未探测到可用的局域网网卡 IPv4 地址
+        </div>
+        <div v-else class="space-y-1.5">
+          <div
+            v-for="url in webUrls"
+            :key="url"
+            class="flex items-center justify-between gap-2 p-2.5 rounded-md bg-surface-card-sub border border-surface-border-sub hover:border-surface-border transition-colors"
+          >
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="w-2 h-2 rounded-full bg-status-success shrink-0" />
+              <span class="font-mono text-[12px] font-semibold text-text-main truncate select-all">
+                {{ url }}
+              </span>
+            </div>
+
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                @click="copy(url)"
+                class="app-btn-secondary app-btn-compact"
+                :title="isCopied(url) ? '已复制！' : '复制网址'"
+              >
+                <M3Icon :name="isCopied(url) ? 'check' : 'content_copy'" :size="13" />
+                <span>{{ isCopied(url) ? '已复制' : '复制' }}</span>
+              </button>
+              <button
+                type="button"
+                @click="openInBrowser(url)"
+                class="app-btn-primary app-btn-compact"
+                title="在默认浏览器中打开"
+              >
+                <M3Icon name="open_in_new" :size="13" />
+                <span>打开</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. 管理员凭据与扫码直达 (并排 2 列磁贴) -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        <!-- 账号安全凭据 -->
+        <div class="app-card-sub p-3 flex flex-col justify-between gap-2">
+          <div>
+            <div class="flex items-center gap-1.5 text-xs font-bold text-text-main">
+              <M3Icon name="key" :size="15" class="text-text-main" />
+              <span>控制台凭据</span>
+            </div>
+            <div class="mt-2 space-y-0.5">
+              <div class="text-[11px] text-text-muted">管理员用户名:</div>
+              <div class="font-mono text-[13px] font-bold text-text-main">{{ adminUser }}</div>
+              <p class="text-[10px] text-text-muted leading-tight mt-0.5">
+                {{ isInitialized ? '密码保护已启用，安全守护' : '尚未初始化密码，首次进入设置' }}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            @click="showPasswordModal = true"
+            class="app-btn-secondary app-btn-compact w-full"
+          >
+            <M3Icon name="lock_reset" :size="13" />
+            <span>{{ isInitialized ? '修改管理员密码' : '设置初始密码' }}</span>
+          </button>
+        </div>
+
+        <!-- 手机快速扫码 -->
+        <div class="app-card-sub p-3 flex flex-col items-center justify-center text-center gap-1.5">
+          <div class="p-1 rounded bg-white border border-surface-border shrink-0">
             <img
               v-if="qrDataUrl"
               :src="qrDataUrl"
               alt="手机扫码二维码"
-              class="w-32 h-32 block"
+              class="w-20 h-20 block"
             />
-            <div v-else class="w-32 h-32 flex items-center justify-center text-text-muted text-xs">
-              加载二维码中...
+            <div v-else class="w-20 h-20 flex items-center justify-center text-text-muted text-[10px]">
+              加载中...
             </div>
           </div>
-          <p class="text-[11px] text-text-sub leading-tight">
-            确保手机连接至同一 Wi-Fi<br />系统相机扫码直达控制台
-          </p>
+          <span class="text-[10px] text-text-muted leading-tight">
+            手机同一 Wi-Fi 相机扫码直达
+          </span>
         </div>
       </div>
 
-      <!-- 2. 防火墙放行状态与端口调整 -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-surface-border/60">
-        <!-- 防火墙规则卡片 -->
-        <div class="flex items-center justify-between p-3.5 rounded-md bg-surface-card-sub border border-surface-border">
-          <div class="space-y-0.5">
-            <div class="flex items-center gap-2">
-              <span class="text-xs font-bold text-text-main">Windows 防火墙规则</span>
+      <!-- 3. 防火墙状态与端口调整 (双列磁贴) -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 border-t border-surface-border-sub">
+        <!-- 防火墙规则 -->
+        <div class="app-card-sub p-2.5 flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5">
+              <span class="text-[11px] font-bold text-text-main">防火墙</span>
               <StatusBadge
                 :status="firewallAllowed ? 'active' : 'warning'"
                 :text="firewallAllowed ? '已放行' : '未放行'"
                 size="sm"
               />
             </div>
-            <p class="text-[11px] text-text-sub">
-              放行 TCP {{ webStatus?.port || 15353 }} 端口允许局域网设备连入
-            </p>
+            <span class="text-[10px] text-text-muted font-mono block truncate">TCP {{ webStatus?.port || 15353 }}</span>
           </div>
+
           <button
             type="button"
             @click="handleToggleFirewall"
             :disabled="togglingFw"
-            class="app-btn-secondary app-btn-compact"
+            class="app-btn-secondary app-btn-compact shrink-0"
           >
-            <M3Icon :name="firewallAllowed ? 'block' : 'shield'" :size="14" />
-            <span>{{ firewallAllowed ? '清除放行' : '一键放行' }}</span>
+            <M3Icon :name="firewallAllowed ? 'block' : 'shield'" :size="13" />
+            <span>{{ firewallAllowed ? '取消放行' : '一键放行' }}</span>
           </button>
         </div>
 
-        <!-- 端口修改 -->
-        <div class="flex items-center justify-between p-3.5 rounded-md bg-surface-card-sub border border-surface-border">
-          <div class="space-y-0.5">
-            <span class="text-xs font-bold text-text-main">远程管理通信端口</span>
-            <p class="text-[11px] text-text-sub font-mono">
-              当前: {{ webStatus?.port || 15353 }} (TCP)
-            </p>
+        <!-- 端口设置 -->
+        <div class="app-card-sub p-2.5 flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <span class="text-[11px] font-bold text-text-main block">通信端口</span>
+            <span class="text-[10px] text-text-muted font-mono block truncate">当前: {{ webStatus?.port || 15353 }}</span>
           </div>
-          <div v-if="!isEditingPort" class="flex items-center gap-2">
+
+          <div v-if="!isEditingPort" class="shrink-0">
             <button
               type="button"
               @click="isEditingPort = true"
               class="app-btn-secondary app-btn-compact"
             >
-              <M3Icon name="tune" :size="14" />
+              <M3Icon name="tune" :size="13" />
               <span>修改端口</span>
             </button>
           </div>
-          <div v-else class="flex items-center gap-2">
+          <div v-else class="flex items-center gap-1 shrink-0">
             <input
               type="number"
               v-model="customPort"
-              class="w-20 px-2 py-1 text-xs font-mono rounded-md border border-surface-border bg-surface-card text-text-main focus:outline-none focus:border-accent-seal placeholder:text-text-muted"
+              class="w-16 px-1.5 py-0.5 text-xs font-mono rounded border border-surface-border bg-surface-card text-text-main focus:outline-none focus:border-accent-seal"
             />
             <button
               type="button"

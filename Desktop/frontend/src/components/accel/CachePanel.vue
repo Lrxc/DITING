@@ -324,14 +324,15 @@ usePoller(pollMetrics, 4000);
 
       <!-- 4. 加速策略设置 -->
       <CacheConfigCard :config="config" :saving="saving" @save="handleSaveConfig" />
-    </div>
 
-    <!-- 5. 缓存条目明细表格 (卡片基元) -->
-    <CacheEntriesTable
-      :entries="entries"
-      :totalCount="totalEntriesCount"
-      @search="handleSearch"
-    />
+      <!-- 5. 缓存条目明细表格 (双列网格跨列卡片) -->
+      <CacheEntriesTable
+        class="lg:col-span-2"
+        :entries="entries"
+        :totalCount="totalEntriesCount"
+        @search="handleSearch"
+      />
+    </div>
 
     <!-- 一键清空确认弹窗 -->
     <AppModal

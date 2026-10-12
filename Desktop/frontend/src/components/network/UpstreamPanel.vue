@@ -183,38 +183,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-5 select-none">
-    <!-- 头部操作栏 -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-      <div class="min-w-0">
-        <h3 class="section-title">上游 DNS 与查询策略</h3>
-        <p class="text-[13px] text-text-sub mt-0.5">
-          管理用于解析域名的 DNS 服务器，支持加密传输（DoH / DoT）与智能容灾测速。
-        </p>
-      </div>
-
-      <div class="flex items-center gap-2 shrink-0">
-        <button
-          type="button"
-          @click="loadData(true)"
-          :disabled="loading"
-          class="app-btn-secondary"
-        >
-          <M3Icon name="refresh" :size="16" :class="loading ? 'animate-spin' : ''" />
-          <span>刷新状态</span>
-        </button>
-        <button
-          type="button"
-          @click="openAddDialog"
-          :disabled="saving"
-          class="app-btn-primary"
-        >
-          <M3Icon name="add" :size="16" />
-          <span>添加 DNS 服务器</span>
-        </button>
-      </div>
-    </div>
-
+  <div class="space-y-6 select-none pb-12">
     <!-- 消息横幅 -->
     <div v-if="successMessage" class="flex items-center justify-between rounded-md bg-status-success-bg border-l-2 border-status-success px-4 py-3 text-[13px] text-status-success">
       <div class="flex items-center gap-2">
@@ -236,59 +205,113 @@ onMounted(() => {
       </button>
     </div>
 
-    <!-- 调度策略选择 -->
-    <div class="app-card p-5">
-      <div class="flex items-center gap-2.5 mb-3.5 pb-2.5 border-b border-surface-border-sub">
-        <div class="w-7 h-7 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
-          <M3Icon name="tune" :size="16" class="text-text-main" />
-        </div>
+    <!-- 顶层卡片双列响应式网格：调度策略 (左) 与 Bootstrap 引导 (右) 并排对齐 -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
+      <!-- 1. 上游调度策略卡片 -->
+      <div class="app-card p-5 flex flex-col justify-between gap-4">
         <div>
-          <h4 class="font-semibold text-text-main text-[14px]">上游调度策略</h4>
-          <span class="text-[11px] text-text-muted">选择多服务器协同工作与容灾模式</span>
-        </div>
-      </div>
+          <div class="flex items-center justify-between gap-3 pb-3 border-b border-surface-border-sub">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div class="w-8 h-8 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
+                <M3Icon name="tune" :size="18" class="text-text-main" />
+              </div>
+              <div>
+                <h4 class="section-title text-[14px]">上游调度策略</h4>
+                <span class="text-[11px] text-text-muted">选择多服务器协同工作与容灾模式</span>
+              </div>
+            </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div
-          v-for="mode in schedulingModes"
-          :key="mode.id"
-          class="flex items-start gap-3 p-3 rounded-md border transition-all duration-150 cursor-pointer"
-          :class="[
-            currentMode === mode.id
-              ? 'border-brand-primary bg-brand-container/40'
-              : 'border-surface-border bg-surface-card-sub hover:bg-surface-hover',
-          ]"
-          @click="handleModeChange(mode.id)"
-        >
-          <md-radio
-            :checked="currentMode === mode.id"
-            :value="mode.id"
-            name="scheduling-mode"
-            class="mt-0.5"
-          />
-          <div class="space-y-0.5">
-            <span class="text-[13px] font-semibold text-text-main">
-              {{ mode.name }}
+            <span class="text-[11px] font-mono text-text-muted">
+              4 种模式
             </span>
-            <p class="text-[11px] text-text-sub leading-relaxed">
-              {{ mode.desc }}
-            </p>
+          </div>
+
+          <!-- 4 种调度模式网格 (内部 2x2) -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-3.5">
+            <div
+              v-for="mode in schedulingModes"
+              :key="mode.id"
+              class="flex items-start gap-2.5 p-2.5 rounded-md border transition-all duration-150 cursor-pointer"
+              :class="[
+                currentMode === mode.id
+                  ? 'border-brand-primary bg-brand-container/40 dark:bg-brand-container/20'
+                  : 'border-surface-border bg-surface-card-sub hover:bg-surface-hover',
+              ]"
+              @click="handleModeChange(mode.id)"
+            >
+              <md-radio
+                :checked="currentMode === mode.id"
+                :value="mode.id"
+                name="scheduling-mode"
+                class="mt-0.5 scale-90"
+              />
+              <div class="space-y-0.5 min-w-0">
+                <span class="text-[12px] font-bold text-text-main block truncate">
+                  {{ mode.name }}
+                </span>
+                <p class="text-[10px] text-text-sub leading-tight line-clamp-2">
+                  {{ mode.desc }}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
+
+        <div class="text-[11px] text-text-muted pt-2 border-t border-surface-border-sub">
+          当前策略: <span class="font-semibold text-text-main">{{ schedulingModes.find(m => m.id === currentMode)?.name }}</span>
+        </div>
       </div>
+
+      <!-- 2. Bootstrap DNS 引导解析卡片 (并排右侧) -->
+      <BootstrapConfigCard
+        :config="bootstrapConfig"
+        :saving="saving"
+        @update:config="bootstrapConfig = $event"
+        @save="handleBootstrapSave"
+      />
     </div>
 
-    <!-- 上游节点列表 -->
-    <div class="space-y-3">
-      <div class="flex items-center justify-between gap-3">
-        <h3 class="section-title">已配置的 DNS 服务器 · {{ upstreams.length }}</h3>
-        <span class="text-[11px] text-text-muted">宽屏两列对齐，支持独立测速与编辑</span>
+    <!-- 上游节点服务器独立模块 (双列响应式卡片流) -->
+    <div class="space-y-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2">
+            <h3 class="section-title">已配置的 DNS 服务器</h3>
+            <span class="px-2 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-surface-card-sub border border-surface-border text-text-main">
+              {{ upstreams.length }} 个节点
+            </span>
+          </div>
+          <p class="text-[12px] text-text-sub mt-0.5">
+            管理用于解析域名的 DNS 服务器，支持加密传输（DoH / DoT）与智能容灾测速。
+          </p>
+        </div>
+
+        <div class="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            @click="loadData(true)"
+            :disabled="loading"
+            class="app-btn-secondary app-btn-compact"
+          >
+            <M3Icon name="refresh" :size="14" :class="loading ? 'animate-spin' : ''" />
+            <span>刷新状态</span>
+          </button>
+          <button
+            type="button"
+            @click="openAddDialog"
+            :disabled="saving"
+            class="app-btn-primary app-btn-compact"
+          >
+            <M3Icon name="add" :size="14" />
+            <span>添加 DNS 服务器</span>
+          </button>
+        </div>
       </div>
 
-      <div v-if="upstreams.length === 0" class="app-card p-8 text-center border-dashed">
-        <M3Icon name="router" :size="32" class="text-text-muted mx-auto mb-2 opacity-50" />
+      <div v-if="upstreams.length === 0" class="app-card p-10 text-center border-dashed">
+        <M3Icon name="router" :size="36" class="text-text-muted mx-auto mb-2 opacity-50" />
         <p class="text-[13px] font-medium text-text-main mb-1">暂无配置 DNS 服务器</p>
-        <p class="text-[12px] text-text-sub mb-4">请点击添加按钮，从预设库中快速选择并添加 DNS 服务器</p>
+        <p class="text-[12px] text-text-sub mb-4">请点击右上角按钮添加主备 DNS 服务器</p>
         <button type="button" @click="openAddDialog" class="app-btn-primary app-btn-compact mx-auto">
           <M3Icon name="add" :size="14" />
           <span>添加预设服务器</span>
@@ -307,7 +330,7 @@ onMounted(() => {
             <div class="flex items-center justify-between gap-3 pb-3 border-b border-surface-border-sub">
               <div class="flex items-center gap-2.5 min-w-0">
                 <div class="w-8 h-8 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
-                  <M3Icon name="dns" :size="16" class="text-text-main" />
+                  <M3Icon name="dns" :size="18" class="text-text-main" />
                 </div>
                 <div class="min-w-0">
                   <div class="flex items-center gap-2 flex-wrap">
@@ -400,14 +423,6 @@ onMounted(() => {
         </div>
       </div>
     </div>
-
-    <!-- Bootstrap DNS 引导解析配置卡片 -->
-    <BootstrapConfigCard
-      :config="bootstrapConfig"
-      :saving="saving"
-      @update:config="bootstrapConfig = $event"
-      @save="handleBootstrapSave"
-    />
 
     <!-- 新增 / 编辑节点弹窗 -->
     <UpstreamEditModal

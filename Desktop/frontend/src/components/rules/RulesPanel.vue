@@ -123,25 +123,44 @@ usePoller(fetchData, 4000);
     <!-- 顶部消息提示 -->
     <ToastBanner v-if="toast" :message="toast.message" :type="toast.isError ? 'error' : 'success'" dismissible @dismiss="dismiss" />
 
-    <!-- 顶栏核心主控卡片 -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      <div>
-        <div class="flex items-center gap-2.5">
-          <h2 class="section-title">广告拦截与安全防护</h2>
-          <StatusBadge :status="stats.enabled ? 'active' : 'inactive'" :text="stats.enabled ? '防护生效中' : '防护已暂停'" size="sm" />
+    <!-- 顶栏核心主控与指标卡片 -->
+    <div class="app-card p-5 space-y-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-surface-border-sub">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-8 h-8 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
+            <M3Icon name="shield" :size="18" class="text-text-main" />
+          </div>
+          <div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <h2 class="section-title text-[14px]">广告拦截与安全防护引擎</h2>
+              <StatusBadge
+                :status="stats.enabled ? 'active' : 'inactive'"
+                :text="stats.enabled ? '防护生效中' : '防护已暂停'"
+                size="sm"
+                :pulse="stats.enabled"
+              />
+            </div>
+            <p class="text-[11px] text-text-muted mt-0.5">
+              毫秒级识别并阻断弹窗广告、隐私追踪与钓鱼恶意网址
+            </p>
+          </div>
         </div>
-        <p class="text-[12px] text-text-sub mt-1">
-          支持主流广告拦截与恶意网址防护规则，毫秒级快速识别并阻断弹窗广告、隐私追踪与危险网站。
-        </p>
-      </div>
-      <div class="flex items-center gap-3 shrink-0 md:pl-4">
-        <span class="text-[12px] font-medium text-text-sub">总开关</span>
-        <md-switch :selected="stats.enabled" @change="toggleMasterSwitch" :disabled="saving"></md-switch>
-      </div>
-    </div>
 
-    <!-- 拦截指标带 -->
-    <MetricStrip :stats="ruleStats" />
+        <div class="flex items-center gap-2 shrink-0">
+          <span class="text-[11px] font-semibold text-text-sub hidden sm:inline">
+            {{ stats.enabled ? '规则拦截开启' : '拦截已关闭' }}
+          </span>
+          <md-switch
+            :selected="stats.enabled"
+            @change="toggleMasterSwitch"
+            :disabled="saving"
+          />
+        </div>
+      </div>
+
+      <!-- 拦截指标带 -->
+      <MetricStrip :stats="ruleStats" />
+    </div>
 
     <!-- TAB 1: 订阅规则源列表 -->
     <RuleListsPanel

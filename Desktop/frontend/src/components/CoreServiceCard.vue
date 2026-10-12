@@ -120,32 +120,29 @@ function handleRefresh() {
     <ToastBanner v-if="opError" :message="opError" type="error" compact />
 
     <!-- 操作工具栏 -->
-    <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
-      <div v-if="webMode" class="w-full flex items-center gap-2 text-xs text-text-sub bg-surface-card-sub p-3 rounded-md border border-surface-border">
-        <M3Icon name="info" :size="16" class="text-text-main shrink-0" />
-        <span>当前为局域网 Web 远程管理控制台，后台服务正在宿主机守护运行中。Windows 系统服务注册与提权安装仅限在宿主机桌面端操作。</span>
+    <div class="space-y-2 pt-1 border-t border-surface-border-sub">
+      <div v-if="webMode" class="w-full flex items-center gap-2 text-xs text-text-sub bg-surface-card-sub p-2.5 rounded-md border border-surface-border">
+        <M3Icon name="info" :size="15" class="text-text-main shrink-0" />
+        <span>当前为局域网 Web 控制台，后台服务在宿主机守护运行中。Windows 服务注册请在桌面端操作。</span>
       </div>
       <template v-else>
-        <div class="text-xs text-text-sub flex items-center gap-1.5">
-          <M3Icon name="info" :size="15" class="text-text-muted" />
-          <span>支持一键向 Windows 注册服务并开机托管，操作将在需要时请求管理员权限。</span>
-        </div>
-
-        <div class="flex items-center gap-2">
-          <!-- 首次加载中占位 -->
-          <span v-if="!serviceStatus && loading" class="text-xs text-text-muted animate-pulse">
+        <div class="flex items-center justify-between gap-3 text-[11px] text-text-muted">
+          <span>注册为 Windows 系统服务后，开机免登录即可守护运行。</span>
+          <span v-if="!serviceStatus && loading" class="text-text-muted animate-pulse">
             正在检测服务状态...
           </span>
+        </div>
 
+        <div class="flex items-center justify-end gap-2 pt-1">
           <!-- 未安装状态：提供安装服务 -->
-          <template v-else-if="serviceStatus && !serviceStatus.installed">
+          <template v-if="serviceStatus && !serviceStatus.installed">
             <button
               type="button"
               @click="handleAction('install')"
               :disabled="operating || !serviceStatus.canInstall"
               class="app-btn-secondary app-btn-compact"
             >
-              <M3Icon name="add" :size="14" />
+              <M3Icon name="add" :size="13" />
               <span>仅注册服务</span>
             </button>
             <button
@@ -154,7 +151,7 @@ function handleRefresh() {
               :disabled="operating || !serviceStatus.canInstall"
               class="app-btn-primary app-btn-compact"
             >
-              <M3Icon name="bolt" :size="14" />
+              <M3Icon name="bolt" :size="13" />
               <span>{{ operating ? '正在处理...' : '一键安装并启动' }}</span>
             </button>
           </template>
@@ -167,7 +164,7 @@ function handleRefresh() {
               :disabled="operating"
               class="app-btn-danger app-btn-compact"
             >
-              <M3Icon name="delete" :size="14" />
+              <M3Icon name="delete" :size="13" />
               <span>卸载服务</span>
             </button>
             <button
@@ -176,7 +173,7 @@ function handleRefresh() {
               :disabled="operating"
               class="app-btn-primary app-btn-compact"
             >
-              <M3Icon name="play_arrow" :size="14" />
+              <M3Icon name="play_arrow" :size="13" />
               <span>{{ operating ? '正在启动...' : '启动服务' }}</span>
             </button>
           </template>
@@ -189,7 +186,7 @@ function handleRefresh() {
               :disabled="operating"
               class="app-btn-secondary app-btn-compact"
             >
-              <M3Icon name="pause" :size="14" />
+              <M3Icon name="pause" :size="13" />
               <span>停止服务</span>
             </button>
             <button
@@ -198,7 +195,7 @@ function handleRefresh() {
               :disabled="operating"
               class="app-btn-primary app-btn-compact"
             >
-              <M3Icon name="refresh" :size="14" :class="operating ? 'animate-spin' : ''" />
+              <M3Icon name="refresh" :size="13" :class="operating ? 'animate-spin' : ''" />
               <span>{{ operating ? '正在重启...' : '重启服务' }}</span>
             </button>
           </template>

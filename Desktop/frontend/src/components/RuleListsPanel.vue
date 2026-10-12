@@ -135,8 +135,19 @@ onMounted(loadLists);
       </div>
     </div>
 
+    <!-- 空规则库状态提示卡片 -->
+    <div v-if="lists.length === 0" class="app-card p-10 text-center border-dashed">
+      <M3Icon name="shield" :size="36" class="text-text-muted mx-auto mb-2 opacity-50" />
+      <p class="text-[13px] font-medium text-text-main mb-1">暂无规则订阅库</p>
+      <p class="text-[12px] text-text-sub mb-4">可点击右上角添加 AdGuard 语法规则链接或本地 Hosts 规则文件</p>
+      <button type="button" @click="isAddModalOpen = true" class="app-btn-primary app-btn-compact mx-auto">
+        <M3Icon name="add" :size="14" />
+        <span>添加规则库</span>
+      </button>
+    </div>
+
     <!-- 规则库网格：宽屏两列，窄屏单列 -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
+    <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
       <div
         v-for="l in lists"
         :key="l.id"

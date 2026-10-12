@@ -220,36 +220,37 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- 网关信息 -->
-          <div class="mt-2.5 flex items-center gap-2 text-[11px] text-text-sub">
-            <span class="text-text-muted">默认网关:</span>
-            <span class="font-mono text-text-main font-medium">{{ adapter.gateway || '无' }}</span>
+          <!-- 网关与 IP 分配模式信息 -->
+          <div class="mt-2.5 flex items-center justify-between gap-2 text-[11px] text-text-sub">
+            <div class="flex items-center gap-1.5 truncate">
+              <span class="text-text-muted">默认网关:</span>
+              <span class="font-mono text-text-main font-medium">{{ adapter.gateway || '无' }}</span>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <span class="text-text-muted">IP 模式:</span>
+              <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-surface-card-sub border border-surface-border-sub text-text-main">
+                {{ adapter.ipv4DHCP ? '自动 (DHCP)' : '固定静态 IP' }}
+              </span>
+            </div>
           </div>
         </div>
 
-        <!-- DNS 配置对比详情磁贴 (3 列等宽) -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs pt-1">
-          <div class="app-card-sub p-2.5 space-y-1">
-            <span class="text-text-muted text-[11px] block">IP 分配模式</span>
-            <span class="font-semibold text-text-main text-[12px] block truncate">
-              {{ adapter.ipv4DHCP ? '自动 (DHCP)' : '固定静态 IP' }}
-            </span>
-          </div>
-
+        <!-- DNS 配置对比详情磁贴 (双列对比，空间充足无截断) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs pt-1">
           <div class="app-card-sub p-2.5 space-y-1">
             <span class="text-text-muted text-[11px] block">原始系统 DNS</span>
-            <span class="font-mono text-text-main text-[12px] block truncate" :title="adapter.ipv4DNS?.join(', ') || '自动获取'">
-              {{ adapter.ipv4DNS?.join(', ') || '自动获取 (默认)' }}
+            <span class="font-mono text-text-main text-[12px] block truncate font-medium" :title="adapter.ipv4DNS?.join(', ') || '自动获取 (系统默认)'">
+              {{ adapter.ipv4DNS?.join(', ') || '自动获取 (系统默认)' }}
             </span>
           </div>
 
           <div class="app-card-sub p-2.5 space-y-1">
             <span class="text-text-muted text-[11px] block">当前生效 DNS</span>
             <span
-              class="font-mono font-semibold text-[12px] block truncate"
+              class="font-mono font-bold text-[12px] block truncate"
               :class="isAdapterTakenOver(adapter) ? 'text-status-success' : 'text-text-sub'"
             >
-              {{ isAdapterTakenOver(adapter) ? '127.0.0.1 (本机保护)' : '系统默认' }}
+              {{ isAdapterTakenOver(adapter) ? '127.0.0.1 (本机保护)' : '系统默认未接管' }}
             </span>
           </div>
         </div>
