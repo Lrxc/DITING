@@ -151,33 +151,35 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="rounded-md border border-surface-border bg-surface-card p-5 space-y-5 transition-colors">
+  <div class="app-card p-5 flex flex-col justify-between gap-4 transition-colors">
     <!-- 头部标题与总开关 -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-surface-border-sub">
       <div class="space-y-1">
         <div class="flex items-center gap-2.5">
-          <div class="w-8 h-8 rounded-md bg-brand-container/60 flex items-center justify-center shrink-0">
-            <M3Icon name="web" :size="20" class="text-text-main" />
+          <div class="w-8 h-8 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
+            <M3Icon name="web" :size="18" class="text-text-main" />
           </div>
-          <h3 class="section-title flex items-center gap-2">
-            局域网 Web 远程管理控制台
-          </h3>
-          <StatusBadge
-            :status="isEnabled ? 'active' : 'inactive'"
-            :text="isEnabled ? '已对外开放' : '仅本地访问'"
-            :pulse="isEnabled"
-            size="sm"
-          />
+          <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <h3 class="section-title text-[14px]">
+                局域网 Web 控制台
+              </h3>
+              <StatusBadge
+                :status="isEnabled ? 'active' : 'inactive'"
+                :text="isEnabled ? '对外开放中' : '仅本地 (127.0.0.1)'"
+                :pulse="isEnabled"
+                size="sm"
+              />
+            </div>
+            <span class="text-[11px] text-text-muted">通过手机、平板或局域网浏览器远程管理</span>
+          </div>
         </div>
-        <p class="text-xs text-text-sub leading-relaxed max-w-2xl">
-          开启后，局域网内的手机、平板或其他电脑可通过浏览器访问完整控制台进行远程管理，与桌面客户端共享核心数据与配置同步。
-        </p>
       </div>
 
       <!-- 右侧启闭开关 -->
-      <div class="flex items-center gap-3 self-end sm:self-center shrink-0">
-        <span class="text-xs font-semibold text-text-main">
-          {{ isEnabled ? '远程管理已开启' : '已关闭' }}
+      <div class="flex items-center gap-2 self-end sm:self-center shrink-0">
+        <span class="text-[11px] font-semibold text-text-sub hidden sm:inline">
+          {{ isEnabled ? '远程管理开启' : '已关闭' }}
         </span>
         <md-switch
           :selected="isEnabled"
@@ -187,12 +189,16 @@ onMounted(() => {
       </div>
     </div>
 
+    <p v-if="!isEnabled" class="text-[12px] text-text-sub leading-relaxed">
+      开启后，局域网内的手机或电脑可通过浏览器访问完整控制台进行远程管理，与桌面客户端共享核心数据与配置同步。
+    </p>
+
     <!-- 成功与错误反馈横幅 -->
     <ToastBanner v-if="successMessage" :message="successMessage" type="success" compact dismissible @dismiss="successMessage = ''" />
     <ToastBanner v-if="errorMessage" :message="errorMessage" type="error" compact dismissible @dismiss="errorMessage = ''" />
 
     <!-- 展开详情面板 (当开启 Web 远程管理时) -->
-    <div v-if="isEnabled" class="space-y-5 pt-2 border-t border-surface-border">
+    <div v-if="isEnabled" class="space-y-4 pt-1">
       <!-- 1. 局域网管理地址与手机扫码 -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <!-- 左侧: 局域网访问地址列表 -->

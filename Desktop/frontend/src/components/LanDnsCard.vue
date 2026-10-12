@@ -85,165 +85,221 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="rounded-md border border-surface-border bg-surface-card p-5 space-y-6 transition-colors">
-    <!-- 头部与主控制开关 -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-surface-border">
-      <div class="space-y-1">
-        <div class="flex items-center gap-2.5">
-          <M3Icon name="router" :size="22" class="text-text-main" />
-          <h3 class="section-title">
-            局域网 DNS 服务器 (AdGuard Home 模式)
-          </h3>
-          <StatusBadge
-            :status="allowLAN ? 'active' : 'inactive'"
-            :text="allowLAN ? '全网监听中 (0.0.0.0)' : '仅本机模式'"
-          />
-        </div>
-        <p class="text-xs text-text-sub max-w-2xl">
-          使本机作为局域网内的 DNS 服务器运行。局域网内其他设备（路由器、手机、平板、NAS）将 DNS 设置为本机的局域网 IP，即可统一通过谛听进行 DNS 解析、智能加速与过滤拦截。
-        </p>
-      </div>
-
-      <div class="flex items-center gap-3 shrink-0">
-        <span class="text-xs font-semibold text-text-sub">
-          {{ allowLAN ? '服务已激活' : '已关闭' }}
-        </span>
-        <md-switch
-          :selected="allowLAN"
-          :disabled="toggling || loading"
-          @change="handleToggleLAN"
-        />
-      </div>
-    </div>
-
+  <div class="space-y-5 select-none">
     <!-- 消息提示栏 -->
     <ToastBanner v-if="successMessage" :message="successMessage" type="success" compact />
     <ToastBanner v-if="errorMessage" :message="errorMessage" type="error" compact dismissible @dismiss="errorMessage = ''" />
 
-    <!-- 核心卡片网格：IP 地址展示与防火墙状态 -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
-      <!-- 局域网 IP 地址卡片 -->
-      <div class="lg:col-span-2 p-4 rounded-md border border-surface-border-sub bg-surface-card-sub space-y-3">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <M3Icon name="dns" :size="18" class="text-text-main" />
-            <span class="text-sm font-bold text-text-main">本机局域网 DNS 服务器地址</span>
-          </div>
-          <button
-            type="button"
-            @click="loadData"
-            :disabled="loading"
-            class="app-btn-secondary app-btn-compact"
-            title="刷新本机 IP"
-          >
-            <M3Icon name="refresh" :size="14" :class="loading ? 'animate-spin' : ''" />
-            <span>刷新</span>
-          </button>
-        </div>
-
-        <p class="text-xs text-text-sub">
-          在其他设备的网络设置中填入以下 IP 地址作为首选 DNS 服务器：
-        </p>
-
-        <!-- IP 地址列表 -->
-        <div v-if="lanAddresses.length > 0" class="space-y-2 pt-1">
-          <div
-            v-for="ip in lanAddresses"
-            :key="ip"
-            class="flex items-center justify-between p-2.5 rounded-md bg-surface-card border border-surface-border hover:border-accent-seal/40 transition-colors"
-          >
+    <!-- 宽屏两列卡片网格，窄屏单列 -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
+      <!-- 1. 局域网 DNS 服务控制与 IP 地址卡片 -->
+      <div class="app-card p-5 flex flex-col justify-between gap-4">
+        <div>
+          <!-- 头部标题与服务总开关 -->
+          <div class="flex items-center justify-between gap-3 pb-3 border-b border-surface-border-sub">
             <div class="flex items-center gap-2.5 min-w-0">
-              <span
-                class="px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0 border"
-                :class="ip.includes(':') ? 'border-surface-border text-text-muted' : 'border-accent-seal/40 text-accent-seal'"
-              >
-                {{ ip.includes(':') ? 'IPv6' : 'IPv4 首选' }}
-              </span>
-              <span class="font-mono text-xs font-semibold text-text-main truncate select-all">
-                {{ ip }}
-              </span>
+              <div class="w-8 h-8 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
+                <M3Icon name="router" :size="18" class="text-text-main" />
+              </div>
+              <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <h3 class="section-title text-[14px]">局域网 DNS 服务</h3>
+                  <StatusBadge
+                    :status="allowLAN ? 'active' : 'inactive'"
+                    :text="allowLAN ? '全网监听 (0.0.0.0)' : '仅本机模式'"
+                    size="sm"
+                  />
+                </div>
+                <span class="text-[11px] text-text-muted">提供 AdGuard Home 兼容的局域网中心解析</span>
+              </div>
             </div>
 
-            <button
-              type="button"
-              @click="copy(ip)"
-              class="app-btn-secondary app-btn-compact shrink-0"
-            >
-              <M3Icon :name="isCopied(ip) ? 'check' : 'content_copy'" :size="13" />
-              <span>{{ isCopied(ip) ? '已复制' : '复制' }}</span>
-            </button>
+            <div class="flex items-center gap-2 shrink-0">
+              <span class="text-[11px] font-semibold text-text-sub hidden sm:inline">
+                {{ allowLAN ? '服务已激活' : '已关闭' }}
+              </span>
+              <md-switch
+                :selected="allowLAN"
+                :disabled="toggling || loading"
+                @change="handleToggleLAN"
+              />
+            </div>
           </div>
-        </div>
-        <div v-else class="text-xs text-text-sub italic py-2">
-          未检测到物理活动网卡 IP，请确认本机已连接 Wi-Fi 或以太网局域网。
+
+          <p class="text-[12px] text-text-sub leading-relaxed mt-3">
+            开启后，局域网设备（路由器、手机、平板、NAS）可将首选 DNS 设为本机 IP，共享加速与拦截。
+          </p>
+
+          <!-- IP 地址列表 -->
+          <div class="mt-3.5 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-bold text-text-main">本机可用的局域网 DNS 地址</span>
+              <button
+                type="button"
+                @click="loadData"
+                :disabled="loading"
+                class="app-btn-secondary app-btn-compact"
+                title="刷新本机网卡 IP"
+              >
+                <M3Icon name="refresh" :size="13" :class="loading ? 'animate-spin' : ''" />
+                <span>刷新 IP</span>
+              </button>
+            </div>
+
+            <div v-if="lanAddresses.length > 0" class="space-y-1.5 pt-1">
+              <div
+                v-for="ip in lanAddresses"
+                :key="ip"
+                class="flex items-center justify-between p-2.5 rounded-md bg-surface-card-sub border border-surface-border-sub hover:border-surface-border transition-colors"
+              >
+                <div class="flex items-center gap-2 min-w-0">
+                  <span
+                    class="px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0 border"
+                    :class="ip.includes(':') ? 'border-surface-border text-text-muted' : 'border-accent-seal/40 text-accent-seal'"
+                  >
+                    {{ ip.includes(':') ? 'IPv6' : 'IPv4 首选' }}
+                  </span>
+                  <span class="font-mono text-[12px] font-semibold text-text-main truncate select-all">
+                    {{ ip }}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  @click="copy(ip)"
+                  class="app-btn-secondary app-btn-compact shrink-0"
+                >
+                  <M3Icon :name="isCopied(ip) ? 'check' : 'content_copy'" :size="13" />
+                  <span>{{ isCopied(ip) ? '已复制' : '复制' }}</span>
+                </button>
+              </div>
+            </div>
+            <div v-else class="text-xs text-text-muted italic py-3 text-center">
+              未检测到物理活动网卡 IP，请确认已连接 Wi-Fi 或以太网。
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Windows 防火墙状态卡片 -->
-      <div class="p-4 rounded-md border border-surface-border-sub bg-surface-card-sub space-y-3 flex flex-col justify-between">
-        <div class="space-y-2">
-          <div class="flex items-center justify-between">
-            <span class="text-sm font-bold text-text-main flex items-center gap-1.5">
-              <M3Icon name="shield" :size="16" class="text-text-main" />
-              防火墙放行状态
+      <!-- 2. Windows 防火墙入站状态与放行控制卡片 -->
+      <div class="app-card p-5 flex flex-col justify-between gap-4">
+        <div>
+          <div class="flex items-center justify-between gap-3 pb-3 border-b border-surface-border-sub">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div class="w-8 h-8 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
+                <M3Icon name="shield" :size="18" class="text-text-main" />
+              </div>
+              <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <h3 class="section-title text-[14px]">防火墙入站放行</h3>
+                  <span
+                    class="px-2 py-0.5 rounded-full text-[10px] font-bold"
+                    :class="firewallAllowed ? 'bg-status-success-bg text-status-success' : 'bg-status-warning-bg text-status-warning'"
+                  >
+                    {{ firewallAllowed ? '53 端口已放行' : '未放行' }}
+                  </span>
+                </div>
+                <span class="text-[11px] text-text-muted">Windows Defender 端口安全规则托管</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-3 mt-3 text-[12px] text-text-sub leading-relaxed">
+            <p>
+              局域网外部设备需通过 UDP/TCP 53 端口向本机发送 DNS 解析请求。
+            </p>
+            <p>
+              如果系统防火墙拦截了 53 端口入站流量，手机或路由器将无法连通本机并导致断网。点击下方按钮可由系统自动添加或移除安全放行规则。
+            </p>
+
+            <div class="app-card-sub p-3 flex items-center justify-between gap-3">
+              <div>
+                <span class="text-[11px] text-text-muted block">入站规则状态</span>
+                <span class="font-semibold text-text-main text-[12px] mt-0.5 block">
+                  {{ firewallAllowed ? '允许局域网设备接入 53 端口' : '53 端口受限或被拦截' }}
+                </span>
+              </div>
+              <M3Icon
+                :name="firewallAllowed ? 'check_circle' : 'warning'"
+                :size="20"
+                :class="firewallAllowed ? 'text-status-success' : 'text-status-warning'"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-2 border-t border-surface-border-sub">
+          <button
+            type="button"
+            @click="handleToggleFirewall"
+            :disabled="togglingFw"
+            class="w-full"
+            :class="firewallAllowed ? 'app-btn-secondary' : 'app-btn-primary'"
+          >
+            <M3Icon v-if="togglingFw" name="sync" :size="14" class="animate-spin" />
+            <M3Icon v-else :name="firewallAllowed ? 'block' : 'verified_user'" :size="14" />
+            <span>{{ firewallAllowed ? '移除防火墙入站放行' : '一键放行入站 53 端口' }}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 3. 方案 A：路由器全局配置卡片 (强烈推荐) -->
+      <div class="app-card p-5 flex flex-col justify-between gap-3">
+        <div>
+          <div class="flex items-center justify-between gap-2 pb-2.5 border-b border-surface-border-sub">
+            <div class="flex items-center gap-2">
+              <M3Icon name="wifi" :size="18" class="text-text-main" />
+              <h4 class="font-bold text-text-main text-[13.5px]">方案 A：路由器全局配置</h4>
+            </div>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-accent-seal text-white">
+              强烈推荐
             </span>
-            <span
-              class="px-2 py-0.5 rounded-full text-[11px] font-bold"
-              :class="firewallAllowed ? 'bg-status-success-bg text-status-success' : 'bg-status-warning-bg text-status-warning'"
-            >
-              {{ firewallAllowed ? '已放行 53 端口' : '未放行' }}
+          </div>
+
+          <div class="space-y-2 mt-3 text-xs text-text-sub leading-relaxed">
+            <p>
+              登录家用路由器后台管理页面（通常为 <code class="font-mono bg-surface-card-sub px-1 py-0.5 rounded text-text-main">192.168.1.1</code> 或 <code class="font-mono bg-surface-card-sub px-1 py-0.5 rounded text-text-main">192.168.0.1</code>）。
+            </p>
+            <p>
+              进入「局域网 LAN 设置」或「DHCP 服务器」，将「主 DNS 服务器」修改为本机局域网 IP：
+            </p>
+            <div class="app-card-sub p-2.5 font-mono text-[12px] font-bold text-text-main select-all text-center">
+              {{ lanAddresses[0] || '192.168.x.x' }}
+            </div>
+            <p class="text-[11px] text-text-muted">
+              保存并重启路由器或手机 Wi-Fi，全屋所有设备即可统一生效，享受广告拦截与极速解析！
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. 方案 B：手机与电脑单机独立配置卡片 -->
+      <div class="app-card p-5 flex flex-col justify-between gap-3">
+        <div>
+          <div class="flex items-center justify-between gap-2 pb-2.5 border-b border-surface-border-sub">
+            <div class="flex items-center gap-2">
+              <M3Icon name="devices" :size="18" class="text-text-main" />
+              <h4 class="font-bold text-text-main text-[13.5px]">方案 B：单终端独立配置</h4>
+            </div>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-surface-card-sub text-text-sub border border-surface-border-sub">
+              独立体验
             </span>
           </div>
 
-          <p class="text-xs text-text-sub leading-relaxed">
-            局域网其他设备需通过 UDP/TCP 53 端口访问本机。若 Windows Defender 防火墙拦截入站请求，外部设备将无法完成解析。
-          </p>
-        </div>
-
-        <button
-          type="button"
-          @click="handleToggleFirewall"
-          :disabled="togglingFw"
-          class="app-btn-base w-full justify-center"
-          :class="firewallAllowed ? 'app-btn-secondary' : 'app-btn-primary'"
-        >
-          <M3Icon v-if="togglingFw" name="sync" :size="14" class="animate-spin" />
-          <M3Icon v-else :name="firewallAllowed ? 'block' : 'verified_user'" :size="14" />
-          <span>{{ firewallAllowed ? '移除防火墙放行' : '一键放行入站 53 端口' }}</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- 局域网设备接入指引 -->
-    <div class="rounded-md border border-surface-border-sub bg-surface-card-sub p-4 space-y-3">
-      <div class="flex items-center gap-2">
-        <M3Icon name="help_outline" :size="18" class="text-text-main" />
-        <h4 class="label-quiet">
-          局域网设备接入与配置指引
-        </h4>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-        <!-- 方案 1：路由器全局配置 -->
-        <div class="p-3 rounded-md bg-surface-card border border-surface-border space-y-1.5">
-          <div class="font-bold text-text-main flex items-center gap-1.5">
-            <M3Icon name="wifi" :size="16" />
-            <span>方案 A：路由器全局配置 (强烈推荐)</span>
+          <div class="space-y-2 mt-3 text-xs text-text-sub leading-relaxed">
+            <p>
+              在目标手机、平板或电脑的 Wi-Fi 设置中，找到当前连接的 Wi-Fi 网络详情。
+            </p>
+            <p>
+              将「IP 设置」从 DHCP 切换为「静态 / 手动」，在「DNS 1」输入本机局域网 IP：
+            </p>
+            <div class="app-card-sub p-2.5 font-mono text-[12px] font-bold text-text-main select-all text-center">
+              {{ lanAddresses[0] || '192.168.x.x' }}
+            </div>
+            <p class="text-[11px] text-text-muted">
+              适用于不具备路由器管理权限，或仅希望特定设备单独体验谛听防护效果的使用场景。
+            </p>
           </div>
-          <p class="text-text-sub leading-relaxed">
-            登录家用路由器后台 (通常为 192.168.1.1 或 192.168.0.1)，进入「LAN 口设置」或「DHCP 服务器」，将「主 DNS 服务器」修改为本机的局域网 IP (例如 <span class="font-mono text-text-main select-all">{{ lanAddresses[0] || '192.168.x.x' }}</span>)。保存后全屋所有设备自动生效！
-          </p>
-        </div>
-
-        <!-- 方案 2：移动设备与电脑独立配置 -->
-        <div class="p-3 rounded-md bg-surface-card border border-surface-border space-y-1.5">
-          <div class="font-bold text-text-main flex items-center gap-1.5">
-            <M3Icon name="devices" :size="16" />
-            <span>方案 B：手机 / 平板 / 电脑单机配置</span>
-          </div>
-          <p class="text-text-sub leading-relaxed">
-            在手机或电脑的 Wi-Fi 设置中，将 IP 设置从 DHCP 改为「静态/手动」，并将 DNS 服务器地址修改为本机的局域网 IP。适合特定设备单独体验谛听的加速与拦截效果。
-          </p>
         </div>
       </div>
     </div>

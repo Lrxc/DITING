@@ -124,28 +124,30 @@ async function handleTestLatency(s: BootstrapServer) {
 </script>
 
 <template>
-  <div class="rounded-md border border-surface-border bg-surface-card p-5 transition-all duration-200">
+  <div class="app-card p-5 transition-all duration-200">
     <!-- 标题与状态切换 -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-surface-border/60">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3.5 border-b border-surface-border-sub">
       <div class="space-y-1">
         <div class="flex items-center gap-2.5">
-          <M3Icon name="dns" :size="22" class="text-text-main" />
-          <h3 class="section-title">
-            Bootstrap DNS (引导解析服务器)
+          <div class="w-7 h-7 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
+            <M3Icon name="dns" :size="16" class="text-text-main" />
+          </div>
+          <h3 class="section-title text-[14px]">
+            Bootstrap DNS 引导解析服务器
           </h3>
           <span
-            class="px-2 py-0.5 rounded-full text-xs font-semibold"
+            class="px-2 py-0.5 rounded-full text-[11px] font-semibold"
             :class="config.enabled ? 'bg-status-success-bg text-status-success' : 'bg-surface-card-sub text-text-sub'"
           >
-            {{ config.enabled ? '已启用引导' : '已停用' }}
+            {{ config.enabled ? '引导启用' : '已停用' }}
           </span>
         </div>
-        <p class="text-xs text-text-sub leading-relaxed max-w-2xl">
-          用于在建立 DoT（DNS over TLS）和 DoH（DNS over HTTPS）加密连接前解析其服务器域名。优先使用此处配置的纯 IP 地址，避免因系统 DNS 不可用而导致加密 DNS 服务无法连接。
+        <p class="text-[12px] text-text-sub leading-relaxed max-w-2xl">
+          建立 DoT（TLS）和 DoH（HTTPS）加密连接前解析上游域名的引导服务器。优先使用纯 IP 地址，避免系统 DNS 无法解析上游。
         </p>
       </div>
 
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-3 shrink-0">
         <md-switch
           :selected="config.enabled"
           @change="handleToggleEnabled"
@@ -158,80 +160,87 @@ async function handleTestLatency(s: BootstrapServer) {
           :disabled="saving"
           class="app-btn-secondary app-btn-compact"
         >
-          <M3Icon name="add" :size="16" />
+          <M3Icon name="add" :size="15" />
           <span>添加引导 DNS</span>
         </button>
       </div>
     </div>
 
-    <!-- 服务器列表 -->
-    <div class="mt-4 space-y-3">
+    <!-- 服务器列表：宽屏两列网格，窄屏单列 -->
+    <div class="mt-4">
       <div
         v-if="!config.servers || config.servers.length === 0"
-        class="text-center py-6 text-xs text-text-sub"
+        class="text-center py-6 text-xs text-text-muted"
       >
         未配置 Bootstrap DNS 服务器，请点击上方按钮添加。
       </div>
 
-      <div
-        v-for="(s, idx) in config.servers"
-        :key="s.id"
-        class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-md border border-surface-border bg-surface-card-sub hover:bg-surface-hover/60 transition-colors"
-      >
-        <div class="space-y-1">
-          <div class="flex items-center gap-2">
-            <span class="text-sm font-bold text-text-main">
-              {{ s.name || s.id }}
-            </span>
-            <span class="text-xs font-mono px-2 py-0.5 rounded bg-surface-card border border-surface-border text-text-main font-semibold">
-              {{ s.address }}
+      <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-3.5 items-stretch">
+        <div
+          v-for="(s, idx) in config.servers"
+          :key="s.id"
+          class="app-card-sub p-3.5 flex flex-col justify-between gap-3 hover:border-surface-border transition-colors"
+        >
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="text-[13px] font-bold text-text-main truncate">
+                {{ s.name || s.id }}
+              </span>
+              <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-card border border-surface-border text-text-main font-semibold shrink-0 select-all">
+                {{ s.address }}
+              </span>
+            </div>
+            <span class="text-[11px] font-mono text-text-muted shrink-0">
+              {{ s.id }}
             </span>
           </div>
-          <p class="text-xs font-mono text-text-sub">
-            标识: {{ s.id }}
-          </p>
-        </div>
 
-        <div class="flex items-center gap-2">
-          <!-- 延迟测试徽标 -->
-          <span
-            v-if="probeResults[s.id] !== undefined"
-            class="text-xs font-mono px-2 py-1 rounded-md font-semibold inline-flex items-center"
-            :class="probeResults[s.id] > 0 ? 'bg-status-success-bg text-status-success border border-status-success/30' : 'bg-status-error-bg text-status-error border border-status-error/30'"
-          >
-            {{ probeResults[s.id] > 0 ? `${probeResults[s.id].toFixed(1)} ms` : '超时' }}
-          </span>
+          <div class="flex items-center justify-between pt-2 border-t border-surface-border-sub/60">
+            <!-- 延迟测试徽标 -->
+            <div>
+              <span
+                v-if="probeResults[s.id] !== undefined"
+                class="text-[11px] font-mono px-2 py-0.5 rounded-md font-semibold inline-flex items-center"
+                :class="probeResults[s.id] > 0 ? 'bg-status-success-bg text-status-success border border-status-success/30' : 'bg-status-error-bg text-status-error border border-status-error/30'"
+              >
+                {{ probeResults[s.id] > 0 ? `${probeResults[s.id].toFixed(1)} ms` : '超时' }}
+              </span>
+              <span v-else class="text-[11px] text-text-muted font-mono">未测速</span>
+            </div>
 
-          <button
-            type="button"
-            class="app-btn-secondary app-btn-compact"
-            @click="handleTestLatency(s)"
-            :disabled="probingId === s.id"
-            title="测试此引导服务器延迟"
-          >
-            <M3Icon v-if="probingId === s.id" name="refresh" class="animate-spin" :size="14" />
-            <M3Icon v-else name="bolt" :size="14" />
-            <span>测速</span>
-          </button>
+            <div class="flex items-center gap-1.5">
+              <button
+                type="button"
+                class="app-btn-secondary app-btn-compact"
+                @click="handleTestLatency(s)"
+                :disabled="probingId === s.id"
+                title="测试此引导服务器延迟"
+              >
+                <M3Icon v-if="probingId === s.id" name="refresh" class="animate-spin" :size="13" />
+                <M3Icon v-else name="bolt" :size="13" />
+                <span>测速</span>
+              </button>
 
-          <button
-            type="button"
-            @click="openEditDialog(idx)"
-            class="app-btn-icon"
-            title="编辑引导 DNS"
-          >
-            <M3Icon name="settings" :size="16" />
-          </button>
+              <button
+                type="button"
+                @click="openEditDialog(idx)"
+                class="app-btn-icon"
+                title="编辑引导 DNS"
+              >
+                <M3Icon name="settings" :size="15" />
+              </button>
 
-          <button
-            type="button"
-            @click="handleDelete(idx)"
-            :disabled="config.servers.length <= 1"
-            class="app-btn-icon app-btn-icon-danger"
-            title="删除此引导 DNS"
-          >
-            <M3Icon name="delete" :size="16" />
-          </button>
+              <button
+                type="button"
+                @click="handleDelete(idx)"
+                :disabled="config.servers.length <= 1"
+                class="app-btn-icon app-btn-icon-danger"
+                title="删除此引导 DNS"
+              >
+                <M3Icon name="delete" :size="15" />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

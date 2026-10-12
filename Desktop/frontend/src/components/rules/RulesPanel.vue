@@ -151,86 +151,220 @@ usePoller(fetchData, 4000);
       @changed="fetchData"
     />
 
-    <!-- TAB 2: 自定义规则编辑器 -->
-    <div v-if="activeTab === 'custom'" class="space-y-4">
-      <div class="p-4 rounded-md bg-surface-card border border-surface-border text-xs text-text-sub space-y-1 ">
-        <div class="font-bold text-text-main mb-1 flex items-center gap-2">
-          <M3Icon name="info" :size="14" class="text-text-main" />
-          <span>常用规则编写指南</span>
+    <!-- TAB 2: 自定义规则编辑器 (宽屏两列对等布局，窄屏单列) -->
+    <div v-if="activeTab === 'custom'" class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
+      <!-- 左侧：编写指南卡片 -->
+      <div class="app-card p-5 flex flex-col justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-2.5 pb-3 border-b border-surface-border-sub">
+            <div class="w-8 h-8 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
+              <M3Icon name="help_outline" :size="16" class="text-text-main" />
+            </div>
+            <div>
+              <h3 class="section-title text-[14px]">AdGuard 语法速查指南</h3>
+              <span class="text-[11px] text-text-muted">主流广告过滤与信任规则编写格式</span>
+            </div>
+          </div>
+
+          <div class="space-y-2.5 mt-3 text-xs">
+            <div class="app-card-sub p-2.5 space-y-1">
+              <div class="flex items-center justify-between">
+                <span class="font-semibold text-text-main">域名与子域名拦截</span>
+                <span class="text-[10px] text-text-muted">常用格式</span>
+              </div>
+              <code class="font-mono text-accent-seal text-[12px] block">||example.com^</code>
+              <p class="text-[11px] text-text-muted">匹配并拦截 example.com 及其所有子域名（如 ad.example.com）</p>
+            </div>
+
+            <div class="app-card-sub p-2.5 space-y-1">
+              <div class="flex items-center justify-between">
+                <span class="font-semibold text-text-main">白名单信任放行</span>
+                <span class="text-[10px] text-text-muted">豁免放行</span>
+              </div>
+              <code class="font-mono text-status-success text-[12px] block">@@||safe.com^</code>
+              <p class="text-[11px] text-text-muted">即便其他规则命中，也始终允许解析 safe.com</p>
+            </div>
+
+            <div class="app-card-sub p-2.5 space-y-1">
+              <div class="flex items-center justify-between">
+                <span class="font-semibold text-text-main">Hosts 文件格式</span>
+                <span class="text-[10px] text-text-muted">传统兼容</span>
+              </div>
+              <code class="font-mono text-text-main text-[12px] block">0.0.0.0 bad.com</code>
+              <p class="text-[11px] text-text-muted">兼容标准 Hosts 文件屏蔽特定恶意域名的语法</p>
+            </div>
+
+            <div class="app-card-sub p-2.5 space-y-1">
+              <div class="flex items-center justify-between">
+                <span class="font-semibold text-text-main">最高优先级强力拦截</span>
+                <span class="text-[10px] text-text-muted">强制优先</span>
+              </div>
+              <code class="font-mono text-accent-seal text-[12px] block">||urgent.com^$important</code>
+              <p class="text-[11px] text-text-muted">忽略所有白名单规则，强制拦截该域名</p>
+            </div>
+          </div>
         </div>
-        <div>• <code class="bg-surface-card-sub px-1 py-0.5 rounded text-text-main font-mono">||example.com^</code> 拦截该网站及其所有子域名</div>
-        <div>• <code class="bg-surface-card-sub px-1 py-0.5 rounded text-text-main font-mono">@@||safe.com^</code> 白名单信任放行 (允许访问该网站)</div>
-        <div>• <code class="bg-surface-card-sub px-1 py-0.5 rounded text-text-main font-mono">0.0.0.0 bad.com</code> 兼容传统 Hosts 文件拦截格式</div>
-        <div>• <code class="bg-surface-card-sub px-1 py-0.5 rounded text-text-main font-mono">||urgent.com^$important</code> 强制拦截 (最高优先级，忽略白名单)</div>
+
+        <div class="text-[11px] text-text-muted pt-2 border-t border-surface-border-sub">
+          提示：每行一条规则，以 <code class="font-mono">!</code> 开头的行为注释。
+        </div>
       </div>
 
-      <div class="rounded-md border border-surface-border bg-surface-card p-2 focus-within:border-accent-seal ">
-        <textarea
-          v-model="customRulesText"
-          rows="14"
-          placeholder="在此输入自定义拦截或信任规则，每行一条..."
-          class="w-full bg-transparent border-0 resize-y p-2 text-xs font-mono text-text-main focus:outline-none"
-        ></textarea>
-      </div>
+      <!-- 右侧：编辑器卡片 -->
+      <div class="app-card p-5 flex flex-col justify-between gap-4">
+        <div class="flex flex-col flex-1">
+          <div class="flex items-center justify-between gap-3 pb-3 border-b border-surface-border-sub">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div class="w-8 h-8 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
+                <M3Icon name="tune" :size="16" class="text-text-main" />
+              </div>
+              <div>
+                <h3 class="section-title text-[14px]">自定义规则文本编辑器</h3>
+                <span class="text-[11px] text-text-muted">编辑用户专属的过滤拦截或放行清单</span>
+              </div>
+            </div>
 
-      <div class="flex items-center justify-end gap-3">
-        <button type="button" @click="saveCustomRules" :disabled="saving" class="app-btn-primary">
-          <M3Icon name="check" :size="16" />
-          <span>{{ saving ? '保存中...' : '保存自定义规则' }}</span>
-        </button>
+            <button type="button" @click="saveCustomRules" :disabled="saving" class="app-btn-primary app-btn-compact">
+              <M3Icon name="check" :size="14" />
+              <span>{{ saving ? '保存中...' : '保存规则' }}</span>
+            </button>
+          </div>
+
+          <div class="mt-3 flex-1 flex flex-col">
+            <div class="app-card-sub p-2 focus-within:border-accent-seal flex-1 flex flex-col">
+              <textarea
+                v-model="customRulesText"
+                rows="15"
+                placeholder="在此输入自定义拦截或信任规则，每行一条...&#10;||ad.example.com^&#10;@@||mysite.com^"
+                class="w-full h-full min-h-[280px] bg-transparent border-0 resize-y p-2 text-xs font-mono text-text-main focus:outline-none placeholder:text-text-muted"
+              ></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between text-[11px] text-text-muted pt-2 border-t border-surface-border-sub">
+          <span>行数统计: {{ customRulesText ? customRulesText.split('\n').filter(l => l.trim()).length : 0 }} 条规则</span>
+          <span>修改后点击保存立即热重载生效</span>
+        </div>
       </div>
     </div>
 
     <!-- TAB 3: 域名规则检测工具 -->
     <RuleTestPanel v-if="activeTab === 'test'" @error="(m) => showToast(m, true)" />
 
-    <!-- TAB 4: 策略配置 -->
-    <div v-if="activeTab === 'config'" class="space-y-4 max-w-2xl">
-      <div class="p-6 rounded-md bg-surface-card border border-surface-border space-y-5 ">
+    <!-- TAB 4: 策略配置 (宽屏两列对等布局，窄屏单列) -->
+    <div v-if="activeTab === 'config'" class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
+      <!-- 左侧：响应动作卡片 -->
+      <div class="app-card p-5 flex flex-col justify-between gap-4">
         <div>
-          <h3 class="section-title">拦截处理方式</h3>
-          <p class="text-xs text-text-sub mt-1">选择当遇到被拦截的广告或恶意网址时，向系统和浏览器返回的处理方式</p>
+          <div class="flex items-center gap-2.5 pb-3 border-b border-surface-border-sub">
+            <div class="w-8 h-8 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
+              <M3Icon name="shield" :size="16" class="text-text-main" />
+            </div>
+            <div>
+              <h3 class="section-title text-[14px]">拦截响应处理方式</h3>
+              <span class="text-[11px] text-text-muted">当遇到被拦截网址时向客户端返回的行为</span>
+            </div>
+          </div>
+
+          <div class="space-y-3 mt-3.5 text-xs">
+            <label
+              class="flex items-start gap-3 cursor-pointer p-3 rounded-md border transition-all"
+              :class="config.blockMode === 'null_ip' ? 'bg-brand-container/40 border-brand-primary/40' : 'border-surface-border-sub bg-surface-card-sub hover:bg-surface-hover'"
+            >
+              <input type="radio" v-model="config.blockMode" value="null_ip" class="accent-brand-primary mt-0.5" />
+              <div>
+                <div class="font-bold text-text-main text-[13px]">立即返回空地址 (0.0.0.0 / ::)</div>
+                <div class="text-[11px] text-text-sub mt-0.5 leading-relaxed">
+                  强烈推荐。以极速终止广告和弹窗资源加载，不会引起浏览器反复重发请求。
+                </div>
+              </div>
+            </label>
+
+            <label
+              class="flex items-start gap-3 cursor-pointer p-3 rounded-md border transition-all"
+              :class="config.blockMode === 'nxdomain' ? 'bg-brand-container/40 border-brand-primary/40' : 'border-surface-border-sub bg-surface-card-sub hover:bg-surface-hover'"
+            >
+              <input type="radio" v-model="config.blockMode" value="nxdomain" class="accent-brand-primary mt-0.5" />
+              <div>
+                <div class="font-bold text-text-main text-[13px]">提示域名不存在 (NXDOMAIN)</div>
+                <div class="text-[11px] text-text-sub mt-0.5 leading-relaxed">
+                  告知客户端该网址不存在，部分标准网络软件将放弃进一步连接探测。
+                </div>
+              </div>
+            </label>
+
+            <label
+              class="flex items-start gap-3 cursor-pointer p-3 rounded-md border transition-all"
+              :class="config.blockMode === 'refused' ? 'bg-brand-container/40 border-brand-primary/40' : 'border-surface-border-sub bg-surface-card-sub hover:bg-surface-hover'"
+            >
+              <input type="radio" v-model="config.blockMode" value="refused" class="accent-brand-primary mt-0.5" />
+              <div>
+                <div class="font-bold text-text-main text-[13px]">明确拒绝请求 (REFUSED)</div>
+                <div class="text-[11px] text-text-sub mt-0.5 leading-relaxed">
+                  向客户端返回拒绝码，表示请求被 DNS 防火墙安全策略主动阻止。
+                </div>
+              </div>
+            </label>
+          </div>
         </div>
 
-        <div class="space-y-3 text-sm">
-          <label
-            class="flex items-center gap-3 cursor-pointer p-3 rounded-md border transition-colors"
-            :class="config.blockMode === 'null_ip' ? 'bg-brand-container/40 border-brand-primary/30' : 'border-transparent hover:bg-surface-hover'"
-          >
-            <input type="radio" v-model="config.blockMode" value="null_ip" class="accent-brand-primary" />
-            <div>
-              <div class="font-medium text-text-main">直接拦截 (推荐)</div>
-              <div class="text-xs text-text-sub">立即返回空地址，以最快速度终止广告加载且不会引起网页反复重试</div>
-            </div>
-          </label>
+        <div class="text-[11px] text-text-muted pt-2 border-t border-surface-border-sub">
+          当前模式: <span class="font-mono text-text-main font-semibold">{{ config.blockMode }}</span>
+        </div>
+      </div>
 
-          <label
-            class="flex items-center gap-3 cursor-pointer p-3 rounded-md border transition-colors"
-            :class="config.blockMode === 'nxdomain' ? 'bg-brand-container/40 border-brand-primary/30' : 'border-transparent hover:bg-surface-hover'"
-          >
-            <input type="radio" v-model="config.blockMode" value="nxdomain" class="accent-brand-primary" />
-            <div>
-              <div class="font-medium text-text-main">提示域名不存在 (NXDOMAIN)</div>
-              <div class="text-xs text-text-sub">告知浏览器该网址不存在，部分软件会放弃进一步连接</div>
+      <!-- 右侧：更新周期与参数卡片 -->
+      <div class="app-card p-5 flex flex-col justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-2.5 pb-3 border-b border-surface-border-sub">
+            <div class="w-8 h-8 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
+              <M3Icon name="sync" :size="16" class="text-text-main" />
             </div>
-          </label>
+            <div>
+              <h3 class="section-title text-[14px]">规则自动更新与网络参数</h3>
+              <span class="text-[11px] text-text-muted">订阅规则库同步周期与重定向 IP 设置</span>
+            </div>
+          </div>
 
-          <label
-            class="flex items-center gap-3 cursor-pointer p-3 rounded-md border transition-colors"
-            :class="config.blockMode === 'refused' ? 'bg-brand-container/40 border-brand-primary/30' : 'border-transparent hover:bg-surface-hover'"
-          >
-            <input type="radio" v-model="config.blockMode" value="refused" class="accent-brand-primary" />
+          <div class="space-y-3.5 mt-3 text-xs">
             <div>
-              <div class="font-medium text-text-main">直接拒绝请求 (REFUSED)</div>
-              <div class="text-xs text-text-sub">告知请求被安全策略明确拒绝</div>
+              <label class="text-[11px] font-semibold text-text-muted block mb-1">规则库自动同步周期 (小时)</label>
+              <input
+                v-model="config.updateIntervalHours"
+                type="number"
+                min="1"
+                class="w-full h-[34px] px-3 rounded-md border border-surface-border bg-surface-card-sub text-xs focus:outline-none focus:border-accent-seal text-text-main font-mono"
+              />
+              <span class="text-[10px] text-text-muted mt-1 block">定时从远程规则源获取更新并增量载入，默认 24 小时</span>
             </div>
-          </label>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div>
+                <label class="text-[11px] font-semibold text-text-muted block mb-1">阻断 IPv4 响应地址</label>
+                <input
+                  v-model="config.blockingIPv4"
+                  type="text"
+                  class="w-full h-[34px] px-3 rounded-md border border-surface-border bg-surface-card-sub text-xs focus:outline-none focus:border-accent-seal text-text-main font-mono"
+                />
+              </div>
+
+              <div>
+                <label class="text-[11px] font-semibold text-text-muted block mb-1">阻断 IPv6 响应地址</label>
+                <input
+                  v-model="config.blockingIPv6"
+                  type="text"
+                  class="w-full h-[34px] px-3 rounded-md border border-surface-border bg-surface-card-sub text-xs focus:outline-none focus:border-accent-seal text-text-main font-mono"
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div class="pt-4 border-t border-surface-border flex justify-end">
+        <div class="pt-2 border-t border-surface-border-sub flex justify-end">
           <button type="button" @click="saveConfig" :disabled="saving" class="app-btn-primary">
-            <M3Icon name="check" :size="16" />
-            <span>{{ saving ? '保存中...' : '保存策略' }}</span>
+            <M3Icon name="check" :size="15" />
+            <span>{{ saving ? '保存中...' : '保存策略与参数' }}</span>
           </button>
         </div>
       </div>

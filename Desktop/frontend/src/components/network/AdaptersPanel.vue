@@ -169,74 +169,87 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 网卡列表展示 -->
-    <div v-else class="space-y-4">
+    <!-- 网卡列表展示：宽屏两列网格，窄屏单列 -->
+    <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
       <div
         v-for="adapter in adapters"
         :key="adapter.id"
-        class="rounded-md border border-surface-border bg-surface-card p-5 transition-all duration-200"
+        class="app-card p-5 flex flex-col justify-between gap-4"
       >
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <!-- 网卡基本属性 -->
-          <div class="space-y-1.5 max-w-lg">
-            <div class="flex items-center gap-3">
-              <span class="text-base font-bold text-text-main">
-                {{ adapter.name }}
+        <div>
+          <!-- 卡片头部：名称、状态与操作开关 -->
+          <div class="flex items-center justify-between gap-3 pb-3 border-b border-surface-border-sub">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div class="w-8 h-8 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
+                <M3Icon name="adapters" :size="18" class="text-text-main" />
+              </div>
+              <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-[14px] font-bold text-text-main truncate">
+                    {{ adapter.name }}
+                  </span>
+                  <StatusBadge
+                    :status="adapter.status === 'Up' ? 'active' : 'inactive'"
+                    :text="adapter.status === 'Up' ? '已连接' : (adapter.status === 'Down' ? '未连接' : (adapter.status || '未连接'))"
+                    size="sm"
+                  />
+                  <StatusBadge
+                    v-if="isAdapterTakenOver(adapter)"
+                    status="active"
+                    text="保护中"
+                    size="sm"
+                    pulse
+                  />
+                </div>
+                <p class="text-[11px] text-text-muted truncate mt-0.5" :title="adapter.description">
+                  {{ adapter.description }}
+                </p>
+              </div>
+            </div>
+
+            <!-- 右侧单卡接管开关 -->
+            <div class="flex items-center gap-2 shrink-0">
+              <span class="text-[11px] font-semibold text-text-sub hidden sm:inline">
+                {{ isAdapterTakenOver(adapter) ? '保护开启' : '未开启' }}
               </span>
-              <StatusBadge
-                :status="adapter.status === 'Up' ? 'active' : 'inactive'"
-                :text="adapter.status === 'Up' ? '连接正常' : (adapter.status === 'Down' ? '未连接' : (adapter.status || '未连接'))"
-                size="sm"
-              />
-              <StatusBadge
-                v-if="isAdapterTakenOver(adapter)"
-                status="active"
-                text="保护生效中"
-                size="sm"
-                pulse
+              <md-switch
+                :selected="isAdapterTakenOver(adapter)"
+                :disabled="operatingId === adapter.id"
+                @change="(e: Event) => handleToggleAdapter(adapter, e)"
               />
             </div>
-            <p class="text-xs text-text-sub">
-              {{ adapter.description }} • 默认网关: {{ adapter.gateway || '无' }}
-            </p>
           </div>
 
-          <!-- 右侧单卡接管开关 -->
-          <div class="flex items-center gap-3 bg-surface-card-sub px-4 py-2 rounded-md border border-surface-border-sub">
-            <span class="text-xs font-medium text-text-main">
-              {{ isAdapterTakenOver(adapter) ? '保护已开启' : '未开启' }}
-            </span>
-            <md-switch
-              :selected="isAdapterTakenOver(adapter)"
-              :disabled="operatingId === adapter.id"
-              @change="(e: Event) => handleToggleAdapter(adapter, e)"
-            />
+          <!-- 网关信息 -->
+          <div class="mt-2.5 flex items-center gap-2 text-[11px] text-text-sub">
+            <span class="text-text-muted">默认网关:</span>
+            <span class="font-mono text-text-main font-medium">{{ adapter.gateway || '无' }}</span>
           </div>
         </div>
 
-        <!-- DNS 配置对比详情 -->
-        <div class="mt-4 pt-4 border-t border-surface-border grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
-          <div class="rounded-md bg-surface-card-sub border border-surface-border-sub p-3">
-            <span class="text-text-muted block mb-1">IP 地址分配方式</span>
-            <span class="font-semibold text-text-main">
-              {{ adapter.ipv4DHCP ? '自动获取 (DHCP)' : '手动固定 (静态 IP)' }}
+        <!-- DNS 配置对比详情磁贴 (3 列等宽) -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs pt-1">
+          <div class="app-card-sub p-2.5 space-y-1">
+            <span class="text-text-muted text-[11px] block">IP 分配模式</span>
+            <span class="font-semibold text-text-main text-[12px] block truncate">
+              {{ adapter.ipv4DHCP ? '自动 (DHCP)' : '固定静态 IP' }}
             </span>
           </div>
 
-          <div class="rounded-md bg-surface-card-sub border border-surface-border-sub p-3">
-            <span class="text-text-muted block mb-1">原始 DNS 服务器</span>
-            <span class="font-mono font-medium text-text-main">
-              {{ adapter.ipv4DNS?.join(', ') || '自动获取 (路由器默认)' }}
+          <div class="app-card-sub p-2.5 space-y-1">
+            <span class="text-text-muted text-[11px] block">原始系统 DNS</span>
+            <span class="font-mono text-text-main text-[12px] block truncate" :title="adapter.ipv4DNS?.join(', ') || '自动获取'">
+              {{ adapter.ipv4DNS?.join(', ') || '自动获取 (默认)' }}
             </span>
           </div>
 
-          <div class="rounded-md bg-surface-card-sub border border-surface-border-sub p-3">
-            <span class="text-text-muted block mb-1">当前实际生效 DNS</span>
+          <div class="app-card-sub p-2.5 space-y-1">
+            <span class="text-text-muted text-[11px] block">当前生效 DNS</span>
             <span
-              class="font-mono font-semibold"
-              :class="isAdapterTakenOver(adapter) ? 'text-status-success' : 'text-text-muted'"
+              class="font-mono font-semibold text-[12px] block truncate"
+              :class="isAdapterTakenOver(adapter) ? 'text-status-success' : 'text-text-sub'"
             >
-              {{ isAdapterTakenOver(adapter) ? '本机加速保护 (127.0.0.1)' : '系统默认设置' }}
+              {{ isAdapterTakenOver(adapter) ? '127.0.0.1 (本机保护)' : '系统默认' }}
             </span>
           </div>
         </div>

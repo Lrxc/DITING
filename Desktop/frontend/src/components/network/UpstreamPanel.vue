@@ -237,14 +237,22 @@ onMounted(() => {
     </div>
 
     <!-- 调度策略选择 -->
-    <div class="app-panel p-5">
-      <h4 class="section-title mb-4">服务器优选策略</h4>
+    <div class="app-card p-5">
+      <div class="flex items-center gap-2.5 mb-3.5 pb-2.5 border-b border-surface-border-sub">
+        <div class="w-7 h-7 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
+          <M3Icon name="tune" :size="16" class="text-text-main" />
+        </div>
+        <div>
+          <h4 class="font-semibold text-text-main text-[14px]">上游调度策略</h4>
+          <span class="text-[11px] text-text-muted">选择多服务器协同工作与容灾模式</span>
+        </div>
+      </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div
           v-for="mode in schedulingModes"
           :key="mode.id"
-          class="flex items-start gap-3 p-3.5 rounded-md border transition-colors duration-150 cursor-pointer"
+          class="flex items-start gap-3 p-3 rounded-md border transition-all duration-150 cursor-pointer"
           :class="[
             currentMode === mode.id
               ? 'border-brand-primary bg-brand-container/40'
@@ -259,10 +267,10 @@ onMounted(() => {
             class="mt-0.5"
           />
           <div class="space-y-0.5">
-            <span class="text-[13.5px] font-semibold text-text-main">
+            <span class="text-[13px] font-semibold text-text-main">
               {{ mode.name }}
             </span>
-            <p class="text-[12px] text-text-sub leading-relaxed">
+            <p class="text-[11px] text-text-sub leading-relaxed">
               {{ mode.desc }}
             </p>
           </div>
@@ -272,9 +280,12 @@ onMounted(() => {
 
     <!-- 上游节点列表 -->
     <div class="space-y-3">
-      <h3 class="section-title">已添加的 DNS 服务器 · {{ upstreams.length }}</h3>
+      <div class="flex items-center justify-between gap-3">
+        <h3 class="section-title">已配置的 DNS 服务器 · {{ upstreams.length }}</h3>
+        <span class="text-[11px] text-text-muted">宽屏两列对齐，支持独立测速与编辑</span>
+      </div>
 
-      <div v-if="upstreams.length === 0" class="rounded-md border border-dashed border-surface-border p-8 text-center">
+      <div v-if="upstreams.length === 0" class="app-card p-8 text-center border-dashed">
         <M3Icon name="router" :size="32" class="text-text-muted mx-auto mb-2 opacity-50" />
         <p class="text-[13px] font-medium text-text-main mb-1">暂无配置 DNS 服务器</p>
         <p class="text-[12px] text-text-sub mb-4">请点击添加按钮，从预设库中快速选择并添加 DNS 服务器</p>
@@ -284,68 +295,95 @@ onMounted(() => {
         </button>
       </div>
 
-      <div v-else class="space-y-3">
+      <!-- 宽屏两列网格，窄屏单列 -->
+      <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
         <div
           v-for="(node, idx) in upstreams"
           :key="node.id"
-          class="rounded-md border border-surface-border bg-surface-card p-5 transition-all duration-200"
+          class="app-card p-5 flex flex-col justify-between gap-4"
         >
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div class="space-y-1.5">
-              <div class="flex items-center gap-3">
-                <span class="text-base font-bold text-text-main font-mono">
-                  {{ node.id }}
-                </span>
-                <span
-                  class="px-2 py-0.5 rounded-full text-[11px] font-semibold font-mono border"
-                  :class="[
-                    node.protocol === 'DOH'
-                      ? 'border-accent-seal/50 text-accent-seal'
-                      : node.protocol === 'DOT'
-                        ? 'border-accent-seal/40 text-text-main'
-                        : 'border-surface-border text-text-sub'
-                  ]"
-                >
-                  {{ node.protocol === 'DOH' ? '加密 DoH' : node.protocol === 'DOT' ? '加密 DoT' : '普通 DNS' }}
-                </span>
-                <StatusBadge
-                  :status="node.active ? 'active' : 'inactive'"
-                  :text="node.active ? '连接正常' : '暂停使用'"
-                  size="sm"
-                />
+          <div>
+            <!-- 头部：ID、协议标识、状态与测速结果 -->
+            <div class="flex items-center justify-between gap-3 pb-3 border-b border-surface-border-sub">
+              <div class="flex items-center gap-2.5 min-w-0">
+                <div class="w-8 h-8 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
+                  <M3Icon name="dns" :size="16" class="text-text-main" />
+                </div>
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-[14px] font-bold text-text-main font-mono truncate">
+                      {{ node.id }}
+                    </span>
+                    <span
+                      class="px-2 py-0.5 rounded-full text-[10px] font-semibold font-mono border"
+                      :class="[
+                        node.protocol === 'DOH'
+                          ? 'border-accent-seal/50 text-accent-seal'
+                          : node.protocol === 'DOT'
+                            ? 'border-accent-seal/40 text-text-main'
+                            : 'border-surface-border text-text-sub'
+                      ]"
+                    >
+                      {{ node.protocol === 'DOH' ? '加密 DoH' : node.protocol === 'DOT' ? '加密 DoT' : 'UDP 53' }}
+                    </span>
+                    <StatusBadge
+                      :status="node.active ? 'active' : 'inactive'"
+                      :text="node.active ? '运行中' : '已暂停'"
+                      size="sm"
+                    />
+                  </div>
+                  <p class="text-[11px] font-mono text-text-muted truncate mt-0.5">
+                    权重: {{ node.weight || 1 }}
+                  </p>
+                </div>
               </div>
-              <p class="text-xs font-mono text-text-sub">
-                服务器地址: <span class="text-text-main font-medium">{{ node.server }}</span>
-                <span v-if="node.url" class="ml-2">| 加密地址: {{ node.url }}</span>
-              </p>
+
+              <!-- 延迟指示药丸 -->
+              <div v-if="probeResults[node.id] !== undefined" class="shrink-0">
+                <span class="h-7 px-2.5 rounded-md bg-status-success-bg text-status-success border border-status-success/30 font-mono text-[11px] font-bold inline-flex items-center">
+                  {{ probeResults[node.id].toFixed(1) }} ms
+                </span>
+              </div>
             </div>
 
-            <!-- 右侧测速与操作项 -->
-            <div class="flex items-center gap-2">
-              <div v-if="probeResults[node.id] !== undefined" class="text-xs font-mono mr-1">
-                <span class="h-8 px-2.5 rounded-md bg-status-success-bg text-status-success border border-status-success/30 font-semibold inline-flex items-center">
-                  {{ probeResults[node.id].toFixed(1) }} 毫秒
+            <!-- 服务器信息磁贴 -->
+            <div class="space-y-2 mt-3 text-xs">
+              <div class="app-card-sub p-2.5">
+                <span class="text-[11px] text-text-muted block">服务器连接地址</span>
+                <span class="font-mono text-text-main font-medium text-[12px] block truncate select-all">
+                  {{ node.server }}
                 </span>
               </div>
+              <div v-if="node.url" class="app-card-sub p-2.5">
+                <span class="text-[11px] text-text-muted block">加密查询 URL (DoH)</span>
+                <span class="font-mono text-text-sub text-[11px] block truncate select-all" :title="node.url">
+                  {{ node.url }}
+                </span>
+              </div>
+            </div>
+          </div>
 
-              <button
-                type="button"
-                class="app-btn-secondary app-btn-compact"
-                @click="handleTestNode({ id: node.id, protocol: node.protocol, server: node.server, url: node.url })"
-                :disabled="probingId === node.id"
-              >
-                <M3Icon v-if="probingId === node.id" name="refresh" class="animate-spin" :size="14" />
-                <M3Icon v-else name="bolt" :size="14" />
-                <span>测试延迟</span>
-              </button>
+          <!-- 底部操作按钮栏 -->
+          <div class="flex items-center justify-between pt-2 border-t border-surface-border-sub">
+            <button
+              type="button"
+              class="app-btn-secondary app-btn-compact"
+              @click="handleTestNode({ id: node.id, protocol: node.protocol, server: node.server, url: node.url })"
+              :disabled="probingId === node.id"
+            >
+              <M3Icon v-if="probingId === node.id" name="refresh" class="animate-spin" :size="13" />
+              <M3Icon v-else name="bolt" :size="13" />
+              <span>测试延迟</span>
+            </button>
 
+            <div class="flex items-center gap-1.5">
               <button
                 type="button"
                 @click="openEditDialog(idx)"
                 class="app-btn-icon"
                 title="编辑服务器"
               >
-                <M3Icon name="settings" :size="16" />
+                <M3Icon name="settings" :size="15" />
               </button>
 
               <button
@@ -355,7 +393,7 @@ onMounted(() => {
                 class="app-btn-icon app-btn-icon-danger"
                 title="删除服务器"
               >
-                <M3Icon name="delete" :size="16" />
+                <M3Icon name="delete" :size="15" />
               </button>
             </div>
           </div>

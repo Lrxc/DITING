@@ -25,88 +25,93 @@ function handleRefresh() {
 </script>
 
 <template>
-  <div class="rounded-md border border-surface-border bg-surface-card p-5 space-y-4 transition-colors">
-    <div class="flex items-center justify-between">
-      <h3 class="section-title flex items-center gap-2">
-        <M3Icon name="router" :size="20" class="text-text-main" />
-        后台核心服务管理
-      </h3>
-      <button
-        type="button"
-        @click="handleRefresh"
-        :disabled="loading || operating"
-        class="app-btn-secondary app-btn-compact"
-        title="刷新核心服务状态"
-      >
-        <M3Icon name="refresh" :size="14" :class="loading ? 'animate-spin' : ''" />
-        <span>刷新状态</span>
-      </button>
-    </div>
-
-    <!-- 状态概览卡片区 -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <!-- 1. 服务运行状态 -->
-      <div class="p-4 rounded-md border border-surface-border-sub bg-surface-card-sub space-y-2">
-        <span class="text-xs font-semibold text-text-sub">系统服务状态</span>
-        <div class="flex items-center gap-2 pt-1">
-          <StatusBadge
-            v-if="serviceStatus?.installed && serviceStatus?.running"
-            status="active"
-            text="运行中"
-            pulse
-          />
-          <StatusBadge
-            v-else-if="serviceStatus?.installed && !serviceStatus?.running"
-            status="warning"
-            text="已停止"
-          />
-          <StatusBadge
-            v-else-if="serviceStatus && !serviceStatus.installed"
-            status="error"
-            text="未安装"
-          />
-          <StatusBadge
-            v-else
-            status="inactive"
-            text="检测中..."
-          />
-          <span class="text-xs text-text-muted">
-            ({{ serviceStatus?.stateText || (loading ? '检测中...' : '未知') }})
-          </span>
+  <div class="app-card p-5 flex flex-col justify-between gap-4 transition-colors">
+    <div>
+      <div class="flex items-center justify-between gap-3 pb-3 border-b border-surface-border-sub">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-8 h-8 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
+            <M3Icon name="router" :size="18" class="text-text-main" />
+          </div>
+          <div>
+            <h3 class="section-title text-[14px]">后台核心服务管理</h3>
+            <span class="text-[11px] text-text-muted">Windows 系统服务守护与进程自启</span>
+          </div>
         </div>
-        <p class="text-[11px] text-text-sub leading-tight">
-          {{ serviceStatus?.message || '负责双栈网卡接管与 DNS 转发' }}
-        </p>
+
+        <button
+          type="button"
+          @click="handleRefresh"
+          :disabled="loading || operating"
+          class="app-btn-secondary app-btn-compact"
+          title="刷新核心服务状态"
+        >
+          <M3Icon name="refresh" :size="13" :class="loading ? 'animate-spin' : ''" />
+          <span>刷新状态</span>
+        </button>
       </div>
 
-      <!-- 2. 可执行程序路径 -->
-      <div class="p-4 rounded-md border border-surface-border-sub bg-surface-card-sub space-y-2">
-        <span class="text-xs font-semibold text-text-sub">组件文件位置</span>
-        <div class="font-mono text-[11px] text-text-main break-all line-clamp-2 pt-1" :title="serviceStatus?.executablePath">
-          <span v-if="!serviceStatus && loading" class="text-text-muted animate-pulse">正在检测组件文件路径...</span>
-          <span v-else>{{ serviceStatus?.executablePath || '未检测到可执行程序' }}</span>
+      <!-- 状态概览卡片区 -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mt-3">
+        <!-- 1. 服务运行状态 -->
+        <div class="app-card-sub p-3 space-y-1">
+          <span class="text-[11px] font-semibold text-text-muted">系统服务状态</span>
+          <div class="flex items-center gap-1.5 pt-0.5">
+            <StatusBadge
+              v-if="serviceStatus?.installed && serviceStatus?.running"
+              status="active"
+              text="运行中"
+              pulse
+              size="sm"
+            />
+            <StatusBadge
+              v-else-if="serviceStatus?.installed && !serviceStatus?.running"
+              status="warning"
+              text="已停止"
+              size="sm"
+            />
+            <StatusBadge
+              v-else-if="serviceStatus && !serviceStatus.installed"
+              status="error"
+              text="未安装"
+              size="sm"
+            />
+            <StatusBadge
+              v-else
+              status="inactive"
+              text="检测中..."
+              size="sm"
+            />
+          </div>
+          <p class="text-[10px] text-text-muted leading-tight truncate mt-1">
+            {{ serviceStatus?.message || '负责双栈网卡接管与 DNS 转发' }}
+          </p>
         </div>
-        <p class="text-[11px]" :class="serviceStatus?.canInstall ? 'text-status-success' : (!serviceStatus && loading ? 'text-text-muted' : 'text-status-warning')">
-          <span v-if="!serviceStatus && loading" class="animate-pulse">⏳ 正在扫描核心程序文件...</span>
-          <span v-else-if="serviceStatus?.canInstall">✔ 服务核心文件就绪</span>
-          <span v-else>⚠ 未检测到 diting-service.exe</span>
-        </p>
-      </div>
 
-      <!-- 3. 管理权限模式 -->
-      <div class="p-4 rounded-md border border-surface-border-sub bg-surface-card-sub space-y-2">
-        <span class="text-xs font-semibold text-text-sub">系统权限级别</span>
-        <div class="flex items-center gap-1.5 pt-1">
-          <M3Icon name="shield" :size="16" :class="serviceStatus?.isElevated ? 'text-status-success' : 'text-text-main'" />
-          <span class="text-xs font-bold text-text-main">
-            <span v-if="!serviceStatus && loading" class="text-text-muted font-normal animate-pulse">检测权限中...</span>
-            <span v-else>{{ serviceStatus?.isElevated ? '管理员特权模式' : '标准用户 (按需授权)' }}</span>
-          </span>
+        <!-- 2. 可执行程序路径 -->
+        <div class="app-card-sub p-3 space-y-1">
+          <span class="text-[11px] font-semibold text-text-muted">核心程序位置</span>
+          <div class="font-mono text-[11px] text-text-main truncate pt-0.5" :title="serviceStatus?.executablePath">
+            <span v-if="!serviceStatus && loading" class="text-text-muted animate-pulse">扫描中...</span>
+            <span v-else>{{ serviceStatus?.executablePath ? 'diting-service.exe' : '未检测到' }}</span>
+          </div>
+          <p class="text-[10px] truncate mt-1" :class="serviceStatus?.canInstall ? 'text-status-success' : 'text-status-warning'">
+            {{ serviceStatus?.canInstall ? '✔ 核心组件就绪' : '⚠ 未检测到组件' }}
+          </p>
         </div>
-        <p class="text-[11px] text-text-sub leading-tight">
-          <span v-if="!serviceStatus && loading" class="text-text-muted">正在检测当前用户与运行权限...</span>
-          <span v-else>{{ serviceStatus?.isElevated ? '已具备管理员权限，操作无需弹窗' : '点击操作时将自动唤起 Windows 提权弹窗' }}</span>
-        </p>
+
+        <!-- 3. 管理权限模式 -->
+        <div class="app-card-sub p-3 space-y-1">
+          <span class="text-[11px] font-semibold text-text-muted">系统权限级别</span>
+          <div class="flex items-center gap-1 pt-0.5">
+            <M3Icon name="shield" :size="14" :class="serviceStatus?.isElevated ? 'text-status-success' : 'text-text-muted'" />
+            <span class="text-[11px] font-bold text-text-main truncate">
+              {{ serviceStatus?.isElevated ? '管理员特权' : '标准用户' }}
+            </span>
+          </div>
+          <p class="text-[10px] text-text-muted truncate mt-1">
+            {{ serviceStatus?.isElevated ? '已具备特权无弹窗' : '按需请求 UAC 提权' }}
+          </p>
+        </div>
       </div>
     </div>
 

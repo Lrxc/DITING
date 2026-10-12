@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import M3Icon from './M3Icon.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -9,6 +10,7 @@ const props = withDefaults(
     strokeColor?: string;
     label?: string;
     unit?: string;
+    icon?: string;
   }>(),
   {
     maxPoints: 30,
@@ -16,6 +18,7 @@ const props = withDefaults(
     strokeColor: '',
     label: '',
     unit: '',
+    icon: 'timeline',
   }
 );
 
@@ -68,12 +71,14 @@ const gridLines = computed(() => {
 </script>
 
 <template>
-  <div class="app-panel p-4">
-    <div class="flex items-baseline justify-between mb-2">
-      <span class="label-quiet">{{ label }}</span>
-      <span class="text-[12px] text-text-muted">
-        当前
-        <strong class="font-mono text-[15px] font-semibold text-text-main">{{ latestValue.toFixed(1) }}</strong>
+  <div class="app-card p-5 flex flex-col justify-between gap-3">
+    <div class="flex items-center justify-between pb-2.5 border-b border-surface-border-sub">
+      <div class="flex items-center gap-2 min-w-0">
+        <M3Icon :name="icon || 'timeline'" :size="16" class="text-text-main shrink-0" />
+        <h4 class="font-semibold text-text-main text-[13.5px] truncate">{{ label }}</h4>
+      </div>
+      <span class="text-[12px] font-mono text-text-muted">
+        当前: <strong class="text-[13.5px] font-bold" :class="strokeColor ? 'text-accent-seal' : 'text-text-main'">{{ latestValue.toFixed(1) }}</strong>
         <span class="ml-0.5">{{ unit }}</span>
       </span>
     </div>
@@ -102,7 +107,7 @@ const gridLines = computed(() => {
           v-if="points.length > 0"
           :cx="points[points.length - 1].x"
           :cy="points[points.length - 1].y"
-          r="2.5"
+          r="3"
           :fill="stroke"
         />
       </svg>

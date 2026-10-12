@@ -359,10 +359,17 @@ button.app-btn-compact:not(.app-btn-primary):not(.app-btn-danger):not(.app-btn-w
   color: #1a1a1c;
 }
 
-/* 面板 / 表格 / 通用 */
+/* 卡片 / 面板 / 表格 / 通用 */
+.app-card,
 .app-panel {
   background-color: var(--app-surface-card);
   border: 1px solid var(--app-surface-border);
+  border-radius: 8px;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.app-card-sub {
+  background-color: var(--app-surface-card-sub);
+  border: 1px solid var(--app-surface-border-sub);
   border-radius: 6px;
 }
 .app-hairline { border-color: var(--app-surface-border); }

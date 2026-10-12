@@ -135,29 +135,51 @@ onMounted(loadLists);
       </div>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <!-- 规则库网格：宽屏两列，窄屏单列 -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
       <div
         v-for="l in lists"
         :key="l.id"
-        class="p-5 rounded-md bg-surface-card border border-surface-border flex flex-col justify-between gap-4 transition-all duration-200"
+        class="app-card p-5 flex flex-col justify-between gap-4"
       >
         <div>
-          <div class="flex items-center justify-between gap-2">
-            <div class="flex items-center gap-2 min-w-0">
-              <span class="font-bold text-text-main truncate text-sm">{{ l.name }}</span>
-              <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-brand-container text-text-main shrink-0">
-                {{ l.rulesCount.toLocaleString() }} 条规则
-              </span>
+          <div class="flex items-center justify-between gap-3 pb-3 border-b border-surface-border-sub">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div class="w-8 h-8 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
+                <M3Icon name="shield" :size="16" class="text-text-main" />
+              </div>
+              <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="font-bold text-text-main truncate text-[13.5px]">{{ l.name }}</span>
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-brand-container text-text-main shrink-0">
+                    {{ l.rulesCount.toLocaleString() }} 条规则
+                  </span>
+                </div>
+                <span class="text-[11px] text-text-muted">
+                  {{ l.enabled ? '规则拦截生效中' : '已暂停拦截' }}
+                </span>
+              </div>
             </div>
-            <md-switch :selected="l.enabled" @change="(e: Event) => toggleList(l, e)"></md-switch>
+
+            <div class="flex items-center gap-2 shrink-0">
+              <span class="text-[11px] font-semibold text-text-sub hidden sm:inline">
+                {{ l.enabled ? '已启用' : '已停用' }}
+              </span>
+              <md-switch :selected="l.enabled" @change="(e: Event) => toggleList(l, e)"></md-switch>
+            </div>
           </div>
-          <p class="text-xs text-text-muted font-mono mt-2 truncate select-all" :title="l.url">{{ l.url }}</p>
+
+          <div class="mt-3">
+            <div class="app-card-sub p-2.5 font-mono text-[11px] text-text-muted truncate select-all" :title="l.url">
+              {{ l.url }}
+            </div>
+          </div>
         </div>
 
-        <div class="flex items-center justify-between pt-3 border-t border-surface-border-sub text-[11px] text-text-muted">
+        <div class="flex items-center justify-between pt-2.5 border-t border-surface-border-sub text-[11px] text-text-muted">
           <span>最后更新: {{ l.lastUpdated ? formatMonthDayTime(l.lastUpdated) : '未更新' }}</span>
           <div class="flex items-center gap-1.5">
-            <button type="button" @click="refreshList(l.id)" class="app-btn-icon" title="立即更新">
+            <button type="button" @click="refreshList(l.id)" class="app-btn-icon" title="立即更新此规则库">
               <M3Icon name="refresh" :size="14" />
             </button>
             <button type="button" @click="askDeleteList(l)" class="app-btn-icon app-btn-icon-danger" title="删除此规则库">

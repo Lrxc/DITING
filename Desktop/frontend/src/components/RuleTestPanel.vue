@@ -24,64 +24,174 @@ async function runTest() {
     testing.value = false;
   }
 }
+
+function fillExample(domain: string) {
+  testDomain.value = domain;
+  runTest();
+}
 </script>
 
 <template>
-  <div class="p-6 rounded-md bg-surface-card border border-surface-border space-y-4">
-    <div>
-      <h3 class="section-title">网址拦截模拟测试</h3>
-      <p class="text-xs text-text-sub mt-1">输入任意网址或域名，即可快速检测其是否会被防护规则拦截以及原因</p>
-    </div>
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch select-none">
+    <!-- 左侧：输入与检测设置卡片 -->
+    <div class="app-card p-5 flex flex-col justify-between gap-4">
+      <div>
+        <div class="flex items-center gap-2.5 pb-3 border-b border-surface-border-sub">
+          <div class="w-8 h-8 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
+            <M3Icon name="search" :size="16" class="text-text-main" />
+          </div>
+          <div>
+            <h3 class="section-title text-[14px]">网址拦截模拟测试</h3>
+            <span class="text-[11px] text-text-muted">输入域名快速检测是否命中过滤拦截规则</span>
+          </div>
+        </div>
 
-    <div class="flex flex-col md:flex-row gap-3 items-center">
-      <input
-        v-model="testDomain"
-        placeholder="例如: ad.example.com"
-        @keyup.enter="runTest"
-        class="flex-1 h-[34px] px-3.5 rounded-md border border-surface-border bg-surface-card-sub text-xs focus:outline-none focus:border-accent-seal text-text-main placeholder:text-text-muted"
-      />
-      <select
-        v-model="testQType"
-        class="h-[34px] px-3 rounded-md border border-surface-border bg-surface-card-sub text-xs focus:outline-none focus:border-accent-seal text-text-main cursor-pointer"
-      >
-        <option value="A" class="bg-surface-card text-text-main">IPv4 地址 (A 记录)</option>
-        <option value="AAAA" class="bg-surface-card text-text-main">IPv6 地址 (AAAA 记录)</option>
-        <option value="ANY" class="bg-surface-card text-text-main">全部记录类型 (ANY)</option>
-      </select>
-      <button type="button" @click="runTest" :disabled="testing || !testDomain.trim()" class="app-btn-primary">
-        <M3Icon :name="testing ? 'refresh' : 'search'" :size="16" :class="testing ? 'animate-spin' : ''" />
-        <span>{{ testing ? '检测中...' : '立即测试' }}</span>
-      </button>
-    </div>
+        <div class="space-y-3 mt-3 text-xs">
+          <div>
+            <label class="text-[11px] font-semibold text-text-muted block mb-1">测试目标域名</label>
+            <input
+              v-model="testDomain"
+              placeholder="例如: ad.example.com 或 tracker.domain.com"
+              @keyup.enter="runTest"
+              class="w-full h-[34px] px-3 rounded-md border border-surface-border bg-surface-card-sub text-xs focus:outline-none focus:border-accent-seal text-text-main placeholder:text-text-muted font-mono"
+            />
+          </div>
 
-    <div
-      v-if="testResult"
-      class="p-5 rounded-md border text-sm"
-      :class="testResult.blocked ? 'bg-status-error-bg border-status-error/30' : testResult.action === 'allow' ? 'bg-status-success-bg border-status-success/30' : 'bg-surface-card-sub border-surface-border-sub'"
-    >
-      <div class="flex items-center gap-3">
-        <span
-          class="px-2.5 py-1 rounded-full text-xs font-bold"
-          :class="testResult.blocked ? 'bg-accent-seal text-white' : testResult.action === 'allow' ? 'bg-status-success-bg text-status-success border border-status-success/30' : 'bg-surface-card-sub text-text-sub border border-surface-border-sub'"
-        >
-          {{ testResult.blocked ? '已拦截 (阻止访问)' : testResult.action === 'allow' ? '已放行 (信任名单)' : '未命中规则 (正常访问)' }}
-        </span>
-        <span class="font-mono font-bold text-text-main">{{ testDomain }}</span>
+          <div>
+            <label class="text-[11px] font-semibold text-text-muted block mb-1">DNS 记录类型</label>
+            <select
+              v-model="testQType"
+              class="w-full h-[34px] px-3 rounded-md border border-surface-border bg-surface-card-sub text-xs focus:outline-none focus:border-accent-seal text-text-main cursor-pointer"
+            >
+              <option value="A">IPv4 地址解析 (A 记录)</option>
+              <option value="AAAA">IPv6 地址解析 (AAAA 记录)</option>
+              <option value="ANY">任意解析类型 (ANY)</option>
+            </select>
+          </div>
+
+          <!-- 快速测试预设标签 -->
+          <div class="pt-1">
+            <span class="text-[11px] text-text-muted block mb-1.5">快速填充示例：</span>
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                @click="fillExample('adservice.google.com')"
+                class="app-btn-chip font-mono text-[11px]"
+              >
+                adservice.google.com
+              </button>
+              <button
+                type="button"
+                @click="fillExample('telemetry.microsoft.com')"
+                class="app-btn-chip font-mono text-[11px]"
+              >
+                telemetry.microsoft.com
+              </button>
+              <button
+                type="button"
+                @click="fillExample('baidu.com')"
+                class="app-btn-chip font-mono text-[11px]"
+              >
+                baidu.com
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mt-4 text-xs">
-        <div>
-          <span class="text-text-muted">命中的规则: </span>
-          <span class="font-mono text-text-main font-semibold">{{ testResult.matchedRule || '无' }}</span>
+      <div class="pt-2 border-t border-surface-border-sub">
+        <button
+          type="button"
+          @click="runTest"
+          :disabled="testing || !testDomain.trim()"
+          class="app-btn-primary w-full"
+        >
+          <M3Icon :name="testing ? 'refresh' : 'bolt'" :size="15" :class="testing ? 'animate-spin' : ''" />
+          <span>{{ testing ? '正在执行规则匹配...' : '立即模拟检测' }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 右侧：检测诊断结果卡片 -->
+    <div class="app-card p-5 flex flex-col justify-between gap-4">
+      <div>
+        <div class="flex items-center gap-2.5 pb-3 border-b border-surface-border-sub">
+          <div class="w-8 h-8 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
+            <M3Icon name="verified_user" :size="16" class="text-text-main" />
+          </div>
+          <div>
+            <h3 class="section-title text-[14px]">规则诊断与拦截判定</h3>
+            <span class="text-[11px] text-text-muted">规则匹配结果、所属规则库与响应动作</span>
+          </div>
         </div>
-        <div>
-          <span class="text-text-muted">所属规则库: </span>
-          <span class="font-medium text-text-main">{{ testResult.listName || '无' }}</span>
+
+        <div v-if="!testResult" class="py-14 text-center text-xs text-text-muted space-y-2">
+          <M3Icon name="search" :size="32" class="text-text-muted opacity-40 mx-auto" />
+          <p>在左侧输入域名并点击「立即模拟检测」以查看规则判定明细</p>
         </div>
-        <div>
-          <span class="text-text-muted">处理原因: </span>
-          <span class="font-medium text-text-main">{{ testResult.reason || '未命中规则' }}</span>
+
+        <div v-else class="space-y-3 mt-3 text-xs">
+          <!-- 判定结论标识 -->
+          <div
+            class="p-3.5 rounded-md border flex items-center justify-between gap-3"
+            :class="
+              testResult.blocked
+                ? 'bg-status-error-bg border-status-error/30'
+                : testResult.action === 'allow'
+                  ? 'bg-status-success-bg border-status-success/30'
+                  : 'bg-surface-card-sub border-surface-border-sub'
+            "
+          >
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span
+                class="px-2 py-0.5 rounded text-[11px] font-bold shrink-0"
+                :class="
+                  testResult.blocked
+                    ? 'bg-accent-seal text-white'
+                    : testResult.action === 'allow'
+                      ? 'bg-status-success text-white'
+                      : 'bg-surface-card text-text-sub border border-surface-border'
+                "
+              >
+                {{ testResult.blocked ? '已拦截 (阻断访问)' : testResult.action === 'allow' ? '已放行 (信任名单)' : '未命中 (正常解析)' }}
+              </span>
+              <span class="font-mono font-bold text-text-main text-[13px] truncate select-all">
+                {{ testDomain }}
+              </span>
+            </div>
+            <span class="text-[11px] font-mono text-text-muted shrink-0">{{ testQType }}</span>
+          </div>
+
+          <!-- 明细字段磁贴 -->
+          <div class="space-y-2">
+            <div class="app-card-sub p-2.5 space-y-0.5">
+              <span class="text-[11px] text-text-muted block">命中的防护规则</span>
+              <span class="font-mono text-text-main font-semibold text-[12px] block truncate select-all">
+                {{ testResult.matchedRule || '未命中任何规则' }}
+              </span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2.5">
+              <div class="app-card-sub p-2.5 space-y-0.5">
+                <span class="text-[11px] text-text-muted block">来源规则库</span>
+                <span class="font-medium text-text-main text-[12px] block truncate">
+                  {{ testResult.listName || '无' }}
+                </span>
+              </div>
+
+              <div class="app-card-sub p-2.5 space-y-0.5">
+                <span class="text-[11px] text-text-muted block">处置判定原因</span>
+                <span class="font-medium text-text-main text-[12px] block truncate">
+                  {{ testResult.reason || '正常直连解析' }}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
+      </div>
+
+      <div class="pt-2 border-t border-surface-border-sub text-[11px] text-text-muted">
+        支持 AdGuard、Hosts 及自定义规则即时模拟测试。
       </div>
     </div>
   </div>
