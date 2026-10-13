@@ -473,12 +473,17 @@ func (e *RuleEngine) runUpdateTicker() {
 				}
 			}
 			if needUpdate {
+				changed := false
 				for _, l := range e.cfg.Lists {
 					if l.Enabled && time.Since(time.UnixMilli(l.LastUpdated)) > interval {
-						_ = e.refreshListUnlocked(l.ID)
+						if updated, err := e.refreshListUnlocked(l.ID); err == nil && updated {
+							changed = true
+						}
 					}
 				}
-				_ = e.rebuildUnlocked()
+				if changed {
+					_ = e.rebuildUnlocked()
+				}
 			}
 			e.mu.Unlock()
 		}

@@ -23,6 +23,14 @@ const (
 	DefaultRuleTTL uint32 = 10
 )
 
+// FilterList 最近一次拉取状态取值（FilterList.LastStatus）
+const (
+	ListStatusOK        = "ok"        // 内容已更新
+	ListStatusUnchanged = "unchanged" // 304 未变更
+	ListStatusCached    = "cached"    // 拉取失败，沿用本地缓存
+	ListStatusFailed    = "failed"    // 拉取失败且无可用缓存
+)
+
 // FilterList 订阅规则源描述
 type FilterList struct {
 	ID          string `json:"id"`
@@ -32,6 +40,15 @@ type FilterList struct {
 	RulesCount  int    `json:"rulesCount"`
 	LastUpdated int64  `json:"lastUpdated"` // Unix 毫秒时间戳
 	Checksum    string `json:"checksum"`
+
+	// ETag / LastModified 为增量更新的协商凭证（借鉴 blocky downloaded_cache），随配置持久化。
+	ETag         string `json:"etag,omitempty"`
+	LastModified string `json:"lastModified,omitempty"`
+
+	// LastStatus / LastError 为最近一次拉取结果（运行时状态，不落盘）。
+	// LastStatus 取值：ok（内容已更新）| unchanged（304 未变更）| cached（沿用本地缓存）| failed（拉取失败）。
+	LastStatus string `json:"lastStatus,omitempty"`
+	LastError  string `json:"lastError,omitempty"`
 }
 
 // FilterConfig 规则过滤引擎运行与策略配置

@@ -2,14 +2,10 @@ package core
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
-	"io"
-	"net/http"
+	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -55,7 +51,10 @@ func (e *RuleEngine) AddFilterList(list FilterList) error {
 	}
 
 	e.cfg.Lists = append(e.cfg.Lists, list)
-	return e.refreshListUnlocked(list.ID)
+	if _, err := e.refreshListUnlocked(list.ID); err != nil {
+		return err
+	}
+	return e.rebuildUnlocked()
 }
 
 // UpdateFilterList 更新已存在的订阅源
@@ -109,7 +108,10 @@ func (e *RuleEngine) RemoveFilterList(id string) error {
 func (e *RuleEngine) RefreshList(id string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return e.refreshListUnlocked(id)
+	if _, err := e.refreshListUnlocked(id); err != nil {
+		return err
+	}
+	return e.rebuildUnlocked()
 }
 
 // RefreshAllLists 强制更新所有启用的订阅列表
@@ -117,15 +119,30 @@ func (e *RuleEngine) RefreshAllLists() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	changed := false
 	for _, l := range e.cfg.Lists {
-		if l.Enabled {
-			_ = e.refreshListUnlocked(l.ID)
+		if !l.Enabled {
+			continue
 		}
+		if updated, err := e.refreshListUnlocked(l.ID); err == nil && updated {
+			changed = true
+		}
+	}
+	// 无内容变化（全部 304 或沿用缓存）时跳过重建，避免无谓的索引重构
+	if !changed {
+		return nil
 	}
 	return e.rebuildUnlocked()
 }
 
-func (e *RuleEngine) refreshListUnlocked(id string) error {
+// refreshListUnlocked 拉取单个规则源，返回内容是否发生变化（需要重建索引）。
+//
+// 借鉴 blocky downloaded_cache 的增量刷新语义：
+//   - 304 → 仅刷新时间戳，不重解析不重建；
+//   - 200 → .tmp + rename 原子写盘并标记 ok；
+//   - 传输类错误且本地已有可用缓存 → 保留旧规则并标记 cached（刷新失败不再清零规则）；
+//   - HTTP 4xx/5xx 或首次拉取失败 → 标记 failed 并上报错误。
+func (e *RuleEngine) refreshListUnlocked(id string) (bool, error) {
 	var target *FilterList
 	for i := range e.cfg.Lists {
 		if e.cfg.Lists[i].ID == id {
@@ -134,49 +151,44 @@ func (e *RuleEngine) refreshListUnlocked(id string) error {
 		}
 	}
 	if target == nil {
-		return fmt.Errorf("找不到订阅列表: %s", id)
+		return false, fmt.Errorf("找不到订阅列表: %s", id)
 	}
 
-	data, err := e.fetchListContent(target.URL)
+	res, err := e.fetchListContentConditional(target.URL, target.ETag, target.LastModified)
 	if err != nil {
-		return fmt.Errorf("获取规则源失败 (%s): %w", target.URL, err)
+		if _, ok := readListCache(e.cfg.DataDir, target.ID); ok && isTransientFetchError(err) {
+			target.LastStatus = ListStatusCached
+			target.LastError = err.Error()
+			log.Printf("[RuleEngine] 规则源拉取失败，沿用本地缓存 (%s): %v", target.URL, err)
+			return false, nil
+		}
+		target.LastStatus = ListStatusFailed
+		target.LastError = err.Error()
+		return false, fmt.Errorf("获取规则源失败 (%s): %w", target.URL, err)
 	}
 
-	cacheFile := filepath.Join(e.cfg.DataDir, target.ID+".txt")
-	if err := os.WriteFile(cacheFile, data, 0644); err != nil {
-		return fmt.Errorf("保存规则缓存文件失败: %w", err)
+	if res.notModified {
+		target.LastStatus = ListStatusUnchanged
+		target.LastError = ""
+		target.LastUpdated = time.Now().UnixMilli()
+		return false, nil
 	}
 
-	// 计算规则数与校验和
-	rules, _ := ParseRules(bytes.NewReader(data), target.ID)
-	hash := sha256.Sum256(data)
+	if err := writeListCacheAtomic(e.cfg.DataDir, target.ID, res.data); err != nil {
+		target.LastStatus = ListStatusFailed
+		target.LastError = err.Error()
+		return false, fmt.Errorf("保存规则缓存文件失败: %w", err)
+	}
+
+	// 计算规则数并记录协商凭证
+	rules, _ := ParseRules(bytes.NewReader(res.data), target.ID)
 	target.RulesCount = len(rules)
 	target.LastUpdated = time.Now().UnixMilli()
-	target.Checksum = hex.EncodeToString(hash[:])
+	target.Checksum = listChecksum(res.data)
+	target.ETag = res.etag
+	target.LastModified = res.lastModified
+	target.LastStatus = ListStatusOK
+	target.LastError = ""
 
-	return e.rebuildUnlocked()
-}
-
-func (e *RuleEngine) fetchListContent(urlStr string) ([]byte, error) {
-	if strings.HasPrefix(urlStr, "http://") || strings.HasPrefix(urlStr, "https://") {
-		req, err := http.NewRequest(http.MethodGet, urlStr, nil)
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("User-Agent", "DITING-DNS-Engine/1.0")
-
-		resp, err := e.httpClient.Do(req)
-		if err != nil {
-			return nil, err
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("HTTP 状态码异常: %d", resp.StatusCode)
-		}
-		return io.ReadAll(io.LimitReader(resp.Body, 50*1024*1024))
-	}
-
-	// 本地文件读取
-	return os.ReadFile(urlStr)
+	return true, nil
 }
