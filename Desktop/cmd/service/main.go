@@ -42,6 +42,9 @@ type program struct {
 	accessControl *core.AccessControl
 	rateLimiter   *core.RateLimiter
 	dns64Synth    *core.DNS64Synthesizer
+	rewriteEngine *core.RewriteEngine
+	clientResolver *core.ClientResolver
+	ecsMgr        *ditingdns.ECSManager
 	takeoverMgr   platform.DNSManager
 	adapterScan  platform.AdapterScanner
 	stateStore   platform.StateStore
@@ -143,6 +146,9 @@ func (p *program) run() error {
 		log.Printf("[DNS64] 初始化 DNS64 合成器警告: %v\n", err)
 	}
 	p.dns64Synth = dns64Synth
+	p.rewriteEngine = core.NewRewriteEngine(cfg.Rewrite)
+	p.clientResolver = core.NewClientResolver(cfg.Client, p.hostsResolver, p.rewriteEngine)
+	p.ecsMgr = ditingdns.NewECSManager(cfg.ECS)
 
 	// 5.1 初始化 Web 远程管理与认证引擎
 	p.authMgr = auth.NewManager(cfg.Web.Username, cfg.Web.PasswordHash, cfg.Web.Salt, cfg.Web.SessionTimeout)

@@ -190,3 +190,74 @@ func TestPipeline_FullIntegration(t *testing.T) {
 		t.Fatalf("expected EDE Prohibited for rate limit")
 	}
 }
+
+func TestPipeline_RewriteClientAndECSIntegration(t *testing.T) {
+	mockRes := &pipelineMockResolver{
+		answers: map[string][]dns.RR{
+			"upstream.example.com.": {
+				&dns.A{Hdr: dns.RR_Header{Name: "upstream.example.com.", Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 300}, A: net.ParseIP("1.1.1.1")},
+			},
+		},
+	}
+
+	rewriteEngine := core.NewRewriteEngine(core.RewriteConfig{
+		Enabled: true,
+		Rules: []core.RewriteRule{
+			{Domain: "*.corp.lan", IPs: []string{"10.10.10.10"}},
+		},
+	})
+	clientResolver := core.NewClientResolver(core.ClientConfig{
+		Enabled: true,
+		Aliases: []core.ClientAlias{
+			{IP: "192.168.1.77", Name: "Office-Printer"},
+		},
+	}, rewriteEngine)
+	ecsMgr := NewECSManager(core.ECSConfig{
+		Enabled:  true,
+		StripECS: true,
+	})
+
+	clientMw := NewClientMiddleware(clientResolver)
+	rewriteMw := NewRewriteMiddleware(rewriteEngine)
+	ecsMw := NewECSMiddleware(ecsMgr)
+	forwardMw := NewForwardMiddleware(mockRes)
+
+	pipeline := NewPipeline(clientMw, rewriteMw, ecsMw, forwardMw)
+
+	// Case 1: 客户端识别与重写命中
+	req1 := new(dns.Msg)
+	req1.SetQuestion("portal.corp.lan.", dns.TypeA)
+	ctx1 := NewDNSContext(context.Background(), req1, &net.UDPAddr{IP: net.ParseIP("192.168.1.77"), Port: 34567}, "udp")
+
+	if err := pipeline.Execute(ctx1); err != nil {
+		t.Fatalf("pipeline error: %v", err)
+	}
+	if ctx1.ClientName != "Office-Printer" {
+		t.Fatalf("expected ClientName Office-Printer, got %s", ctx1.ClientName)
+	}
+	if ctx1.Resp == nil || len(ctx1.Resp.Answer) != 1 {
+		t.Fatalf("expected rewrite answer, got %v", ctx1.Resp)
+	}
+	aRec := ctx1.Resp.Answer[0].(*dns.A)
+	if !aRec.A.Equal(net.ParseIP("10.10.10.10")) {
+		t.Fatalf("rewrite IP mismatch: %v", aRec.A)
+	}
+
+	// Case 2: 上游转发请求时自动剥离 ECS 隐私子网
+	req2 := new(dns.Msg)
+	req2.SetQuestion("upstream.example.com.", dns.TypeA)
+	_ = SetECS(req2, "192.0.2.0/24")
+
+	ctx2 := NewDNSContext(context.Background(), req2, &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 34567}, "udp")
+	if err := pipeline.Execute(ctx2); err != nil {
+		t.Fatalf("pipeline error: %v", err)
+	}
+	if ctx2.ClientName != "localhost" {
+		t.Fatalf("expected loopback to be localhost, got %s", ctx2.ClientName)
+	}
+	// 验证请求报文上的 ECS 已被顺利剥离
+	if opt := GetEdns0Option[*dns.EDNS0_SUBNET](req2); opt != nil {
+		t.Fatalf("expected ECS option to be stripped before upstream forwarding")
+	}
+}
+

@@ -61,5 +61,12 @@ type ServiceController interface {
 	ConfigureRateLimit(ctx context.Context, req ConfigureRateLimitRequest) error
 	ConfigureDNS64(ctx context.Context, req ConfigureDNS64Request) error
 	ConfigureBlockUnqualified(ctx context.Context, req ConfigureBlockUnqualifiedRequest) error
+	GetRewriteRules(ctx context.Context) ([]core.RewriteRule, error)
+	AddRewriteRule(ctx context.Context, rule core.RewriteRule) error
+	DeleteRewriteRule(ctx context.Context, domain string) error
+	ConfigureRewrite(ctx context.Context, req ConfigureRewriteRequest) error
+	GetClients(ctx context.Context) ([]core.ClientInfo, error)
+	ConfigureClientAlias(ctx context.Context, req ConfigureClientAliasRequest) error
+	ConfigureECS(ctx context.Context, req ConfigureECSRequest) error
 }
 

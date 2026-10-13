@@ -69,6 +69,9 @@ type StatusResponse struct {
 	Access        core.AccessControlConfig `json:"access"`
 	RateLimit     core.RateLimitConfig     `json:"rateLimit"`
 	DNS64         core.DNS64Config         `json:"dns64"`
+	Rewrite       core.RewriteConfig       `json:"rewrite"`
+	ECS           core.ECSConfig           `json:"ecs"`
+	Clients       []core.ClientInfo        `json:"clients,omitempty"`
 }
 
 // Event WebSocket 事件推送载荷
@@ -83,6 +86,7 @@ type QueryEventData struct {
 	Domain       string  `json:"domain"`
 	QType        string  `json:"qtype"`
 	ClientIP     string  `json:"clientIP"`
+	ClientName   string  `json:"clientName,omitempty"`
 	DurationMs   float64 `json:"durationMs"`
 	Success      bool    `json:"success"`
 	RCode        string  `json:"rcode,omitempty"`
@@ -272,4 +276,25 @@ type ConfigureDNS64Request struct {
 type ConfigureBlockUnqualifiedRequest struct {
 	BlockUnqualified bool `json:"blockUnqualified"`
 }
+
+// ConfigureRewriteRequest DNS 重写整体配置请求
+type ConfigureRewriteRequest struct {
+	Enabled *bool               `json:"enabled,omitempty"`
+	TTL     *uint32             `json:"ttl,omitempty"`
+	Rules   *[]core.RewriteRule `json:"rules,omitempty"`
+}
+
+// ConfigureECSRequest EDNS Client Subnet 策略配置请求
+type ConfigureECSRequest struct {
+	Enabled      *bool   `json:"enabled,omitempty"`
+	StripECS     *bool   `json:"stripECS,omitempty"`
+	CustomSubnet *string `json:"customSubnet,omitempty"`
+}
+
+// ConfigureClientAliasRequest 客户端友好主机名别名配置请求
+type ConfigureClientAliasRequest struct {
+	IP   string `json:"ip"`
+	Name string `json:"name"`
+}
+
 

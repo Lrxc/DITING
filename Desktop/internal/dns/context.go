@@ -16,6 +16,7 @@ type DNSContext struct {
 	Resp       *dns.Msg
 	ClientIP   net.IP
 	ClientPort int
+	ClientName string // 客户端主机名或友好别名（如 localhost、MacBook-Pro）
 	Protocol   string // "udp" 或 "tcp"
 	StartTime  time.Time
 	Attributes map[string]any

@@ -109,6 +109,7 @@ func (p *program) StartDNS(ctx context.Context) error {
 					Domain:       qName,
 					QType:        qType,
 					ClientIP:     formatIP(dctx.ClientIP),
+					ClientName:   dctx.ClientName,
 					DurationMs:   float64(duration.Nanoseconds()) / 1e6,
 					Success:      success,
 					RCode:        rcodeStr,
@@ -126,11 +127,13 @@ func (p *program) StartDNS(ctx context.Context) error {
 	if rebindMgr == nil {
 		rebindMgr = ditingdns.NewRebindProtectionManager(p.cfg.Rebind)
 	}
+	clientMw := ditingdns.NewClientMiddleware(p.clientResolver)
 	accessMw := ditingdns.NewAccessMiddleware(p.accessControl)
 	rateLimitMw := ditingdns.NewRateLimitMiddleware(p.rateLimiter)
 	edeMw := ditingdns.NewEDEMiddleware(p.cfg.DNS.EnableEDE)
 	sudnMw := ditingdns.NewSUDNMiddleware()
 	hostsMw := ditingdns.NewHostsMiddleware(p.hostsResolver)
+	rewriteMw := ditingdns.NewRewriteMiddleware(p.rewriteEngine)
 	unqualifiedMw := ditingdns.NewDynamicUnqualifiedMiddleware(func() bool {
 		p.mu.Lock()
 		defer p.mu.Unlock()
@@ -139,9 +142,10 @@ func (p *program) StartDNS(ctx context.Context) error {
 	filterMw := ditingdns.NewFilterMiddleware(p.filterEngine)
 	rebindMw := ditingdns.NewRebindMiddleware(rebindMgr, p.cache)
 	dns64Mw := ditingdns.NewDNS64Middleware(p.dns64Synth, p.resolver)
+	ecsMw := ditingdns.NewECSMiddleware(p.ecsMgr)
 	cacheMw := ditingdns.NewCacheMiddleware(p.cache, p.resolver)
 	forwardMw := ditingdns.NewForwardMiddleware(p.resolver)
-	pipeline := ditingdns.NewPipeline(metricsMw, edeMw, accessMw, rateLimitMw, sudnMw, hostsMw, unqualifiedMw, filterMw, rebindMw, dns64Mw, cacheMw, forwardMw)
+	pipeline := ditingdns.NewPipeline(metricsMw, edeMw, clientMw, accessMw, rateLimitMw, sudnMw, hostsMw, rewriteMw, unqualifiedMw, filterMw, rebindMw, dns64Mw, ecsMw, cacheMw, forwardMw)
 	udpAddrs, tcpAddrs := p.cfg.DNS.EffectiveListenAddresses()
 	serverCfg := ditingdns.ServerConfig{
 		UDPAddresses: udpAddrs,
@@ -316,6 +320,9 @@ func (p *program) GetStatus(ctx context.Context) (*ipc.StatusResponse, error) {
 		Access:    p.cfg.Access,
 		RateLimit: p.cfg.RateLimit,
 		DNS64:     p.cfg.DNS64,
+		Rewrite:   p.cfg.Rewrite,
+		ECS:       p.cfg.ECS,
+		Clients:   p.getClientsSnapshot(),
 	}, nil
 }
 
@@ -331,4 +338,11 @@ func (p *program) getFilterStatsSnapshot() core.FilterStats {
 		return p.filterEngine.GetStats()
 	}
 	return core.FilterStats{Enabled: false}
+}
+
+func (p *program) getClientsSnapshot() []core.ClientInfo {
+	if p.clientResolver != nil {
+		return p.clientResolver.GetClients()
+	}
+	return []core.ClientInfo{}
 }

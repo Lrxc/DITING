@@ -267,6 +267,20 @@ func (r *HostsResolver) LookupPTR(arpaName string) []dns.RR {
 	return records
 }
 
+// LookupReverse 实现 ReverseLookuper 接口，根据 IP 反向查询首选主机名
+func (r *HostsResolver) LookupReverse(ip net.IP) string {
+	if ip == nil {
+		return ""
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	hosts, ok := r.ptrMap[ip.String()]
+	if !ok || len(hosts) == 0 {
+		return ""
+	}
+	return hosts[0]
+}
+
 func parseHexNibble(c byte) (byte, bool) {
 	switch {
 	case c >= '0' && c <= '9':

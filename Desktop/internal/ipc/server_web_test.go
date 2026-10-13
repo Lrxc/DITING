@@ -8,6 +8,8 @@ import (
 	"testing"
 	"testing/fstest"
 	"time"
+
+	"github.com/haoze-evolluling/diting/desktop/internal/core"
 )
 
 // 为 mockController 补充 Web 与 Auth 相关实现
@@ -126,6 +128,34 @@ func (m *mockController) ConfigureDNS64(ctx context.Context, req ConfigureDNS64R
 }
 
 func (m *mockController) ConfigureBlockUnqualified(ctx context.Context, req ConfigureBlockUnqualifiedRequest) error {
+	return nil
+}
+
+func (m *mockController) GetRewriteRules(ctx context.Context) ([]core.RewriteRule, error) {
+	return []core.RewriteRule{}, nil
+}
+
+func (m *mockController) AddRewriteRule(ctx context.Context, rule core.RewriteRule) error {
+	return nil
+}
+
+func (m *mockController) DeleteRewriteRule(ctx context.Context, domain string) error {
+	return nil
+}
+
+func (m *mockController) ConfigureRewrite(ctx context.Context, req ConfigureRewriteRequest) error {
+	return nil
+}
+
+func (m *mockController) GetClients(ctx context.Context) ([]core.ClientInfo, error) {
+	return []core.ClientInfo{}, nil
+}
+
+func (m *mockController) ConfigureClientAlias(ctx context.Context, req ConfigureClientAliasRequest) error {
+	return nil
+}
+
+func (m *mockController) ConfigureECS(ctx context.Context, req ConfigureECSRequest) error {
 	return nil
 }
 

@@ -179,6 +179,9 @@ type Config struct {
 	Access    core.AccessControlConfig `json:"access"`
 	RateLimit core.RateLimitConfig     `json:"rateLimit"`
 	DNS64     core.DNS64Config         `json:"dns64"`
+	Rewrite   core.RewriteConfig       `json:"rewrite"`
+	Client    core.ClientConfig        `json:"client"`
+	ECS       core.ECSConfig           `json:"ecs"`
 	Web       WebConfig                `json:"web"`
 }
 
@@ -223,6 +226,9 @@ func DefaultConfig() *Config {
 		Access:    core.DefaultAccessControlConfig(),
 		RateLimit: core.DefaultRateLimitConfig(),
 		DNS64:     core.DefaultDNS64Config(),
+		Rewrite:   core.DefaultRewriteConfig(),
+		Client:    core.DefaultClientConfig(),
+		ECS:       core.DefaultECSConfig(),
 		Web: WebConfig{
 			Enabled:        true,
 			ListenPort:     15353,
