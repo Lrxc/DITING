@@ -1,0 +1,163 @@
+package dns
+
+import (
+	"fmt"
+	"net"
+	"strings"
+	"sync"
+
+	"github.com/haoze-evolluling/diting/desktop/internal/core"
+	"github.com/miekg/dns"
+)
+
+// RebindConfig DNS Rebinding 保护配置类型别名
+type RebindConfig = core.RebindConfig
+
+// DefaultRebindConfig 默认 Rebind 防御配置别名
+var DefaultRebindConfig = core.DefaultRebindConfig
+
+// RebindProtectionManager DNS Rebinding 防御管理器
+type RebindProtectionManager struct {
+	mu             sync.RWMutex
+	enabled        bool
+	allowedDomains []string
+}
+
+// NewRebindProtectionManager 创建 DNS 重新绑定防护管理器
+func NewRebindProtectionManager(cfg RebindConfig) *RebindProtectionManager {
+	m := &RebindProtectionManager{
+		enabled: cfg.Enabled,
+	}
+	m.SetAllowedDomains(cfg.AllowedDomains)
+	return m
+}
+
+// SetAllowedDomains 更新白名单域名
+func (m *RebindProtectionManager) SetAllowedDomains(domains []string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cleaned := make([]string, 0, len(domains))
+	for _, d := range domains {
+		d = strings.ToLower(strings.TrimSpace(d))
+		d = strings.TrimPrefix(d, "*")
+		d = strings.Trim(d, ".")
+		if d != "" {
+			cleaned = append(cleaned, d)
+		}
+	}
+	m.allowedDomains = cleaned
+}
+
+// IsDomainAllowed 判断域名是否在内网白名单中
+func (m *RebindProtectionManager) IsDomainAllowed(domain string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	domain = strings.ToLower(strings.Trim(domain, "."))
+	for _, allowed := range m.allowedDomains {
+		if domain == allowed || strings.HasSuffix(domain, "."+allowed) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsBlockedIP 判定 IP 是否为私有/回环/链路本地/未指定地址（RFC 1918、RFC 4193、RFC 3927 等）
+func IsBlockedIP(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+	return ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsUnspecified()
+}
+
+// FindBlockedIPInMsg 遍历报文各 Section 提取首个非公网内网 IP（防御 DNS 重新绑定攻击）
+func FindBlockedIPInMsg(msg *dns.Msg) net.IP {
+	if msg == nil {
+		return nil
+	}
+	for _, section := range [][]dns.RR{msg.Answer, msg.Extra, msg.Ns} {
+		for _, rr := range section {
+			switch v := rr.(type) {
+			case *dns.A:
+				if IsBlockedIP(v.A) {
+					return v.A
+				}
+			case *dns.AAAA:
+				if IsBlockedIP(v.AAAA) {
+					return v.AAAA
+				}
+			case *dns.HTTPS:
+				if ip := findBlockedHintIP(v.Value); ip != nil {
+					return ip
+				}
+			case *dns.SVCB:
+				if ip := findBlockedHintIP(v.Value); ip != nil {
+					return ip
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func findBlockedHintIP(values []dns.SVCBKeyValue) net.IP {
+	for _, kv := range values {
+		switch hint := kv.(type) {
+		case *dns.SVCBIPv4Hint:
+			for _, ip := range hint.Hint {
+				if IsBlockedIP(ip) {
+					return ip
+				}
+			}
+		case *dns.SVCBIPv6Hint:
+			for _, ip := range hint.Hint {
+				if IsBlockedIP(ip) {
+					return ip
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// NewRebindMiddleware 创建防 DNS 重新绑定攻击流水线中间件
+// 借鉴自 blocky (rebinding_resolver.go) 与 AdGuard Home (dnsforward/access.go)
+func NewRebindMiddleware(mgr *RebindProtectionManager) Middleware {
+	return func(ctx *DNSContext, next func() error) error {
+		err := next()
+		if mgr == nil || !mgr.enabled || ctx.Resp == nil || ctx.Req == nil || len(ctx.Req.Question) == 0 {
+			return err
+		}
+
+		// 若前置中间件已经阻断或本身就是错误报文，不需重复处理
+		if val, ok := ctx.Get("filter_blocked"); ok && val == true {
+			return err
+		}
+
+		blockedIP := FindBlockedIPInMsg(ctx.Resp)
+		if blockedIP == nil {
+			return err
+		}
+
+		q := ctx.Req.Question[0]
+		domain := strings.Trim(q.Name, ".")
+		if mgr.IsDomainAllowed(domain) {
+			return err
+		}
+
+		// 检测到外部域名解析为内网保留地址，判定为 Rebinding 攻击并执行阻断
+		reason := fmt.Sprintf("DNS Rebinding 攻击防护: 外部域名解析为非受信内网 IP (%s)", blockedIP.String())
+		ctx.Set("rebinding_blocked", true)
+		ctx.Set("filter_action", "block")
+		ctx.Set("filter_blocked", true)
+		ctx.Set("filter_reason", reason)
+
+		// 替换为安全的空应答或指定拒绝
+		cleanResp := new(dns.Msg)
+		cleanResp.SetRcode(ctx.Req, dns.RcodeSuccess)
+		cleanResp.Authoritative = true
+		cleanResp.RecursionAvailable = true
+		ctx.Resp = cleanResp
+
+		return err
+	}
+}

@@ -1,4 +1,4 @@
-﻿package main
+package main
 
 import (
 	"context"
@@ -54,6 +54,14 @@ func (p *program) StartDNS(ctx context.Context) error {
 				filterBlocked = b
 			}
 		}
+		if val, ok := dctx.Get("rebinding_blocked"); ok {
+			if b, ok := val.(bool); ok && b {
+				filterBlocked = true
+				if filterRule == "" {
+					filterRule = "REBIND_PROTECTION"
+				}
+			}
+		}
 		if val, ok := dctx.Get("filter_rule"); ok {
 			if s, ok := val.(string); ok {
 				filterRule = s
@@ -90,9 +98,18 @@ func (p *program) StartDNS(ctx context.Context) error {
 		}
 	})
 
+	rebindMgr := p.rebindMgr
+	if rebindMgr == nil {
+		rebindMgr = ditingdns.NewRebindProtectionManager(p.cfg.Rebind)
+	}
+	rebindMw := ditingdns.NewRebindMiddleware(rebindMgr)
+	edeMw := ditingdns.NewEDEMiddleware(p.cfg.DNS.EnableEDE)
+	sudnMw := ditingdns.NewSUDNMiddleware()
+	hostsMw := ditingdns.NewHostsMiddleware(p.hostsResolver)
 	filterMw := ditingdns.NewFilterMiddleware(p.filterEngine)
 	cacheMw := ditingdns.NewCacheMiddleware(p.cache, p.resolver)
-	pipeline := ditingdns.NewPipeline(metricsMw, filterMw, cacheMw, ditingdns.NewForwardMiddleware(p.resolver))
+	forwardMw := ditingdns.NewForwardMiddleware(p.resolver)
+	pipeline := ditingdns.NewPipeline(metricsMw, edeMw, sudnMw, hostsMw, filterMw, cacheMw, forwardMw, rebindMw)
 	udpAddrs, tcpAddrs := p.cfg.DNS.EffectiveListenAddresses()
 	serverCfg := ditingdns.ServerConfig{
 		UDPAddresses: udpAddrs,

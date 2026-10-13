@@ -1,4 +1,4 @@
-﻿package config
+package config
 
 import (
 	"encoding/json"
@@ -17,6 +17,7 @@ type DNSConfig struct {
 	ReadTimeout  time.Duration `json:"readTimeout"`
 	WriteTimeout time.Duration `json:"writeTimeout"`
 	AllowLAN     bool          `json:"allowLAN"` // 是否启用局域网 DNS 服务器功能（监听 0.0.0.0 与所有局域网地址）
+	EnableEDE    bool          `json:"enableEDE"` // 是否启用 RFC 8914 Extended DNS Errors 选项
 }
 
 // EffectiveListenAddresses 根据 AllowLAN 配置返回实际应监听的双栈 UDP 与 TCP 地址
@@ -172,6 +173,8 @@ type Config struct {
 	Takeover TakeoverConfig      `json:"takeover"`
 	Cache    core.CacheConfig    `json:"cache"`
 	Filter   core.FilterConfig   `json:"filter"`
+	Hosts    core.HostsConfig    `json:"hosts"`
+	Rebind   core.RebindConfig   `json:"rebind"`
 	Web      WebConfig           `json:"web"`
 }
 
@@ -184,6 +187,7 @@ func DefaultConfig() *Config {
 			ReadTimeout:  5 * time.Second,
 			WriteTimeout: 5 * time.Second,
 			AllowLAN:     false,
+			EnableEDE:    true,
 		},
 		Upstream: core.ResolverConfig{
 			Mode: core.ModePrimaryBackup,
@@ -209,6 +213,8 @@ func DefaultConfig() *Config {
 		},
 		Cache:  core.DefaultCacheConfig(),
 		Filter: core.DefaultFilterConfig(),
+		Hosts:  core.DefaultHostsConfig(),
+		Rebind: core.DefaultRebindConfig(),
 		Web: WebConfig{
 			Enabled:        true,
 			ListenPort:     15353,

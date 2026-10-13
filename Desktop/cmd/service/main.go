@@ -1,4 +1,4 @@
-﻿package main
+package main
 
 import (
 	"context"
@@ -35,9 +35,11 @@ type program struct {
 	cfg          *config.Config
 	server       *ditingdns.Server
 	resolver     *core.CoreResolver
-	cache        *core.DNSCache
-	filterEngine *core.RuleEngine
-	takeoverMgr  platform.DNSManager
+	cache         *core.DNSCache
+	filterEngine  *core.RuleEngine
+	hostsResolver *core.HostsResolver
+	rebindMgr     *ditingdns.RebindProtectionManager
+	takeoverMgr   platform.DNSManager
 	adapterScan  platform.AdapterScanner
 	stateStore   platform.StateStore
 	portChecker  platform.PortChecker
@@ -119,6 +121,13 @@ func (p *program) run() error {
 	p.resolver = res
 	p.cache = core.NewDNSCache(cfg.Cache)
 	p.filterEngine = core.NewRuleEngine(cfg.Filter)
+
+	hostsRes, err := core.NewHostsResolver(cfg.Hosts)
+	if err != nil {
+		log.Printf("[Hosts] 初始化 Hosts 解析器警告: %v\n", err)
+	}
+	p.hostsResolver = hostsRes
+	p.rebindMgr = ditingdns.NewRebindProtectionManager(cfg.Rebind)
 
 	// 5.1 初始化 Web 远程管理与认证引擎
 	p.authMgr = auth.NewManager(cfg.Web.Username, cfg.Web.PasswordHash, cfg.Web.Salt, cfg.Web.SessionTimeout)

@@ -42,9 +42,10 @@ type ProviderConfig struct {
 
 // ResolverConfig 上游解析器整体配置
 type ResolverConfig struct {
-	Mode      string           `json:"mode"`
-	Providers []ProviderConfig `json:"providers"`
-	Bootstrap BootstrapConfig  `json:"bootstrap"`
+	Mode              string            `json:"mode"`
+	Providers         []ProviderConfig  `json:"providers"`
+	Bootstrap         BootstrapConfig   `json:"bootstrap"`
+	ConditionalRoutes map[string]string `json:"conditionalRoutes,omitempty"` // 域名后缀分流: domainSuffix -> upstream
 }
 
 // Resolver 核心上游解析器接口
@@ -65,6 +66,7 @@ type CoreResolver struct {
 	doh       *DoHResolver
 	dot       *DoTResolver
 	scheduler *Scheduler
+	router    *ConditionalRouter
 }
 
 // NewResolver 创建并初始化核心 DNS 解析器
@@ -79,6 +81,7 @@ func NewResolver(cfg ResolverConfig) (*CoreResolver, error) {
 		plain:     plain,
 		doh:       doh,
 		dot:       dot,
+		router:    NewConditionalRouter(nil),
 	}
 
 	r.scheduler = NewScheduler(r.executeProvider)
@@ -147,11 +150,49 @@ func (r *CoreResolver) Configure(cfg ResolverConfig) error {
 		}
 	}
 
+	if r.router != nil {
+		r.router.ClearRoutes()
+		for pattern, upstream := range cfg.ConditionalRoutes {
+			upstream = strings.TrimSpace(upstream)
+			if upstream == "" {
+				continue
+			}
+			proto := ProtocolPlain
+			server := upstream
+			urlStr := ""
+			if strings.HasPrefix(upstream, "https://") || strings.HasPrefix(upstream, "http://") {
+				proto = ProtocolDoH
+				urlStr = upstream
+			} else if strings.HasPrefix(upstream, "tls://") || strings.HasPrefix(upstream, "dot://") {
+				proto = ProtocolDoT
+				server = strings.TrimPrefix(strings.TrimPrefix(upstream, "tls://"), "dot://")
+			}
+			prov := &ConfiguredProvider{
+				ID:       "conditional-" + pattern,
+				Protocol: proto,
+				Server:   server,
+				URL:      urlStr,
+				Stats:    NewProviderStats(),
+			}
+			r.router.SetRoute(pattern, &conditionalProviderAdapter{
+				resolver: r,
+				provider: prov,
+			})
+		}
+	}
+
 	return nil
 }
 
 // Resolve 调度执行 wire-format 二进制 DNS 查询
 func (r *CoreResolver) Resolve(ctx context.Context, rawQuery []byte) ([]byte, error) {
+	req := new(dns.Msg)
+	if err := req.Unpack(rawQuery); err == nil && len(req.Question) > 0 && r.router != nil {
+		if target := r.router.MatchRoute(req.Question[0].Name); target != nil {
+			return target.Resolve(ctx, rawQuery)
+		}
+	}
+
 	r.mu.RLock()
 	mode := r.mode
 	providers := r.providers
@@ -164,6 +205,12 @@ func (r *CoreResolver) Resolve(ctx context.Context, rawQuery []byte) ([]byte, er
 func (r *CoreResolver) Exchange(ctx context.Context, req *dns.Msg) (*dns.Msg, error) {
 	if req == nil {
 		return nil, fmt.Errorf("nil dns request")
+	}
+
+	if len(req.Question) > 0 && r.router != nil {
+		if target := r.router.MatchRoute(req.Question[0].Name); target != nil {
+			return target.Exchange(ctx, req)
+		}
 	}
 
 	rawQuery, err := req.Pack()
@@ -184,6 +231,35 @@ func (r *CoreResolver) Exchange(ctx context.Context, req *dns.Msg) (*dns.Msg, er
 	resp.Id = req.Id
 	return resp, nil
 }
+
+type conditionalProviderAdapter struct {
+	resolver *CoreResolver
+	provider *ConfiguredProvider
+}
+
+func (a *conditionalProviderAdapter) Resolve(ctx context.Context, rawQuery []byte) ([]byte, error) {
+	return a.resolver.executeProvider(ctx, a.provider, rawQuery)
+}
+
+func (a *conditionalProviderAdapter) Exchange(ctx context.Context, req *dns.Msg) (*dns.Msg, error) {
+	raw, err := req.Pack()
+	if err != nil {
+		return nil, err
+	}
+	rawResp, err := a.Resolve(ctx, raw)
+	if err != nil {
+		return nil, err
+	}
+	resp := new(dns.Msg)
+	if err := resp.Unpack(rawResp); err != nil {
+		return nil, err
+	}
+	resp.Id = req.Id
+	return resp, nil
+}
+
+func (a *conditionalProviderAdapter) Configure(cfg ResolverConfig) error { return nil }
+func (a *conditionalProviderAdapter) Shutdown() error                    { return nil }
 
 func (r *CoreResolver) executeProvider(ctx context.Context, p *ConfiguredProvider, rawQuery []byte) ([]byte, error) {
 	switch p.Protocol {
