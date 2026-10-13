@@ -198,7 +198,7 @@ func (p *program) StartDNS(ctx context.Context) error {
 		defer p.mu.Unlock()
 		return p.cfg.DNS.BlockUnqualified
 	})
-	filterMw := ditingdns.NewFilterMiddleware(p.filterEngine)
+	filterMw := ditingdns.NewFilterMiddlewareWithGroups(p.filterEngine, p.groupResolver)
 	rebindMw := ditingdns.NewRebindMiddleware(rebindMgr, p.cache)
 	dns64Mw := ditingdns.NewDNS64Middleware(p.dns64Synth, p.resolver)
 	ecsMw := ditingdns.NewECSMiddleware(p.ecsMgr)

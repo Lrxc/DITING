@@ -462,6 +462,37 @@ export interface ConfigureRateLimitRequest {
   exemptIPs: string[];
 }
 
+/** 客户端分组：一组 IP/CIDR 绑定专属规则集与拦截方式 */
+export interface ClientGroup {
+  id: string;
+  name: string;
+  enabled: boolean;
+  /** IP 或 CIDR（支持 IPv4/IPv6） */
+  clients: string[];
+  /** 该组启用的订阅列表 ID；空数组表示继承全部 */
+  ruleListIds?: string[];
+  /** 组级拦截方式覆盖；空表示继承全局 */
+  blockMode?: string;
+}
+
+/** 分组可绑定的订阅列表选项 */
+export interface ClientGroupRuleListOption {
+  id: string;
+  name: string;
+  enabled: boolean;
+}
+
+export interface ClientGroupConfigResponse {
+  enabled: boolean;
+  groups: ClientGroup[];
+  ruleLists: ClientGroupRuleListOption[];
+}
+
+export interface ConfigureClientGroupsRequest {
+  enabled?: boolean;
+  groups?: ClientGroup[];
+}
+
 export interface DNS64Config {
   enabled: boolean;
   prefixes: string[];

@@ -41,6 +41,8 @@ type ServiceController interface {
 	CheckHostRule(ctx context.Context, domain string, qtype uint16) (*core.CheckHostResult, error)
 	GetBlockingSchedule(ctx context.Context) (*ScheduleConfigResponse, error)
 	ConfigureBlockingSchedule(ctx context.Context, req ConfigureScheduleRequest) error
+	GetClientGroups(ctx context.Context) (*ClientGroupConfigResponse, error)
+	ConfigureClientGroups(ctx context.Context, req ConfigureClientGroupsRequest) error
 	GetLANStatus(ctx context.Context) (*LANStatusResponse, error)
 	ConfigureLAN(ctx context.Context, req ConfigureLANRequest) error
 	ConfigureFirewall(ctx context.Context, enable bool) error

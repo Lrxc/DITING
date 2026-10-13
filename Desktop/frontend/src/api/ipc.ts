@@ -105,6 +105,8 @@ class IPCService {
   public configureRewrite = (req: Parameters<RewriteApi['configureRewrite']>[0]) => this.rewrite.configureRewrite(req);
   public getClients = () => this.rewrite.getClients();
   public configureClientAlias = (req: Parameters<RewriteApi['configureClientAlias']>[0]) => this.rewrite.configureClientAlias(req);
+  public getClientGroups = () => this.rewrite.getClientGroups();
+  public configureClientGroups = (req: Parameters<RewriteApi['configureClientGroups']>[0]) => this.rewrite.configureClientGroups(req);
 
   // --- 安全访问、速率限制与协议隐私 ---
   public configureAccess = (req: Parameters<SecurityApi['configureAccess']>[0]) => this.security.configureAccess(req);

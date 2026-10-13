@@ -39,6 +39,7 @@ type program struct {
 	cache          *core.DNSCache
 	queryLog       *querylog.QueryLog
 	filterEngine   *core.RuleEngine
+	groupResolver  *core.GroupResolver
 	hostsResolver  *core.HostsResolver
 	rebindMgr      *ditingdns.RebindProtectionManager
 	accessControl  *core.AccessControl
@@ -131,6 +132,14 @@ func (p *program) run() error {
 	p.cache.SetPrefetcher(res)
 	p.queryLog = querylog.New(cfg.QueryLog)
 	p.filterEngine = core.NewRuleEngine(cfg.Filter)
+	if err := p.filterEngine.SetClientGroups(cfg.Client.GroupConfig()); err != nil {
+		log.Printf("[Clients] 载入客户端分组警告: %v\n", err)
+	}
+	if gr, err := core.NewGroupResolver(cfg.Client.GroupConfig()); err == nil {
+		p.groupResolver = gr
+	} else {
+		log.Printf("[Clients] 编译客户端分组匹配器警告: %v\n", err)
+	}
 
 	hostsRes, err := core.NewHostsResolver(cfg.Hosts)
 	if err != nil {

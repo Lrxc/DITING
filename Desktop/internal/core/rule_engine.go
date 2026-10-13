@@ -20,6 +20,11 @@ type RuleEngine struct {
 	blockedQueries atomic.Uint64
 	allowedQueries atomic.Uint64
 
+	// 客户端分组：组 ID → 专属匹配器 / 拦截方式覆盖
+	groupCfg        ClientGroupConfig
+	groupMatchers   map[string]*RuleMatcher
+	groupBlockModes map[string]string
+
 	httpClient *http.Client
 	stopCh     chan struct{}
 
@@ -37,8 +42,11 @@ func NewRuleEngine(cfg FilterConfig) *RuleEngine {
 		httpClient: &http.Client{
 			Timeout: 15 * time.Second,
 		},
-		stopCh: make(chan struct{}),
-		now:    time.Now,
+		stopCh:          make(chan struct{}),
+		now:             time.Now,
+		groupCfg:        ClientGroupConfig{},
+		groupMatchers:   make(map[string]*RuleMatcher),
+		groupBlockModes: make(map[string]string),
 	}
 
 	// 确保规则缓存目录存在
@@ -259,40 +267,178 @@ func (e *RuleEngine) CheckHost(domain string, qtype uint16) CheckHostResult {
 	return matcher.Match(domain, qtype)
 }
 
+// compileGroupMatchersUnlocked 为每个启用分组构建专属规则匹配器。
+//
+// 调用方须已持有 e.mu 写锁。组级规则集按 RuleListIDs 过滤：
+// 空列表表示继承全部；否则只包含指定的订阅列表（自定义规则始终包含）。
+func (e *RuleEngine) compileGroupMatchersUnlocked(customRules, listRules []*ParsedRule) {
+	e.groupMatchers = make(map[string]*RuleMatcher)
+	e.groupBlockModes = make(map[string]string)
+
+	if !e.groupCfg.Enabled {
+		return
+	}
+
+	for i := range e.groupCfg.Groups {
+		g := &e.groupCfg.Groups[i]
+		if !g.Enabled {
+			continue
+		}
+
+		selected := make([]*ParsedRule, 0, len(customRules)+len(listRules))
+		selected = append(selected, customRules...)
+
+		if len(g.RuleListIDs) == 0 {
+			selected = append(selected, listRules...)
+		} else {
+			allow := make(map[string]bool, len(g.RuleListIDs))
+			for _, id := range g.RuleListIDs {
+				allow[id] = true
+			}
+			for _, r := range listRules {
+				if allow[r.Source] {
+					selected = append(selected, r)
+				}
+			}
+		}
+
+		m := NewRuleMatcher()
+		m.BuildFromRules(selected)
+		e.groupMatchers[g.ID] = m
+		if g.BlockMode != "" {
+			e.groupBlockModes[g.ID] = g.BlockMode
+		}
+	}
+}
+
+// getGroupMatcher 读取指定分组的匹配器（不存在或未分组时回落默认匹配器）。
+func (e *RuleEngine) getGroupMatcher(groupID string) *RuleMatcher {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if groupID != "" && groupID != DefaultClientGroupID {
+		if m, ok := e.groupMatchers[groupID]; ok {
+			return m
+		}
+	}
+	return e.matcher
+}
+
+// MatchForGroup 按客户端分组评估域名，并记录遥测统计。
+//
+// 未命中分组或分组未启用时等价于 Match（默认组语义不变）。
+func (e *RuleEngine) MatchForGroup(domain string, qtype uint16, groupID string) CheckHostResult {
+	if !e.IsEnabled() {
+		return CheckHostResult{Action: "pass"}
+	}
+	if !e.IsBlockingActive() {
+		return CheckHostResult{Action: "pass", Reason: ReasonScheduleInactive}
+	}
+
+	matcher := e.getGroupMatcher(groupID)
+	if matcher == nil {
+		return CheckHostResult{Action: "pass"}
+	}
+
+	e.totalQueries.Add(1)
+	res := matcher.Match(domain, qtype)
+
+	if res.Blocked {
+		e.blockedQueries.Add(1)
+	} else if res.Action == "allow" {
+		e.allowedQueries.Add(1)
+	}
+	return res
+}
+
+// GroupBlockMode 返回分组的拦截方式覆盖（无覆盖时返回空串）。
+func (e *RuleEngine) GroupBlockMode(groupID string) string {
+	if e == nil || groupID == "" || groupID == DefaultClientGroupID {
+		return ""
+	}
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.groupBlockModes[groupID]
+}
+
+// SetClientGroups 注入客户端分组配置并重建分组匹配器。
+//
+// 分组配置独立于 FilterConfig，因此不触发全局规则索引重建之外的副作用。
+func (e *RuleEngine) SetClientGroups(cfg ClientGroupConfig) error {
+	if err := NormalizeClientGroupConfig(&cfg); err != nil {
+		// 归一化错误不阻断生效，记录后继续（非法成员已被剔除）
+		log.Printf("[RuleEngine] 客户端分组配置存在问题: %v", err)
+	}
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if cfg.Groups == nil {
+		cfg.Groups = []ClientGroup{}
+	}
+	e.groupCfg = cfg
+
+	customRules, listRules := e.loadAllRulesUnlocked()
+	e.compileGroupMatchersUnlocked(customRules, listRules)
+	return nil
+}
+
+// GetClientGroups 返回当前客户端分组配置副本。
+func (e *RuleEngine) GetClientGroups() ClientGroupConfig {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	out := ClientGroupConfig{Enabled: e.groupCfg.Enabled, Groups: make([]ClientGroup, len(e.groupCfg.Groups))}
+	copy(out.Groups, e.groupCfg.Groups)
+	return out
+}
+
 // rebuildUnlocked 从自定义规则与订阅缓存重建匹配器并原子切换
 func (e *RuleEngine) rebuildUnlocked() error {
-	var allRules []*ParsedRule
+	customRules, listRules := e.loadAllRulesUnlocked()
 
-	// 1. 解析用户自定义规则 (最高优先级)
+	allRules := make([]*ParsedRule, 0, len(customRules)+len(listRules))
+	allRules = append(allRules, customRules...)
+	allRules = append(allRules, listRules...)
+
+	// 构建新的匹配器实例并全量原子切换
+	newMatcher := NewRuleMatcher()
+	newMatcher.BuildFromRules(allRules)
+	e.matcher = newMatcher
+
+	// 按客户端分组构建专属匹配器（组数有限，内存可控）
+	e.compileGroupMatchersUnlocked(customRules, listRules)
+
+	log.Printf("[RuleEngine] 规则索引构建完毕，共激活 %d 条规则", len(allRules))
+	return nil
+}
+
+// loadAllRulesUnlocked 解析自定义规则与各启用订阅列表的缓存并返回。
+//
+// 返回顺序固定为自定义规则在前（最高优先级），随后按列表声明顺序。
+func (e *RuleEngine) loadAllRulesUnlocked() (customRules []*ParsedRule, listRules []*ParsedRule) {
 	for _, line := range e.cfg.CustomRules {
 		if r, ok := ParseRuleLine(line, "custom"); ok && r != nil {
-			allRules = append(allRules, r)
+			customRules = append(customRules, r)
 		}
 	}
 
-	// 2. 加载各启用订阅列表的缓存文件
 	for i := range e.cfg.Lists {
 		list := &e.cfg.Lists[i]
 		if !list.Enabled {
 			continue
 		}
 		cacheFile := filepath.Join(e.cfg.DataDir, list.ID+".txt")
-		if data, err := os.ReadFile(cacheFile); err == nil {
-			listRules, err := ParseRules(bytes.NewReader(data), list.ID)
-			if err == nil {
-				list.RulesCount = len(listRules)
-				allRules = append(allRules, listRules...)
-			}
+		data, err := os.ReadFile(cacheFile)
+		if err != nil {
+			continue
 		}
+		parsed, err := ParseRules(bytes.NewReader(data), list.ID)
+		if err != nil {
+			continue
+		}
+		list.RulesCount = len(parsed)
+		listRules = append(listRules, parsed...)
 	}
-
-	// 3. 构建新的匹配器实例并全量原子切换
-	newMatcher := NewRuleMatcher()
-	newMatcher.BuildFromRules(allRules)
-	e.matcher = newMatcher
-
-	log.Printf("[RuleEngine] 规则索引构建完毕，共激活 %d 条规则", len(allRules))
-	return nil
+	return customRules, listRules
 }
 
 func (e *RuleEngine) runUpdateTicker() {

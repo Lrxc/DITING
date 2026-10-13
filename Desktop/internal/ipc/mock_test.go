@@ -23,6 +23,8 @@ type mockController struct {
 	filterConfig         *core.FilterConfig
 	scheduleConfig       *ScheduleConfigResponse
 	scheduleConfigureErr error
+	clientGroups         *ClientGroupConfigResponse
+	clientGroupsErr      error
 	queryLogConfig       *querylog.QueryLogConfig
 	queryLogCleared      bool
 	bgConfig             *LoginBackgroundResponse
@@ -297,6 +299,34 @@ func (m *mockController) ConfigureBlockingSchedule(ctx context.Context, req Conf
 	}
 	if req.Schedules != nil {
 		m.scheduleConfig.Schedules = *req.Schedules
+	}
+	return nil
+}
+
+func (m *mockController) GetClientGroups(ctx context.Context) (*ClientGroupConfigResponse, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.clientGroups != nil {
+		cpy := *m.clientGroups
+		return &cpy, nil
+	}
+	return &ClientGroupConfigResponse{Enabled: false, Groups: []core.ClientGroup{}}, nil
+}
+
+func (m *mockController) ConfigureClientGroups(ctx context.Context, req ConfigureClientGroupsRequest) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.clientGroupsErr != nil {
+		return m.clientGroupsErr
+	}
+	if m.clientGroups == nil {
+		m.clientGroups = &ClientGroupConfigResponse{}
+	}
+	if req.Enabled != nil {
+		m.clientGroups.Enabled = *req.Enabled
+	}
+	if req.Groups != nil {
+		m.clientGroups.Groups = *req.Groups
 	}
 	return nil
 }

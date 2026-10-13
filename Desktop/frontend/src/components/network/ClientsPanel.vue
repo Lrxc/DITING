@@ -7,6 +7,7 @@ import AppCard from '../ui/AppCard.vue';
 import AppModal from '../AppModal.vue';
 import ToastBanner from '../ToastBanner.vue';
 import StatusBadge from '../StatusBadge.vue';
+import ClientGroupsCard from './ClientGroupsCard.vue';
 import { formatClockTimeMs } from '../../utils/format';
 import { extractSwitchValue } from '../../utils/switch';
 import { useToast } from '../../composables/useToast';
@@ -526,9 +527,11 @@ onMounted(() => {
       </AppCard>
     </div>
 
+    <!-- 客户端分组与分组级精细策略 -->
+    <ClientGroupsCard />
+
     <!-- 弹窗：编辑客户端友好别名 -->
-    <AppModal
-      :open="isAliasModalOpen"
+    <AppModal      :open="isAliasModalOpen"
       title="配置客户端设备别名"
       @close="isAliasModalOpen = false"
     >

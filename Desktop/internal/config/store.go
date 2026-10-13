@@ -1,4 +1,4 @@
-﻿package config
+package config
 
 import (
 	"encoding/json"
@@ -134,5 +134,6 @@ func normalizeConfig(cfg *Config) {
 	}
 	core.NormalizeCacheConfig(&cfg.Cache)
 	core.NormalizeFilterConfig(&cfg.Filter)
+	_ = cfg.Client.Normalize()
 	querylog.NormalizeQueryLogConfig(&cfg.QueryLog)
 }

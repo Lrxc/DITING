@@ -349,3 +349,24 @@ type ConfigureScheduleRequest struct {
 	Enabled   *bool                    `json:"enabled,omitempty"`
 	Schedules *[]core.BlockingSchedule `json:"schedules,omitempty"`
 }
+
+// ClientGroupConfigResponse 客户端分组配置与已解析规则集选项
+type ClientGroupConfigResponse struct {
+	Enabled bool               `json:"enabled"`
+	Groups  []core.ClientGroup `json:"groups"`
+	// RuleLists 供前端多选绑定的可用订阅列表（ID + 名称）
+	RuleLists []ClientGroupRuleListOption `json:"ruleLists"`
+}
+
+// ClientGroupRuleListOption 分组可绑定的订阅列表选项
+type ClientGroupRuleListOption struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Enabled bool   `json:"enabled"`
+}
+
+// ConfigureClientGroupsRequest 客户端分组配置请求
+type ConfigureClientGroupsRequest struct {
+	Enabled *bool               `json:"enabled,omitempty"`
+	Groups  *[]core.ClientGroup `json:"groups,omitempty"`
+}

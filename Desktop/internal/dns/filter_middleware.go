@@ -10,6 +10,13 @@ import (
 
 // NewFilterMiddleware 创建规则过滤与拦截流水线中间件
 func NewFilterMiddleware(engine *core.RuleEngine) Middleware {
+	return NewFilterMiddlewareWithGroups(engine, nil)
+}
+
+// NewFilterMiddlewareWithGroups 创建带客户端分组感知的规则过滤中间件。
+//
+// groupResolver 为 nil 时等价于按默认组评估，行为与 NewFilterMiddleware 一致。
+func NewFilterMiddlewareWithGroups(engine *core.RuleEngine, groupResolver *core.GroupResolver) Middleware {
 	return func(ctx *DNSContext, next func() error) error {
 		if engine == nil || !engine.IsEnabled() || ctx.Req == nil || len(ctx.Req.Question) == 0 {
 			return next()
@@ -21,7 +28,13 @@ func NewFilterMiddleware(engine *core.RuleEngine) Middleware {
 			return next()
 		}
 
-		res := engine.Match(domain, q.Qtype)
+		// 解析客户端所属分组（未启用分组或未命中时回落 default）
+		groupID := core.DefaultClientGroupID
+		if groupResolver != nil && ctx.ClientIP != nil {
+			groupID = groupResolver.Resolve(ctx.ClientIP)
+		}
+
+		res := engine.MatchForGroup(domain, q.Qtype, groupID)
 
 		// 分时拦截窗口外：整体放行，标记原因供日志观测
 		if res.Action == "pass" && res.Reason == core.ReasonScheduleInactive {
@@ -33,14 +46,19 @@ func NewFilterMiddleware(engine *core.RuleEngine) Middleware {
 		}
 
 		if res.Blocked {
-			// 构建阻断响应报文并短路返回
-			resp := buildBlockedResponse(ctx.Req, engine.GetConfig())
+			// 构建阻断响应报文并短路返回（组级拦截方式可覆盖全局）
+			blockCfg := engine.GetConfig()
+			if override := engine.GroupBlockMode(groupID); override != "" {
+				blockCfg.BlockMode = override
+			}
+			resp := buildBlockedResponse(ctx.Req, blockCfg)
 			ctx.Resp = resp
 			ctx.Set("filter_action", "block")
 			ctx.Set("filter_blocked", true)
 			ctx.Set("filter_rule", res.MatchedRule)
 			ctx.Set("filter_reason", res.Reason)
 			ctx.Set("filter_list", res.ListName)
+			ctx.Set("client_group", groupID)
 			return nil
 		}
 

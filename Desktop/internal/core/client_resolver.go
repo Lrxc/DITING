@@ -28,6 +28,10 @@ type ClientConfig struct {
 	EnableRDNS bool          `json:"enableRDNS"` // 是否启用局域网反向 DNS (rDNS) 自动发现主机名
 	CacheTTL   time.Duration `json:"cacheTTL"`   // 主机名缓存生存时长，默认 1 小时
 	Aliases    []ClientAlias `json:"aliases"`    // 静态别名列表
+
+	// 客户端分组与分组级精细策略
+	GroupsEnabled bool          `json:"groupsEnabled"`
+	Groups        []ClientGroup `json:"groups"`
 }
 
 // DefaultClientConfig 默认客户端配置
@@ -37,6 +41,7 @@ func DefaultClientConfig() ClientConfig {
 		EnableRDNS: true,
 		CacheTTL:   time.Hour,
 		Aliases:    []ClientAlias{},
+		Groups:     []ClientGroup{},
 	}
 }
 

@@ -3,6 +3,8 @@ import type {
   ConfigureRewriteRequest,
   ClientInfo,
   ConfigureClientAliasRequest,
+  ClientGroupConfigResponse,
+  ConfigureClientGroupsRequest,
 } from './types';
 import type { HttpTransport } from './http';
 
@@ -46,6 +48,19 @@ export class RewriteApi {
   /** 设置或清除客户端友好静态别名 */
   public async configureClientAlias(req: ConfigureClientAliasRequest): Promise<void> {
     await this.http.request<void>('/api/v1/clients/alias', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    });
+  }
+
+  /** 获取客户端分组配置与可选订阅列表 */
+  public getClientGroups(): Promise<ClientGroupConfigResponse> {
+    return this.http.request<ClientGroupConfigResponse>('/api/v1/clients/groups');
+  }
+
+  /** 更新客户端分组配置（分组级规则集与拦截方式） */
+  public async configureClientGroups(req: ConfigureClientGroupsRequest): Promise<void> {
+    await this.http.request<void>('/api/v1/clients/groups', {
       method: 'POST',
       body: JSON.stringify(req),
     });
