@@ -9,9 +9,9 @@
 !define INFO_PRODUCTNAME    "谛听 DNS"
 !ifndef INFO_PRODUCTVERSION
   !ifdef PRODUCT_VERSION
-    !define INFO_PRODUCTVERSION "1.3.5"
+    !define INFO_PRODUCTVERSION "1.3.6"
   !else
-    !define INFO_PRODUCTVERSION "1.3.5"
+    !define INFO_PRODUCTVERSION "1.3.6"
   !endif
 !endif
 !define INFO_COPYRIGHT      "Copyright 2026 DITING"
