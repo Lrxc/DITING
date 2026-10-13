@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"net"
+	"sort"
 	"strings"
 	"sync"
 
@@ -57,7 +58,7 @@ type RewriteEngine struct {
 	defaultTTL    uint32
 	exactRules    map[string]*compiledRule // domain -> rule
 	wildcardRules []*compiledRule          // 泛域名规则列表（按后缀长度从长到短优先匹配）
-	ptrMap        map[string]string        // ip.String() -> FQDN domain (用于自动反向 PTR 解析)
+	ptrMap        map[string][]string      // ip.String() -> []FQDN domain (支持多别名反向 PTR 解析)
 	originalRules []RewriteRule
 }
 
@@ -72,7 +73,7 @@ func NewRewriteEngine(cfg RewriteConfig) *RewriteEngine {
 		defaultTTL:    ttl,
 		exactRules:    make(map[string]*compiledRule),
 		wildcardRules: make([]*compiledRule, 0),
-		ptrMap:        make(map[string]string),
+		ptrMap:        make(map[string][]string),
 		originalRules: make([]RewriteRule, 0),
 	}
 	for _, rule := range cfg.Rules {
@@ -125,14 +126,14 @@ func (e *RewriteEngine) addRuleInternal(rule RewriteRule) {
 		}
 		if v4 := ip.To4(); v4 != nil {
 			c.v4List = append(c.v4List, v4)
-			// 自动建立反向 PTR 映射（精准域名优先）
+			// 自动建立反向 PTR 映射（精准域名优先，支持多别名）
 			if !c.isWildcard {
-				e.ptrMap[v4.String()] = norm + "."
+				e.appendPTR(v4.String(), norm+".")
 			}
 		} else {
 			c.v6List = append(c.v6List, ip)
 			if !c.isWildcard {
-				e.ptrMap[ip.String()] = norm + "."
+				e.appendPTR(ip.String(), norm+".")
 			}
 		}
 	}
@@ -142,14 +143,84 @@ func (e *RewriteEngine) addRuleInternal(rule RewriteRule) {
 	if c.isWildcard {
 		e.wildcardRules = append(e.wildcardRules, c)
 		// 按后缀长度降序排序，长后缀更精确优先匹配
-		for i := len(e.wildcardRules) - 1; i > 0; i-- {
-			if len(e.wildcardRules[i].suffix) > len(e.wildcardRules[i-1].suffix) {
-				e.wildcardRules[i], e.wildcardRules[i-1] = e.wildcardRules[i-1], e.wildcardRules[i]
-			}
-		}
+		sort.SliceStable(e.wildcardRules, func(i, j int) bool {
+			return len(e.wildcardRules[i].suffix) > len(e.wildcardRules[j].suffix)
+		})
 	} else {
 		e.exactRules[norm] = c
 	}
+}
+
+func (e *RewriteEngine) appendPTR(ipStr, fqdn string) {
+	for _, exist := range e.ptrMap[ipStr] {
+		if exist == fqdn {
+			return
+		}
+	}
+	e.ptrMap[ipStr] = append(e.ptrMap[ipStr], fqdn)
+}
+
+func (e *RewriteEngine) findRule(norm string) (*compiledRule, bool) {
+	if cr, ok := e.exactRules[norm]; ok {
+		return cr, true
+	}
+	for _, w := range e.wildcardRules {
+		if norm == w.suffix || strings.HasSuffix(norm, "."+w.suffix) {
+			return w, true
+		}
+	}
+	return nil, false
+}
+
+func (e *RewriteEngine) chaseCNAME(targetFQDN string, qtype uint16, visited map[string]bool) []dns.RR {
+	if len(visited) > 8 {
+		return nil
+	}
+	targetNorm := normalizeRewriteDomain(targetFQDN)
+	if targetNorm == "" || visited[targetNorm] {
+		return nil
+	}
+	visited[targetNorm] = true
+
+	rule, ok := e.findRule(targetNorm)
+	if !ok {
+		return nil
+	}
+
+	var chained []dns.RR
+	switch qtype {
+	case dns.TypeA:
+		if len(rule.v4List) > 0 {
+			for _, ip := range rule.v4List {
+				chained = append(chained, &dns.A{
+					Hdr: dns.RR_Header{Name: dns.Fqdn(targetFQDN), Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: rule.ttl},
+					A:   ip,
+				})
+			}
+		} else if rule.cname != "" {
+			chained = append(chained, &dns.CNAME{
+				Hdr:    dns.RR_Header{Name: dns.Fqdn(targetFQDN), Rrtype: dns.TypeCNAME, Class: dns.ClassINET, Ttl: rule.ttl},
+				Target: rule.cname,
+			})
+			chained = append(chained, e.chaseCNAME(rule.cname, qtype, visited)...)
+		}
+	case dns.TypeAAAA:
+		if len(rule.v6List) > 0 {
+			for _, ip := range rule.v6List {
+				chained = append(chained, &dns.AAAA{
+					Hdr:  dns.RR_Header{Name: dns.Fqdn(targetFQDN), Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: rule.ttl},
+					AAAA: ip,
+				})
+			}
+		} else if rule.cname != "" {
+			chained = append(chained, &dns.CNAME{
+				Hdr:    dns.RR_Header{Name: dns.Fqdn(targetFQDN), Rrtype: dns.TypeCNAME, Class: dns.ClassINET, Ttl: rule.ttl},
+				Target: rule.cname,
+			})
+			chained = append(chained, e.chaseCNAME(rule.cname, qtype, visited)...)
+		}
+	}
+	return chained
 }
 
 // Lookup 查找匹配的重写规则
@@ -166,19 +237,7 @@ func (e *RewriteEngine) Lookup(domain string, qtype uint16) (answers []dns.RR, m
 		return nil, false
 	}
 
-	// 1. 精准匹配
-	cr, ok := e.exactRules[norm]
-	// 2. 泛域名匹配
-	if !ok {
-		for _, w := range e.wildcardRules {
-			if norm == w.suffix || strings.HasSuffix(norm, "."+w.suffix) {
-				cr = w
-				ok = true
-				break
-			}
-		}
-	}
-
+	cr, ok := e.findRule(norm)
 	if !ok {
 		return nil, false
 	}
@@ -204,6 +263,7 @@ func (e *RewriteEngine) Lookup(domain string, qtype uint16) (answers []dns.RR, m
 				Hdr:    dns.RR_Header{Name: fqdn, Rrtype: dns.TypeCNAME, Class: dns.ClassINET, Ttl: cr.ttl},
 				Target: cr.cname,
 			})
+			answers = append(answers, e.chaseCNAME(cr.cname, dns.TypeA, map[string]bool{norm: true})...)
 		}
 	case dns.TypeAAAA:
 		if len(cr.v6List) > 0 {
@@ -218,6 +278,7 @@ func (e *RewriteEngine) Lookup(domain string, qtype uint16) (answers []dns.RR, m
 				Hdr:    dns.RR_Header{Name: fqdn, Rrtype: dns.TypeCNAME, Class: dns.ClassINET, Ttl: cr.ttl},
 				Target: cr.cname,
 			})
+			answers = append(answers, e.chaseCNAME(cr.cname, dns.TypeAAAA, map[string]bool{norm: true})...)
 		}
 	case dns.TypeCNAME:
 		if cr.cname != "" {
@@ -238,7 +299,7 @@ func (e *RewriteEngine) Lookup(domain string, qtype uint16) (answers []dns.RR, m
 	return answers, true
 }
 
-// LookupPTR 根据 IP 反向解析域名
+// LookupPTR 根据 IP 反向解析域名（O(1) 精确反查，支持多域名别名）
 func (e *RewriteEngine) LookupPTR(ptrQuery string) (answers []dns.RR, matched bool) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -247,31 +308,28 @@ func (e *RewriteEngine) LookupPTR(ptrQuery string) (answers []dns.RR, matched bo
 		return nil, false
 	}
 
-	fqdn := ptrQuery
-	if !strings.HasSuffix(fqdn, ".") {
-		fqdn += "."
+	ip := ParseIPFromArpa(ptrQuery)
+	if ip == nil {
+		return nil, false
+	}
+	if v4 := ip.To4(); v4 != nil {
+		ip = v4
 	}
 
-	// 遍历所有 ptrMap 匹配对应的 arpa 地址
-	for ipStr, targetDomain := range e.ptrMap {
-		ip := net.ParseIP(ipStr)
-		if ip == nil {
-			continue
-		}
-		arpa, err := dns.ReverseAddr(ipStr)
-		if err != nil {
-			continue
-		}
-		if strings.EqualFold(arpa, fqdn) {
-			answers = append(answers, &dns.PTR{
-				Hdr: dns.RR_Header{Name: fqdn, Rrtype: dns.TypePTR, Class: dns.ClassINET, Ttl: e.defaultTTL},
-				Ptr: targetDomain,
-			})
-			return answers, true
-		}
+	domains, ok := e.ptrMap[ip.String()]
+	if !ok || len(domains) == 0 {
+		return nil, false
 	}
 
-	return nil, false
+	fqdn := dns.Fqdn(ptrQuery)
+	for _, domain := range domains {
+		answers = append(answers, &dns.PTR{
+			Hdr: dns.RR_Header{Name: fqdn, Rrtype: dns.TypePTR, Class: dns.ClassINET, Ttl: e.defaultTTL},
+			Ptr: domain,
+		})
+	}
+
+	return answers, true
 }
 
 // LookupReverse 实现 ReverseLookuper 接口，根据 IP 反向查询重写匹配的域名
@@ -279,13 +337,16 @@ func (e *RewriteEngine) LookupReverse(ip net.IP) string {
 	if ip == nil {
 		return ""
 	}
+	if v4 := ip.To4(); v4 != nil {
+		ip = v4
+	}
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	if !e.enabled {
 		return ""
 	}
-	if domain, ok := e.ptrMap[ip.String()]; ok {
-		return strings.TrimSuffix(domain, ".")
+	if domains, ok := e.ptrMap[ip.String()]; ok && len(domains) > 0 {
+		return strings.TrimSuffix(domains[0], ".")
 	}
 	return ""
 }
@@ -343,7 +404,7 @@ func (e *RewriteEngine) DeleteRule(domain string) bool {
 func (e *RewriteEngine) rebuildRules(rules []RewriteRule) {
 	e.exactRules = make(map[string]*compiledRule)
 	e.wildcardRules = make([]*compiledRule, 0)
-	e.ptrMap = make(map[string]string)
+	e.ptrMap = make(map[string][]string)
 	e.originalRules = make([]RewriteRule, 0, len(rules))
 
 	for _, r := range rules {

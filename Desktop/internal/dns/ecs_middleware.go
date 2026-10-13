@@ -44,14 +44,15 @@ func NewECSMiddleware(mgr *ECSManager) Middleware {
 			return next()
 		}
 
-		if cfg.StripECS {
-			// 隐私保护模式：剥离请求中携带的客户端真实子网
+		if cfg.CustomSubnet != "" {
+			// 自定义子网透传/伪装模式：先剥离客户端可能自带的真实子网，再注入自定义伪装子网
 			StripECS(ctx.Req)
-			ctx.Set("ecs_stripped", true)
-		} else if cfg.CustomSubnet != "" {
-			// 自定义子网透传模式
 			_ = SetECS(ctx.Req, cfg.CustomSubnet)
 			ctx.Set("ecs_injected", cfg.CustomSubnet)
+		} else if cfg.StripECS {
+			// 隐私保护模式：剥离请求中携带的客户端真实子网以防信息泄露
+			StripECS(ctx.Req)
+			ctx.Set("ecs_stripped", true)
 		}
 
 		return next()

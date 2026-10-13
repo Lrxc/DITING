@@ -272,6 +272,9 @@ func (r *HostsResolver) LookupReverse(ip net.IP) string {
 	if ip == nil {
 		return ""
 	}
+	if v4 := ip.To4(); v4 != nil {
+		ip = v4
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	hosts, ok := r.ptrMap[ip.String()]

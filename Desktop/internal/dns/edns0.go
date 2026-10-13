@@ -122,16 +122,21 @@ func SetECS(msg *dns.Msg, subnetCIDR string) error {
 		return err
 	}
 	maskLen, _ := ipNet.Mask.Size()
-	family := uint16(1) // IPv4
-	if ipNet.IP.To4() == nil {
+	var family uint16
+	var addr net.IP
+	if v4 := ipNet.IP.To4(); v4 != nil {
+		family = 1 // IPv4
+		addr = v4
+	} else {
 		family = 2 // IPv6
+		addr = ipNet.IP.To16()
 	}
 	ecs := &dns.EDNS0_SUBNET{
 		Code:          dns.EDNS0SUBNET,
 		Family:        family,
 		SourceNetmask: uint8(maskLen),
 		SourceScope:   0,
-		Address:       ipNet.IP,
+		Address:       addr,
 	}
 	SetEdns0Option(msg, ecs)
 	return nil

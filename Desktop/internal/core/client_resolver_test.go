@@ -88,4 +88,41 @@ func TestClientResolver_Identification(t *testing.T) {
 	if name != "Office-Printer" {
 		t.Fatalf("expected alias override Office-Printer, got %s", name)
 	}
+
+	// 7. 测试双栈 IPv4-mapped IPv6 别名识别
+	nameV4Mapped := resolver.IdentifyClient(net.ParseIP("::ffff:192.168.1.100"))
+	if nameV4Mapped != "Boss-iPhone" {
+		t.Fatalf("expected Boss-iPhone for IPv4-mapped IPv6, got %s", nameV4Mapped)
+	}
+}
+
+func TestClientResolver_ConcurrencyAndBounds(t *testing.T) {
+	cfg := ClientConfig{
+		Enabled:    true,
+		EnableRDNS: true,
+		CacheTTL:   time.Minute,
+	}
+	resolver := NewClientResolver(cfg)
+	resolver.lookupAddr = func(ctx context.Context, addr string) ([]string, error) {
+		time.Sleep(10 * time.Millisecond)
+		return []string{"host-" + addr + ".lan."}, nil
+	}
+
+	// 并发高频查询不同 IP，验证信号量防并发风暴
+	done := make(chan bool)
+	for i := 0; i < 50; i++ {
+		go func(idx int) {
+			ip := net.ParseIP("10.0.0." + string(rune('0'+(idx%10))))
+			_ = resolver.IdentifyClient(ip)
+			done <- true
+		}(i)
+	}
+	for i := 0; i < 50; i++ {
+		<-done
+	}
+
+	clients := resolver.GetClients()
+	if len(clients) == 0 {
+		t.Fatalf("expected recorded clients")
+	}
 }

@@ -50,19 +50,26 @@ type ReverseLookuper interface {
 	LookupReverse(ip net.IP) string
 }
 
+const (
+	maxConcurrentRDNS = 16
+	maxClientStats    = 4096
+	maxClientCache    = 4096
+)
+
 // ClientResolver 客户端主机名识别与活动跟踪器
 // 深度借鉴自 Blocky (client_names_resolver.go) 与 AdGuard Home (internal/rdns)
 type ClientResolver struct {
-	mu          sync.RWMutex
-	enabled     bool
-	enableRDNS  bool
-	cacheTTL    time.Duration
-	aliases     map[string]string          // ipStr -> name
-	cache       map[string]cachedNameEntry // ipStr -> cache
-	stats       map[string]*ClientInfo     // ipStr -> info
-	inFlight    map[string]bool            // 防止对同一未命中 IP 发起并发重复 rDNS 查找
-	lookupers   []ReverseLookuper
-	lookupAddr  func(ctx context.Context, addr string) ([]string, error) // 可插拔底层反向解析函数
+	mu         sync.RWMutex
+	enabled    bool
+	enableRDNS bool
+	cacheTTL   time.Duration
+	aliases    map[string]string          // ipStr -> name
+	cache      map[string]cachedNameEntry // ipStr -> cache
+	stats      map[string]*ClientInfo     // ipStr -> info
+	inFlight   map[string]bool            // 防止对同一未命中 IP 发起并发重复 rDNS 查找
+	sem        chan struct{}              // 限制并发后台 rDNS 数量，抵御高并发探测与资源耗尽
+	lookupers  []ReverseLookuper
+	lookupAddr func(ctx context.Context, addr string) ([]string, error) // 可插拔底层反向解析函数
 }
 
 // NewClientResolver 创建客户端主机名识别器
@@ -79,6 +86,7 @@ func NewClientResolver(cfg ClientConfig, lookupers ...ReverseLookuper) *ClientRe
 		cache:      make(map[string]cachedNameEntry),
 		stats:      make(map[string]*ClientInfo),
 		inFlight:   make(map[string]bool),
+		sem:        make(chan struct{}, maxConcurrentRDNS),
 		lookupers:  lookupers,
 		lookupAddr: func(ctx context.Context, addr string) ([]string, error) {
 			var resolver net.Resolver
@@ -89,6 +97,11 @@ func NewClientResolver(cfg ClientConfig, lookupers ...ReverseLookuper) *ClientRe
 		ip := strings.TrimSpace(alias.IP)
 		name := strings.TrimSpace(alias.Name)
 		if ip != "" && name != "" {
+			if parsed := net.ParseIP(ip); parsed != nil {
+				if v4 := parsed.To4(); v4 != nil {
+					ip = v4.String()
+				}
+			}
 			r.aliases[ip] = name
 		}
 	}
@@ -100,12 +113,24 @@ func (r *ClientResolver) IdentifyClient(ip net.IP) string {
 	if ip == nil {
 		return ""
 	}
+	if v4 := ip.To4(); v4 != nil {
+		ip = v4
+	}
 	ipStr := ip.String()
 
 	// 1. 记录或累加请求指标
 	r.mu.Lock()
 	info, exists := r.stats[ipStr]
 	if !exists {
+		// 内存容量淘汰保护
+		if len(r.stats) >= maxClientStats {
+			for k := range r.stats {
+				if _, hasAlias := r.aliases[k]; !hasAlias {
+					delete(r.stats, k)
+					break
+				}
+			}
+		}
 		info = &ClientInfo{
 			IP:       ipStr,
 			LastSeen: time.Now().Unix(),
@@ -157,13 +182,21 @@ func (r *ClientResolver) IdentifyClient(ip net.IP) string {
 		return entry.name
 	}
 
-	// 6. 若启用了 rDNS 且当前未在查找中，启动异步后台解析（不阻塞 DNS 实时热路径）
+	// 6. 若启用了 rDNS 且当前未在查找中，带并发限制启动异步后台解析
 	if r.enableRDNS {
 		r.mu.Lock()
 		inProgress := r.inFlight[ipStr]
 		if !inProgress {
-			r.inFlight[ipStr] = true
-			go r.asyncResolveRDNS(ipStr)
+			select {
+			case r.sem <- struct{}{}:
+				r.inFlight[ipStr] = true
+				go func(targetIP string) {
+					defer func() { <-r.sem }()
+					r.asyncResolveRDNS(targetIP)
+				}(ipStr)
+			default:
+				// 并发已达上限，跳过本次解析以保护系统
+			}
 		}
 		r.mu.Unlock()
 	}
@@ -192,10 +225,33 @@ func (r *ClientResolver) asyncResolveRDNS(ipStr string) {
 		resolvedName = strings.TrimSuffix(names[0], ".")
 	}
 
+	ttl := r.cacheTTL
+	if resolvedName == "" {
+		// 负缓存（反查失败）采用较短过期时间，以便网络恢复后重新发现
+		if ttl > 5*time.Minute {
+			ttl = 5 * time.Minute
+		}
+	}
+
 	r.mu.Lock()
+	if len(r.cache) >= maxClientCache {
+		now := time.Now()
+		for k, v := range r.cache {
+			if v.expiresAt.Before(now) {
+				delete(r.cache, k)
+				break
+			}
+		}
+		if len(r.cache) >= maxClientCache {
+			for k := range r.cache {
+				delete(r.cache, k)
+				break
+			}
+		}
+	}
 	r.cache[ipStr] = cachedNameEntry{
 		name:      resolvedName,
-		expiresAt: time.Now().Add(r.cacheTTL),
+		expiresAt: time.Now().Add(ttl),
 	}
 	if resolvedName != "" {
 		if info, ok := r.stats[ipStr]; ok {
@@ -219,6 +275,11 @@ func (r *ClientResolver) SetAlias(ip, name string) {
 	nameStr := strings.TrimSpace(name)
 	if ipStr == "" {
 		return
+	}
+	if parsed := net.ParseIP(ipStr); parsed != nil {
+		if v4 := parsed.To4(); v4 != nil {
+			ipStr = v4.String()
+		}
 	}
 
 	r.mu.Lock()
@@ -279,6 +340,11 @@ func (r *ClientResolver) Configure(cfg ClientConfig) {
 		ip := strings.TrimSpace(alias.IP)
 		name := strings.TrimSpace(alias.Name)
 		if ip != "" && name != "" {
+			if parsed := net.ParseIP(ip); parsed != nil {
+				if v4 := parsed.To4(); v4 != nil {
+					ip = v4.String()
+				}
+			}
 			r.aliases[ip] = name
 		}
 	}

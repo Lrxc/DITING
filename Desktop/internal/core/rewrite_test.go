@@ -111,6 +111,90 @@ func TestRewriteEngine_ExactAndWildcard(t *testing.T) {
 	if !ok || ptrRecord.Ptr != "nas.lan." {
 		t.Fatalf("unexpected PTR target: %v", ptrAns[0])
 	}
+
+	// 8. 测试 IPv4-mapped IPv6 反向反查
+	revName := engine.LookupReverse(net.ParseIP("::ffff:192.168.1.100"))
+	if revName != "nas.lan" {
+		t.Fatalf("expected nas.lan for IPv4-mapped IPv6, got %s", revName)
+	}
+}
+
+func TestRewriteEngine_CNAMEChainingAndLoops(t *testing.T) {
+	cfg := RewriteConfig{
+		Enabled: true,
+		Rules: []RewriteRule{
+			{Domain: "alias1.lan", CNAME: "alias2.lan"},
+			{Domain: "alias2.lan", CNAME: "target.lan"},
+			{Domain: "target.lan", IPs: []string{"192.168.8.8"}},
+			// 循环测试规则
+			{Domain: "loop1.lan", CNAME: "loop2.lan"},
+			{Domain: "loop2.lan", CNAME: "loop1.lan"},
+		},
+	}
+	engine := NewRewriteEngine(cfg)
+
+	// 1. 测试深度链式解析：alias1.lan -> alias2.lan -> target.lan -> 192.168.8.8
+	ans, matched := engine.Lookup("alias1.lan", dns.TypeA)
+	if !matched || len(ans) != 3 {
+		t.Fatalf("expected 3 answers (2 CNAMEs + 1 A), got len=%d matched=%v", len(ans), matched)
+	}
+	cname1 := ans[0].(*dns.CNAME)
+	cname2 := ans[1].(*dns.CNAME)
+	aRec := ans[2].(*dns.A)
+	if cname1.Target != "alias2.lan." || cname2.Target != "target.lan." || !aRec.A.Equal(net.ParseIP("192.168.8.8")) {
+		t.Fatalf("unexpected chained answers: %v", ans)
+	}
+
+	// 2. 测试循环 CNAME 保护：loop1.lan -> loop2.lan -> loop1.lan 不死循环
+	loopAns, loopMatched := engine.Lookup("loop1.lan", dns.TypeA)
+	if !loopMatched || len(loopAns) < 1 {
+		t.Fatalf("expected graceful loop termination, got %v", loopAns)
+	}
+}
+
+func TestRewriteEngine_WildcardLongestSuffix(t *testing.T) {
+	// 无论添加顺序如何，长后缀规则必须优先匹配
+	cfg := RewriteConfig{
+		Enabled: true,
+		Rules: []RewriteRule{
+			{Domain: "*.lan", IPs: []string{"10.0.0.1"}},
+			{Domain: "*.corp.lan", IPs: []string{"10.0.0.2"}},
+			{Domain: "*.deep.sub.corp.lan", IPs: []string{"10.0.0.3"}},
+		},
+	}
+	engine := NewRewriteEngine(cfg)
+
+	ans, _ := engine.Lookup("my.deep.sub.corp.lan", dns.TypeA)
+	if len(ans) != 1 || !ans[0].(*dns.A).A.Equal(net.ParseIP("10.0.0.3")) {
+		t.Fatalf("expected 10.0.0.3 for deepest wildcard, got %v", ans)
+	}
+
+	ans, _ = engine.Lookup("my.corp.lan", dns.TypeA)
+	if len(ans) != 1 || !ans[0].(*dns.A).A.Equal(net.ParseIP("10.0.0.2")) {
+		t.Fatalf("expected 10.0.0.2 for corp.lan wildcard, got %v", ans)
+	}
+
+	ans, _ = engine.Lookup("my.lan", dns.TypeA)
+	if len(ans) != 1 || !ans[0].(*dns.A).A.Equal(net.ParseIP("10.0.0.1")) {
+		t.Fatalf("expected 10.0.0.1 for .lan wildcard, got %v", ans)
+	}
+}
+
+func TestRewriteEngine_MultiAliasPTR(t *testing.T) {
+	cfg := RewriteConfig{
+		Enabled: true,
+		Rules: []RewriteRule{
+			{Domain: "nas.lan", IPs: []string{"192.168.1.50"}},
+			{Domain: "storage.lan", IPs: []string{"192.168.1.50"}},
+		},
+	}
+	engine := NewRewriteEngine(cfg)
+
+	ptrQuery, _ := dns.ReverseAddr("192.168.1.50")
+	ans, matched := engine.LookupPTR(ptrQuery)
+	if !matched || len(ans) != 2 {
+		t.Fatalf("expected 2 PTR records for shared IP, got len=%d matched=%v", len(ans), matched)
+	}
 }
 
 func TestRewriteEngine_DynamicRules(t *testing.T) {
