@@ -163,6 +163,14 @@ func (m *mockController) ConfigureECS(ctx context.Context, req ConfigureECSReque
 	return nil
 }
 
+func (m *mockController) ConfigureRebind(ctx context.Context, req ConfigureRebindRequest) error {
+	return nil
+}
+
+func (m *mockController) ConfigureHosts(ctx context.Context, req ConfigureHostsRequest) error {
+	return nil
+}
+
 func TestIPC_WebAndAuthEndpoints(t *testing.T) {
 	mockCtrl := &mockController{}
 	token := "ipc-secret-token"

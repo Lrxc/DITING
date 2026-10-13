@@ -4,6 +4,7 @@ import { ipc } from '../../api/ipc';
 import type { StatusResponse, ECSConfig, RebindConfig, HostsConfig } from '../../api/types';
 import M3Icon from '../M3Icon.vue';
 import AppCard from '../ui/AppCard.vue';
+import AppModal from '../AppModal.vue';
 import StatusBadge from '../StatusBadge.vue';
 import ToastBanner from '../ToastBanner.vue';
 import { extractSwitchValue } from '../../utils/switch';
@@ -14,6 +15,7 @@ const loading = ref(false);
 const saving = ref(false);
 
 // 协议增强与隐私状态
+const enableEDE = ref(true);
 const blockPrivatePTR = ref(true);
 const blockUnqualified = ref(false);
 const blockECH = ref(false);
@@ -27,11 +29,14 @@ const ecsConfig = ref<ECSConfig>({
   customSubnet: '',
 });
 
-// Rebind 与 Hosts 状态展示
+// Rebind 与 Hosts 状态展示与配置
 const rebindConfig = ref<RebindConfig>({
   enabled: true,
   allowedDomains: [],
 });
+const isRebindModalOpen = ref(false);
+const rebindDomainsText = ref('');
+
 const hostsConfig = ref<HostsConfig>({
   enabled: true,
   useSystemHost: true,
@@ -47,6 +52,7 @@ async function loadData() {
     const st = await ipc.getStatus();
     if (st) {
       status.value = st;
+      enableEDE.value = st.dns?.enableEDE ?? true;
       blockPrivatePTR.value = st.dns?.blockPrivatePTR ?? true;
       blockUnqualified.value = st.dns?.blockUnqualified ?? false;
       blockECH.value = st.dns?.blockECH ?? false;
@@ -68,6 +74,12 @@ async function loadData() {
   } finally {
     loading.value = false;
   }
+}
+
+async function handleToggleEDE(e: Event) {
+  const nextVal = extractSwitchValue(e);
+  enableEDE.value = nextVal;
+  await savePrivacyConfig();
 }
 
 async function handleTogglePrivatePTR(e: Event) {
@@ -96,6 +108,7 @@ async function savePrivacyConfig() {
   saving.value = true;
   try {
     await ipc.configurePrivacy({
+      enableEDE: enableEDE.value,
       blockPrivatePTR: blockPrivatePTR.value,
       blockIPv6: blockIPv6.value,
       blockECH: blockECH.value,
@@ -153,6 +166,71 @@ async function saveECSConfig() {
   }
 }
 
+function openRebindModal() {
+  rebindDomainsText.value = (rebindConfig.value.allowedDomains || []).join('\n');
+  isRebindModalOpen.value = true;
+}
+
+async function handleToggleRebind(e: Event) {
+  const nextVal = extractSwitchValue(e);
+  rebindConfig.value.enabled = nextVal;
+  await saveRebindConfig();
+}
+
+async function saveRebindDomains() {
+  const list = rebindDomainsText.value
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  rebindConfig.value.allowedDomains = list;
+  await saveRebindConfig();
+  isRebindModalOpen.value = false;
+}
+
+async function saveRebindConfig() {
+  saving.value = true;
+  try {
+    await ipc.configureRebind({
+      enabled: rebindConfig.value.enabled,
+      allowedDomains: rebindConfig.value.allowedDomains,
+    });
+    showToast(`DNS Rebinding 防御配置已成功保存 (状态: ${rebindConfig.value.enabled ? '已开启' : '已关闭'})`);
+  } catch (err: any) {
+    showToast(err.message || '更新 Rebind 配置失败', true);
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function handleToggleHosts(e: Event) {
+  const nextVal = extractSwitchValue(e);
+  hostsConfig.value.enabled = nextVal;
+  await saveHostsConfig();
+}
+
+async function handleToggleSystemHost(e: Event) {
+  const nextVal = (e.target as HTMLInputElement).checked;
+  hostsConfig.value.useSystemHost = nextVal;
+  await saveHostsConfig();
+}
+
+async function saveHostsConfig() {
+  saving.value = true;
+  try {
+    await ipc.configureHosts({
+      enabled: hostsConfig.value.enabled,
+      useSystemHost: hostsConfig.value.useSystemHost,
+      customFiles: hostsConfig.value.customFiles,
+      ttl: hostsConfig.value.ttl,
+    });
+    showToast(`本地 Hosts 解析配置已更新 (状态: ${hostsConfig.value.enabled ? '已开启' : '已关闭'})`);
+  } catch (err: any) {
+    showToast(err.message || '更新 Hosts 配置失败', true);
+  } finally {
+    saving.value = false;
+  }
+}
+
 onMounted(() => {
   loadData();
 });
@@ -171,6 +249,24 @@ onMounted(() => {
         icon="shield"
       >
         <div class="space-y-4 mt-3 text-xs">
+          <!-- EDE 错误诊断扩展 -->
+          <div class="app-card-sub p-3 space-y-2">
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="font-bold text-text-main text-[13px]">Extended DNS Errors (EDE 错误诊断扩展)</span>
+                <span class="text-[10px] text-text-muted ml-2 font-mono">RFC 8914</span>
+              </div>
+              <md-switch
+                :selected="enableEDE"
+                :disabled="saving"
+                @change="handleToggleEDE"
+              />
+            </div>
+            <p class="text-[11px] text-text-sub leading-relaxed">
+              向支持的客户端在 OPT 报文中透明返回 RFC 8914 扩展错误代码与原因说明（如策略阻断、速率超限、Rebind 拦截或上游解析故障），便于网络诊断排错。
+            </p>
+          </div>
+
           <!-- 私有 PTR 防泄露 -->
           <div class="app-card-sub p-3 space-y-2">
             <div class="flex items-center justify-between">
@@ -261,6 +357,7 @@ onMounted(() => {
               <option :value="128">128 字节 (推荐)</option>
               <option :value="256">256 字节</option>
               <option :value="468">468 字节 (RFC 推荐)</option>
+              <option v-if="![0, 128, 256, 468].includes(ednsPadding)" :value="ednsPadding">{{ ednsPadding }} 字节</option>
             </select>
           </div>
         </div>
@@ -341,42 +438,106 @@ onMounted(() => {
             </button>
           </div>
 
-          <!-- 核心防护状态磁贴 (Rebinding & Hosts) -->
+          <!-- 核心防护状态与配置 (Rebinding & Hosts) -->
           <div class="pt-2 border-t border-surface-border-sub space-y-3">
-            <span class="text-[11px] font-bold text-text-muted block">内置安全防御模块运行状态</span>
+            <span class="text-[11px] font-bold text-text-muted block">内置安全防御模块配置与运行状态</span>
 
-            <div class="grid grid-cols-2 gap-2.5">
-              <div class="app-card-sub p-2.5 space-y-1">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <!-- Rebinding 防御 -->
+              <div class="app-card-sub p-3 space-y-2">
                 <div class="flex items-center justify-between">
-                  <span class="font-semibold text-text-main text-[12px]">DNS 重绑定防御</span>
-                  <span
-                    class="px-1.5 py-0.2 rounded text-[10px] font-semibold"
-                    :class="rebindConfig.enabled ? 'bg-status-success-bg text-status-success' : 'bg-status-warning-bg text-status-warning'"
-                  >
-                    {{ rebindConfig.enabled ? '生效中' : '未开启' }}
-                  </span>
+                  <div class="min-w-0">
+                    <span class="font-semibold text-text-main text-[12px] block">DNS 重绑定防御</span>
+                    <span class="text-[10px] text-text-muted">阻断外网域名解析为私有 IP</span>
+                  </div>
+                  <md-switch
+                    :selected="rebindConfig.enabled"
+                    :disabled="saving"
+                    @change="handleToggleRebind"
+                  />
                 </div>
-                <p class="text-[10px] text-text-muted">阻断外网域名解析为局域网私有 IP，防御内网穿透攻击</p>
+                <div class="flex items-center justify-between pt-1 border-t border-surface-border-sub/60">
+                  <span class="text-[10px] font-mono text-text-muted">
+                    {{ (rebindConfig.allowedDomains || []).length }} 个白名单域名
+                  </span>
+                  <button
+                    type="button"
+                    @click="openRebindModal"
+                    :disabled="saving"
+                    class="text-[11px] text-accent-seal hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <M3Icon name="settings" :size="12" />
+                    <span>白名单设置</span>
+                  </button>
+                </div>
               </div>
 
-              <div class="app-card-sub p-2.5 space-y-1">
+              <!-- Hosts 本地解析 -->
+              <div class="app-card-sub p-3 space-y-2">
                 <div class="flex items-center justify-between">
-                  <span class="font-semibold text-text-main text-[12px]">本地 Hosts 解析器</span>
-                  <span
-                    class="px-1.5 py-0.2 rounded text-[10px] font-semibold"
-                    :class="hostsConfig.enabled ? 'bg-status-success-bg text-status-success' : 'bg-status-warning-bg text-status-warning'"
-                  >
-                    {{ hostsConfig.enabled ? '权威应答中' : '未开启' }}
+                  <div class="min-w-0">
+                    <span class="font-semibold text-text-main text-[12px] block">本地 Hosts 解析器</span>
+                    <span class="text-[10px] text-text-muted">系统与自定义映射优先应答</span>
+                  </div>
+                  <md-switch
+                    :selected="hostsConfig.enabled"
+                    :disabled="saving"
+                    @change="handleToggleHosts"
+                  />
+                </div>
+                <div class="flex items-center justify-between pt-1 border-t border-surface-border-sub/60">
+                  <label class="flex items-center gap-1.5 cursor-pointer text-[10px] text-text-sub">
+                    <input
+                      type="checkbox"
+                      :checked="hostsConfig.useSystemHost"
+                      :disabled="saving || !hostsConfig.enabled"
+                      @change="handleToggleSystemHost"
+                      class="rounded text-accent-seal focus:ring-0"
+                    />
+                    <span>联动系统 hosts</span>
+                  </label>
+                  <span class="text-[10px] font-mono text-text-muted">
+                    TTL: {{ hostsConfig.ttl || 60 }}s
                   </span>
                 </div>
-                <p class="text-[10px] text-text-muted">
-                  {{ hostsConfig.useSystemHost ? '已自动联动操作系统系统级 hosts 映射' : '仅使用自定义映射文件' }}
-                </p>
               </div>
             </div>
           </div>
         </div>
       </AppCard>
     </div>
+
+    <!-- 弹窗：编辑 Rebinding 白名单域名 -->
+    <AppModal
+      :open="isRebindModalOpen"
+      title="DNS 重绑定防御白名单域名"
+      @close="isRebindModalOpen = false"
+    >
+      <div class="space-y-3 text-xs">
+        <p class="text-[11px] text-text-sub leading-relaxed">
+          名单内的域名允许解析为局域网私有 IP（如 <code class="font-mono">192.168.x.x</code>、<code class="font-mono">10.x.x.x</code>、<code class="font-mono">127.0.0.1</code>）。支持后缀通配（如 <code class="font-mono">.lan</code>、<code class="font-mono">.local</code>）。每行一个。
+        </p>
+        <div>
+          <label class="font-semibold text-text-main block mb-1">允许的白名单域名</label>
+          <textarea
+            v-model="rebindDomainsText"
+            rows="6"
+            placeholder="localhost&#10;.local&#10;.lan&#10;.home.arpa&#10;router.lan"
+            class="w-full rounded-md border border-surface-border bg-surface-card-sub p-2.5 font-mono text-xs text-text-main focus:outline-none focus:border-accent-seal"
+          ></textarea>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="flex items-center justify-end gap-2 w-full">
+          <button type="button" @click="isRebindModalOpen = false" class="app-btn-secondary">
+            取消
+          </button>
+          <button type="button" @click="saveRebindDomains" :disabled="saving" class="app-btn-primary">
+            保存白名单
+          </button>
+        </div>
+      </template>
+    </AppModal>
   </div>
 </template>

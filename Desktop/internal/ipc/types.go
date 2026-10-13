@@ -37,6 +37,7 @@ type DNSStatus struct {
 	Upstreams         []UpstreamInfo       `json:"upstreams"`
 	Bootstrap         core.BootstrapConfig `json:"bootstrap"`
 	ConditionalRoutes map[string]string    `json:"conditionalRoutes,omitempty"`
+	EnableEDE         bool                 `json:"enableEDE"`
 	BlockUnqualified  bool                 `json:"blockUnqualified"`
 	BlockPrivatePTR   bool                 `json:"blockPrivatePTR"`
 	BlockIPv6         bool                 `json:"blockIPv6"`
@@ -304,10 +305,25 @@ type ConfigureClientAliasRequest struct {
 
 // ConfigurePrivacyRequest 隐私保护与协议增强策略配置请求
 type ConfigurePrivacyRequest struct {
+	EnableEDE        *bool `json:"enableEDE,omitempty"`
 	BlockPrivatePTR *bool `json:"blockPrivatePTR,omitempty"`
 	BlockIPv6       *bool `json:"blockIPv6,omitempty"`
 	BlockECH        *bool `json:"blockECH,omitempty"`
 	EDNSPadding     *int  `json:"ednsPadding,omitempty"`
+}
+
+// ConfigureRebindRequest DNS Rebinding 攻击防御配置请求
+type ConfigureRebindRequest struct {
+	Enabled        *bool    `json:"enabled,omitempty"`
+	AllowedDomains []string `json:"allowedDomains,omitempty"`
+}
+
+// ConfigureHostsRequest 本地 Hosts 解析器配置请求
+type ConfigureHostsRequest struct {
+	Enabled       *bool    `json:"enabled,omitempty"`
+	UseSystemHost *bool    `json:"useSystemHost,omitempty"`
+	CustomFiles   []string `json:"customFiles,omitempty"`
+	TTL           *uint32  `json:"ttl,omitempty"`
 }
 
 

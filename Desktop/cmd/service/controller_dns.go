@@ -130,7 +130,11 @@ func (p *program) StartDNS(ctx context.Context) error {
 	clientMw := ditingdns.NewClientMiddleware(p.clientResolver)
 	accessMw := ditingdns.NewAccessMiddleware(p.accessControl)
 	rateLimitMw := ditingdns.NewRateLimitMiddleware(p.rateLimiter)
-	edeMw := ditingdns.NewEDEMiddleware(p.cfg.DNS.EnableEDE)
+	edeMw := ditingdns.NewEDEMiddleware(func() bool {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		return p.cfg.DNS.EnableEDE
+	})
 	echMw := ditingdns.NewECHMiddleware(func() bool {
 		p.mu.Lock()
 		defer p.mu.Unlock()
@@ -322,6 +326,7 @@ func (p *program) GetStatus(ctx context.Context) (*ipc.StatusResponse, error) {
 			Upstreams:         upstreams,
 			Bootstrap:         p.cfg.Upstream.Bootstrap,
 			ConditionalRoutes: p.cfg.Upstream.ConditionalRoutes,
+			EnableEDE:         p.cfg.DNS.EnableEDE,
 			BlockUnqualified:  p.cfg.DNS.BlockUnqualified,
 			BlockPrivatePTR:   p.cfg.DNS.BlockPrivatePTR,
 			BlockIPv6:         p.cfg.DNS.BlockIPv6,

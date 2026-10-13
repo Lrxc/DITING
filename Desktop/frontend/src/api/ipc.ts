@@ -102,6 +102,8 @@ class IPCService {
   public configureBlockUnqualified = (req: Parameters<SecurityApi['configureBlockUnqualified']>[0]) => this.security.configureBlockUnqualified(req);
   public configurePrivacy = (req: Parameters<SecurityApi['configurePrivacy']>[0]) => this.security.configurePrivacy(req);
   public configureECS = (req: Parameters<SecurityApi['configureECS']>[0]) => this.security.configureECS(req);
+  public configureRebind = (req: Parameters<SecurityApi['configureRebind']>[0]) => this.security.configureRebind(req);
+  public configureHosts = (req: Parameters<SecurityApi['configureHosts']>[0]) => this.security.configureHosts(req);
 
   // --- 局域网 DNS ---
   public getLANStatus = () => this.network.getLANStatus();

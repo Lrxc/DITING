@@ -16,6 +16,10 @@ type securityMockController struct {
 	unqualifiedCalled bool
 	privacyCalled     bool
 	lastPrivacyReq    ConfigurePrivacyRequest
+	rebindCalled      bool
+	lastRebindReq     ConfigureRebindRequest
+	hostsCalled       bool
+	lastHostsReq      ConfigureHostsRequest
 }
 
 func (m *securityMockController) ConfigureAccess(ctx context.Context, req ConfigureAccessRequest) error {
@@ -41,6 +45,18 @@ func (m *securityMockController) ConfigureBlockUnqualified(ctx context.Context, 
 func (m *securityMockController) ConfigurePrivacy(ctx context.Context, req ConfigurePrivacyRequest) error {
 	m.privacyCalled = true
 	m.lastPrivacyReq = req
+	return nil
+}
+
+func (m *securityMockController) ConfigureRebind(ctx context.Context, req ConfigureRebindRequest) error {
+	m.rebindCalled = true
+	m.lastRebindReq = req
+	return nil
+}
+
+func (m *securityMockController) ConfigureHosts(ctx context.Context, req ConfigureHostsRequest) error {
+	m.hostsCalled = true
+	m.lastHostsReq = req
 	return nil
 }
 
@@ -125,5 +141,48 @@ func TestServer_SecurityAndPrivacyEndpoints(t *testing.T) {
 	}
 	if !mockCtrl.unqualifiedCalled {
 		t.Fatal("expected ConfigureBlockUnqualified to be called")
+	}
+
+	// 4. POST /api/v1/dns/rebind/configure
+	rebindPayload := ConfigureRebindRequest{
+		Enabled:        &bTrue,
+		AllowedDomains: []string{"localhost", ".lan", "nas.local"},
+	}
+	rebindBody, _ := json.Marshal(rebindPayload)
+	reqRebind, _ := http.NewRequest(http.MethodPost, baseURL+"/api/v1/dns/rebind/configure", bytes.NewReader(rebindBody))
+	reqRebind.Header.Set("Authorization", "Bearer "+token)
+	respRebind, err := http.DefaultClient.Do(reqRebind)
+	if err != nil {
+		t.Fatalf("POST rebind failed: %v", err)
+	}
+	defer respRebind.Body.Close()
+	if respRebind.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200 for rebind, got %d", respRebind.StatusCode)
+	}
+	if !mockCtrl.rebindCalled {
+		t.Fatal("expected ConfigureRebind to be called")
+	}
+	if len(mockCtrl.lastRebindReq.AllowedDomains) != 3 {
+		t.Fatalf("expected 3 allowed domains, got %v", mockCtrl.lastRebindReq.AllowedDomains)
+	}
+
+	// 5. POST /api/v1/dns/hosts/configure
+	hostsPayload := ConfigureHostsRequest{
+		Enabled:       &bTrue,
+		UseSystemHost: &bTrue,
+	}
+	hostsBody, _ := json.Marshal(hostsPayload)
+	reqHosts, _ := http.NewRequest(http.MethodPost, baseURL+"/api/v1/dns/hosts/configure", bytes.NewReader(hostsBody))
+	reqHosts.Header.Set("Authorization", "Bearer "+token)
+	respHosts, err := http.DefaultClient.Do(reqHosts)
+	if err != nil {
+		t.Fatalf("POST hosts failed: %v", err)
+	}
+	defer respHosts.Body.Close()
+	if respHosts.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200 for hosts, got %d", respHosts.StatusCode)
+	}
+	if !mockCtrl.hostsCalled {
+		t.Fatal("expected ConfigureHosts to be called")
 	}
 }

@@ -69,5 +69,7 @@ type ServiceController interface {
 	ConfigureClientAlias(ctx context.Context, req ConfigureClientAliasRequest) error
 	ConfigureECS(ctx context.Context, req ConfigureECSRequest) error
 	ConfigurePrivacy(ctx context.Context, req ConfigurePrivacyRequest) error
+	ConfigureRebind(ctx context.Context, req ConfigureRebindRequest) error
+	ConfigureHosts(ctx context.Context, req ConfigureHostsRequest) error
 }
 

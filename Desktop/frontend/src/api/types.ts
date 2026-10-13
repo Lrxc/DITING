@@ -43,6 +43,7 @@ export interface DNSStatus {
   upstreams: UpstreamInfo[];
   bootstrap?: BootstrapConfig;
   conditionalRoutes?: Record<string, string>;
+  enableEDE?: boolean;
   blockUnqualified?: boolean;
   blockPrivatePTR?: boolean;
   blockIPv6?: boolean;
@@ -439,6 +440,7 @@ export interface ConfigureBlockUnqualifiedRequest {
 }
 
 export interface ConfigurePrivacyRequest {
+  enableEDE?: boolean;
   blockPrivatePTR?: boolean;
   blockIPv6?: boolean;
   blockECH?: boolean;
@@ -467,6 +469,18 @@ export interface HostsConfig {
 export interface RebindConfig {
   enabled: boolean;
   allowedDomains: string[];
+}
+
+export interface ConfigureRebindRequest {
+  enabled?: boolean;
+  allowedDomains?: string[];
+}
+
+export interface ConfigureHostsRequest {
+  enabled?: boolean;
+  useSystemHost?: boolean;
+  customFiles?: string[];
+  ttl?: number;
 }
 
 

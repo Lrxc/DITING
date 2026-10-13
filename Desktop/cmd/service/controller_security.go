@@ -106,6 +106,9 @@ func (p *program) ConfigurePrivacy(ctx context.Context, req ipc.ConfigurePrivacy
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	if req.EnableEDE != nil {
+		p.cfg.DNS.EnableEDE = *req.EnableEDE
+	}
 	if req.BlockPrivatePTR != nil {
 		p.cfg.DNS.BlockPrivatePTR = *req.BlockPrivatePTR
 	}
@@ -134,4 +137,59 @@ func (p *program) ConfigurePrivacy(ctx context.Context, req ipc.ConfigurePrivacy
 	}
 	return nil
 }
+
+// ConfigureRebind 实现 ServiceController 接口
+func (p *program) ConfigureRebind(ctx context.Context, req ipc.ConfigureRebindRequest) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if req.Enabled != nil {
+		p.cfg.Rebind.Enabled = *req.Enabled
+	}
+	if req.AllowedDomains != nil {
+		p.cfg.Rebind.AllowedDomains = req.AllowedDomains
+	}
+
+	if p.rebindMgr != nil {
+		p.rebindMgr.UpdateConfig(p.cfg.Rebind)
+	}
+
+	if p.configPath != "" {
+		if err := config.SaveConfig(p.configPath, p.cfg); err != nil {
+			log.Printf("[配置] 持久化 Rebind 配置失败: %v\n", err)
+		}
+	}
+	return nil
+}
+
+// ConfigureHosts 实现 ServiceController 接口
+func (p *program) ConfigureHosts(ctx context.Context, req ipc.ConfigureHostsRequest) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if req.Enabled != nil {
+		p.cfg.Hosts.Enabled = *req.Enabled
+	}
+	if req.UseSystemHost != nil {
+		p.cfg.Hosts.UseSystemHost = *req.UseSystemHost
+	}
+	if req.CustomFiles != nil {
+		p.cfg.Hosts.CustomFiles = req.CustomFiles
+	}
+	if req.TTL != nil && *req.TTL > 0 {
+		p.cfg.Hosts.TTL = *req.TTL
+	}
+
+	if p.hostsResolver != nil {
+		_ = p.hostsResolver.UpdateConfig(p.cfg.Hosts)
+	}
+
+	if p.configPath != "" {
+		if err := config.SaveConfig(p.configPath, p.cfg); err != nil {
+			log.Printf("[配置] 持久化 Hosts 配置失败: %v\n", err)
+		}
+	}
+	return nil
+}
+
 

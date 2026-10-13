@@ -8,11 +8,22 @@ import (
 
 // NewEDEMiddleware 创建遵循 RFC 8914 规范的 Extended DNS Errors (EDE) 响应增强中间件。
 // 借鉴自 blocky (ede_resolver.go) 与 AdGuard Home，为客户端提供详尽的标准 DNS 错误与拦截原因。
-func NewEDEMiddleware(enabled bool) Middleware {
+// 支持传入静态 bool 或动态 func() bool 查询函数以支持配置热重载。
+func NewEDEMiddleware(enabled any) Middleware {
+	var isEnabled func() bool
+	switch v := enabled.(type) {
+	case func() bool:
+		isEnabled = v
+	case bool:
+		isEnabled = func() bool { return v }
+	default:
+		isEnabled = func() bool { return true }
+	}
+
 	return func(ctx *DNSContext, next func() error) error {
 		err := next()
 		// RFC 8914 Section 3: 响应中不得包含 EDE 选项，除非客户端查询本身携带了 OPT pseudo-RR (EDNS0)
-		if !enabled || ctx.Resp == nil || ctx.Req == nil || ctx.Req.IsEdns0() == nil {
+		if !isEnabled() || ctx.Resp == nil || ctx.Req == nil || ctx.Req.IsEdns0() == nil {
 			return err
 		}
 

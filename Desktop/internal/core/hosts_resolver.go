@@ -51,6 +51,9 @@ func SystemHostsPath() string {
 // 借鉴自 blocky (hosts_file_resolver.go) 与 AdGuard Home
 type HostsResolver struct {
 	mu          sync.RWMutex
+	enabled     bool
+	useSystem   bool
+	customFiles []string
 	v4Map       map[string][]net.IP   // domain -> []IPv4
 	v6Map       map[string][]net.IP   // domain -> []IPv6
 	ptrMap      map[string][]string // ip.String() -> []hostname (支持多别名)
@@ -65,10 +68,13 @@ func NewHostsResolver(cfg HostsConfig) (*HostsResolver, error) {
 		ttl = DefaultHostsTTL
 	}
 	r := &HostsResolver{
-		v4Map:  make(map[string][]net.IP),
-		v6Map:  make(map[string][]net.IP),
-		ptrMap: make(map[string][]string),
-		ttl:    ttl,
+		enabled:     cfg.Enabled,
+		useSystem:   cfg.UseSystemHost,
+		customFiles: cfg.CustomFiles,
+		v4Map:       make(map[string][]net.IP),
+		v6Map:       make(map[string][]net.IP),
+		ptrMap:      make(map[string][]string),
+		ttl:         ttl,
 	}
 
 	if cfg.Enabled {
@@ -81,6 +87,39 @@ func NewHostsResolver(cfg HostsConfig) (*HostsResolver, error) {
 		}
 	}
 	return r, nil
+}
+
+// IsEnabled 获取 Hosts 解析器当前是否启用
+func (r *HostsResolver) IsEnabled() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.enabled
+}
+
+// UpdateConfig 动态更新配置并热重载映射文件
+func (r *HostsResolver) UpdateConfig(cfg HostsConfig) error {
+	r.mu.Lock()
+	r.enabled = cfg.Enabled
+	r.useSystem = cfg.UseSystemHost
+	r.customFiles = cfg.CustomFiles
+	if cfg.TTL > 0 {
+		r.ttl = cfg.TTL
+	}
+	r.v4Map = make(map[string][]net.IP)
+	r.v6Map = make(map[string][]net.IP)
+	r.ptrMap = make(map[string][]string)
+	r.loadedFiles = nil
+	r.mu.Unlock()
+
+	if cfg.Enabled {
+		if cfg.UseSystemHost {
+			_ = r.LoadFile(SystemHostsPath())
+		}
+		for _, f := range cfg.CustomFiles {
+			_ = r.LoadFile(f)
+		}
+	}
+	return nil
 }
 
 // Reload 重新加载所有已注册的 hosts 文件

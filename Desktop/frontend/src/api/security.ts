@@ -5,6 +5,8 @@ import type {
   ConfigureBlockUnqualifiedRequest,
   ConfigurePrivacyRequest,
   ConfigureECSRequest,
+  ConfigureRebindRequest,
+  ConfigureHostsRequest,
 } from './types';
 import type { HttpTransport } from './http';
 
@@ -55,6 +57,22 @@ export class SecurityApi {
   /** 配置 EDNS0 Client Subnet (ECS) 客户端子网隐私策略 */
   public async configureECS(req: ConfigureECSRequest): Promise<void> {
     await this.http.request<void>('/api/v1/dns/ecs/configure', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    });
+  }
+
+  /** 配置 DNS Rebinding 攻击防御与白名单 */
+  public async configureRebind(req: ConfigureRebindRequest): Promise<void> {
+    await this.http.request<void>('/api/v1/dns/rebind/configure', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    });
+  }
+
+  /** 配置系统与自定义 Hosts 本地解析 */
+  public async configureHosts(req: ConfigureHostsRequest): Promise<void> {
+    await this.http.request<void>('/api/v1/dns/hosts/configure', {
       method: 'POST',
       body: JSON.stringify(req),
     });

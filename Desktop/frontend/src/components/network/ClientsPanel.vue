@@ -122,6 +122,70 @@ async function saveAccessControl() {
   }
 }
 
+function isClientAllowed(ip: string): boolean {
+  return (accessConfig.value.allowedClients || []).includes(ip);
+}
+
+function isClientBlocked(ip: string): boolean {
+  return (accessConfig.value.blockedClients || []).includes(ip);
+}
+
+async function toggleClientAllowed(ip: string) {
+  const allowed = [...(accessConfig.value.allowedClients || [])];
+  const blocked = (accessConfig.value.blockedClients || []).filter((item) => item !== ip);
+  const idx = allowed.indexOf(ip);
+  if (idx >= 0) {
+    allowed.splice(idx, 1);
+  } else {
+    allowed.push(ip);
+  }
+
+  savingAccess.value = true;
+  try {
+    await ipc.configureAccess({
+      allowedClients: allowed,
+      blockedClients: blocked,
+    });
+    accessConfig.value.allowedClients = allowed;
+    accessConfig.value.blockedClients = blocked;
+    allowedText.value = allowed.join('\n');
+    blockedText.value = blocked.join('\n');
+    showToast(`客户端 [${ip}] 已${idx >= 0 ? '移出白名单' : '加入白名单'}`);
+  } catch (err: any) {
+    showToast(err.message || '更新客户端白名单失败', true);
+  } finally {
+    savingAccess.value = false;
+  }
+}
+
+async function toggleClientBlocked(ip: string) {
+  const blocked = [...(accessConfig.value.blockedClients || [])];
+  const allowed = (accessConfig.value.allowedClients || []).filter((item) => item !== ip);
+  const idx = blocked.indexOf(ip);
+  if (idx >= 0) {
+    blocked.splice(idx, 1);
+  } else {
+    blocked.push(ip);
+  }
+
+  savingAccess.value = true;
+  try {
+    await ipc.configureAccess({
+      allowedClients: allowed,
+      blockedClients: blocked,
+    });
+    accessConfig.value.allowedClients = allowed;
+    accessConfig.value.blockedClients = blocked;
+    allowedText.value = allowed.join('\n');
+    blockedText.value = blocked.join('\n');
+    showToast(`客户端 [${ip}] 已${idx >= 0 ? '移出黑名单' : '加入黑名单阻断'}`);
+  } catch (err: any) {
+    showToast(err.message || '更新客户端黑名单失败', true);
+  } finally {
+    savingAccess.value = false;
+  }
+}
+
 async function toggleRateLimitSwitch(e: Event) {
   const nextVal = extractSwitchValue(e);
   rateLimitConfig.value.enabled = nextVal;
@@ -194,6 +258,7 @@ onMounted(() => {
               <tr class="bg-surface-card-sub border-b border-surface-border text-text-muted">
                 <th class="py-2.5 px-3 font-semibold">客户端 IP</th>
                 <th class="py-2.5 px-3 font-semibold">友好名称 / 识别主机名</th>
+                <th class="py-2.5 px-3 font-semibold text-center">访问控制状态</th>
                 <th class="py-2.5 px-3 font-semibold text-center">累计查询次数</th>
                 <th class="py-2.5 px-3 font-semibold">最近活跃</th>
                 <th class="py-2.5 px-3 font-semibold text-right">操作</th>
@@ -216,6 +281,33 @@ onMounted(() => {
                     未设置（未知设备）
                   </span>
                 </td>
+                <td class="py-2 px-3 text-center">
+                  <span
+                    v-if="isClientBlocked(c.ip)"
+                    class="px-2 py-0.5 rounded text-[10px] font-semibold bg-state-error/15 text-state-error border border-state-error/30"
+                  >
+                    已阻断
+                  </span>
+                  <span
+                    v-else-if="isClientAllowed(c.ip)"
+                    class="px-2 py-0.5 rounded text-[10px] font-semibold bg-state-success/15 text-state-success border border-state-success/30"
+                  >
+                    白名单
+                  </span>
+                  <span
+                    v-else-if="(accessConfig.allowedClients || []).length > 0"
+                    class="px-2 py-0.5 rounded text-[10px] font-semibold bg-state-warning/15 text-state-warning border border-state-warning/30"
+                    title="白名单模式下未放行的客户端"
+                  >
+                    未在白名单
+                  </span>
+                  <span
+                    v-else
+                    class="text-text-muted text-[11px]"
+                  >
+                    正常放行
+                  </span>
+                </td>
                 <td class="py-2 px-3 font-mono text-center text-text-main tabular-nums">
                   {{ c.queryCount.toLocaleString() }}
                 </td>
@@ -223,14 +315,39 @@ onMounted(() => {
                   {{ formatTime(c.lastSeen) }}
                 </td>
                 <td class="py-2 px-3 text-right">
-                  <button
-                    type="button"
-                    @click="openAliasModal(c)"
-                    class="app-btn-secondary app-btn-compact !px-2.5"
-                  >
-                    <M3Icon name="edit" :size="12" />
-                    <span>设置别名</span>
-                  </button>
+                  <div class="flex items-center justify-end gap-1.5">
+                    <button
+                      type="button"
+                      @click="openAliasModal(c)"
+                      class="app-btn-secondary app-btn-compact !px-2"
+                      title="设置别名"
+                    >
+                      <M3Icon name="edit" :size="12" />
+                      <span>别名</span>
+                    </button>
+                    <button
+                      type="button"
+                      @click="toggleClientAllowed(c.ip)"
+                      :disabled="savingAccess"
+                      :class="isClientAllowed(c.ip) ? 'bg-state-success/15 text-state-success border border-state-success/30 hover:bg-state-success/25' : 'app-btn-secondary'"
+                      class="app-btn-compact !px-2"
+                      :title="isClientAllowed(c.ip) ? '移出白名单' : '加入白名单'"
+                    >
+                      <M3Icon name="check" :size="12" />
+                      <span>{{ isClientAllowed(c.ip) ? '已放行' : '白名单' }}</span>
+                    </button>
+                    <button
+                      type="button"
+                      @click="toggleClientBlocked(c.ip)"
+                      :disabled="savingAccess"
+                      :class="isClientBlocked(c.ip) ? 'bg-state-error/15 text-state-error border border-state-error/30 hover:bg-state-error/25' : 'app-btn-secondary'"
+                      class="app-btn-compact !px-2"
+                      :title="isClientBlocked(c.ip) ? '移出黑名单' : '加入阻断黑名单'"
+                    >
+                      <M3Icon name="block" :size="12" />
+                      <span>{{ isClientBlocked(c.ip) ? '已阻断' : '阻断' }}</span>
+                    </button>
+                  </div>
                 </td>
               </tr>
             </tbody>

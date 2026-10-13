@@ -32,6 +32,40 @@ func NewRebindProtectionManager(cfg RebindConfig) *RebindProtectionManager {
 	return m
 }
 
+// SetEnabled 设置是否开启 DNS Rebinding 防御
+func (m *RebindProtectionManager) SetEnabled(enabled bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.enabled = enabled
+}
+
+// IsEnabled 获取当前是否开启 DNS Rebinding 防御
+func (m *RebindProtectionManager) IsEnabled() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.enabled
+}
+
+// GetConfig 获取当前完整配置快照
+func (m *RebindProtectionManager) GetConfig() RebindConfig {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	domains := make([]string, len(m.allowedDomains))
+	copy(domains, m.allowedDomains)
+	return RebindConfig{
+		Enabled:        m.enabled,
+		AllowedDomains: domains,
+	}
+}
+
+// UpdateConfig 完整更新 DNS Rebinding 防御配置
+func (m *RebindProtectionManager) UpdateConfig(cfg RebindConfig) {
+	m.mu.Lock()
+	m.enabled = cfg.Enabled
+	m.mu.Unlock()
+	m.SetAllowedDomains(cfg.AllowedDomains)
+}
+
 // SetAllowedDomains 更新白名单域名
 func (m *RebindProtectionManager) SetAllowedDomains(domains []string) {
 	m.mu.Lock()
@@ -141,7 +175,7 @@ func NewRebindMiddleware(mgr *RebindProtectionManager, cache ...*core.DNSCache) 
 
 	return func(ctx *DNSContext, next func() error) error {
 		err := next()
-		if mgr == nil || !mgr.enabled || ctx.Resp == nil || ctx.Req == nil || len(ctx.Req.Question) == 0 {
+		if mgr == nil || !mgr.IsEnabled() || ctx.Resp == nil || ctx.Req == nil || len(ctx.Req.Question) == 0 {
 			return err
 		}
 
