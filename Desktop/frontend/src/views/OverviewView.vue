@@ -3,6 +3,9 @@ import PageHeader from '../components/ui/PageHeader.vue';
 import SegmentedTabs from '../components/ui/SegmentedTabs.vue';
 import OverviewPanel from '../components/overview/OverviewPanel.vue';
 import LiveQueryPanel from '../components/overview/LiveQueryPanel.vue';
+import QueryHistoryPanel from '../components/overview/QueryHistoryPanel.vue';
+import QueryStatsPanel from '../components/overview/QueryStatsPanel.vue';
+import QueryLogConfigCard from '../components/overview/QueryLogConfigCard.vue';
 import { SUB_TABS, type NavTab } from '../constants/navigation';
 import { useSubTab } from '../composables/useSubTab';
 
@@ -27,6 +30,11 @@ const active = useSubTab(segments, () => props.sub, 'status');
       v-if="active === 'status'"
       @navigate="emit('navigate', $event)"
     />
-    <LiveQueryPanel v-else />
+    <LiveQueryPanel v-else-if="active === 'queries'" />
+    <div v-else-if="active === 'history'" class="space-y-5">
+      <QueryHistoryPanel />
+      <QueryLogConfigCard />
+    </div>
+    <QueryStatsPanel v-else />
   </div>
 </template>

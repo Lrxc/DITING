@@ -56,6 +56,8 @@ export const SUB_TABS: Record<NavTab, readonly SubTabDef[]> = {
   overview: [
     { id: 'status', label: '状态总览' },
     { id: 'queries', label: '实时查询' },
+    { id: 'history', label: '查询历史' },
+    { id: 'stats', label: '统计中心' },
   ],
   network: [
     { id: 'adapters', label: '网卡接管' },

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/haoze-evolluling/diting/desktop/internal/core"
+	"github.com/haoze-evolluling/diting/desktop/internal/querylog"
 )
 
 // DNSConfig 本地 DNS 监听服务配置
@@ -186,6 +187,7 @@ type Config struct {
 	Rewrite   core.RewriteConfig       `json:"rewrite"`
 	Client    core.ClientConfig        `json:"client"`
 	ECS       core.ECSConfig           `json:"ecs"`
+	QueryLog  querylog.QueryLogConfig  `json:"querylog"`
 	Web       WebConfig                `json:"web"`
 }
 
@@ -238,6 +240,7 @@ func DefaultConfig() *Config {
 		Rewrite:   core.DefaultRewriteConfig(),
 		Client:    core.DefaultClientConfig(),
 		ECS:       core.DefaultECSConfig(),
+		QueryLog:  querylog.DefaultQueryLogConfig(),
 		Web: WebConfig{
 			Enabled:        true,
 			ListenPort:     15353,

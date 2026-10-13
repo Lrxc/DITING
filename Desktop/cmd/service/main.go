@@ -16,6 +16,7 @@ import (
 	ditingdns "github.com/haoze-evolluling/diting/desktop/internal/dns"
 	"github.com/haoze-evolluling/diting/desktop/internal/ipc"
 	"github.com/haoze-evolluling/diting/desktop/internal/platform"
+	"github.com/haoze-evolluling/diting/desktop/internal/querylog"
 	"github.com/kardianos/service"
 )
 
@@ -32,25 +33,26 @@ type program struct {
 	ipcAddr    string
 	token      string
 
-	cfg          *config.Config
-	server       *ditingdns.Server
-	resolver     *core.CoreResolver
-	cache         *core.DNSCache
-	filterEngine  *core.RuleEngine
-	hostsResolver *core.HostsResolver
-	rebindMgr     *ditingdns.RebindProtectionManager
-	accessControl *core.AccessControl
-	rateLimiter   *core.RateLimiter
-	dns64Synth    *core.DNS64Synthesizer
-	rewriteEngine *core.RewriteEngine
+	cfg            *config.Config
+	server         *ditingdns.Server
+	resolver       *core.CoreResolver
+	cache          *core.DNSCache
+	queryLog       *querylog.QueryLog
+	filterEngine   *core.RuleEngine
+	hostsResolver  *core.HostsResolver
+	rebindMgr      *ditingdns.RebindProtectionManager
+	accessControl  *core.AccessControl
+	rateLimiter    *core.RateLimiter
+	dns64Synth     *core.DNS64Synthesizer
+	rewriteEngine  *core.RewriteEngine
 	clientResolver *core.ClientResolver
-	ecsMgr        *ditingdns.ECSManager
-	takeoverMgr   platform.DNSManager
-	adapterScan  platform.AdapterScanner
-	stateStore   platform.StateStore
-	portChecker  platform.PortChecker
-	ipcServer    *ipc.Server
-	authMgr      *auth.Manager
+	ecsMgr         *ditingdns.ECSManager
+	takeoverMgr    platform.DNSManager
+	adapterScan    platform.AdapterScanner
+	stateStore     platform.StateStore
+	portChecker    platform.PortChecker
+	ipcServer      *ipc.Server
+	authMgr        *auth.Manager
 
 	startTime time.Time
 	metrics   *metricsTracker
@@ -126,6 +128,7 @@ func (p *program) run() error {
 	}
 	p.resolver = res
 	p.cache = core.NewDNSCache(cfg.Cache)
+	p.queryLog = querylog.New(cfg.QueryLog)
 	p.filterEngine = core.NewRuleEngine(cfg.Filter)
 
 	hostsRes, err := core.NewHostsResolver(cfg.Hosts)
@@ -228,6 +231,11 @@ func (p *program) Stop(s service.Service) error {
 	}
 
 	_ = p.StopDNS(context.Background())
+
+	// 查询日志落盘写入器优先收尾，确保缓冲数据不丢失
+	if p.queryLog != nil {
+		_ = p.queryLog.Close()
+	}
 
 	if p.cache != nil {
 		p.cache.Close()

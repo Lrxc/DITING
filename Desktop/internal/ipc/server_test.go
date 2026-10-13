@@ -1,4 +1,4 @@
-﻿package ipc
+package ipc
 
 import (
 	"context"
@@ -11,20 +11,23 @@ import (
 
 	"github.com/haoze-evolluling/diting/desktop/internal/core"
 	"github.com/haoze-evolluling/diting/desktop/internal/platform"
+	"github.com/haoze-evolluling/diting/desktop/internal/querylog"
 )
 
 type mockController struct {
-	mu           sync.Mutex
-	dnsRunning   bool
-	takeoverOn   bool
-	startErr     error
-	stopErr      error
-	takeoverErr  error
-	restoreErr   error
-	statusResult *StatusResponse
-	portResult   *platform.PortCheckResult
-	cacheConfig  *core.CacheConfig
-	filterConfig *core.FilterConfig
+	mu              sync.Mutex
+	dnsRunning      bool
+	takeoverOn      bool
+	startErr        error
+	stopErr         error
+	takeoverErr     error
+	restoreErr      error
+	statusResult    *StatusResponse
+	portResult      *platform.PortCheckResult
+	cacheConfig     *core.CacheConfig
+	filterConfig    *core.FilterConfig
+	queryLogConfig  *querylog.QueryLogConfig
+	queryLogCleared bool
 	bgConfig        *LoginBackgroundResponse
 	bgImageData     []byte
 	authInitialized bool
@@ -202,6 +205,52 @@ func (m *mockController) UpdateCacheConfig(ctx context.Context, cfg core.CacheCo
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.cacheConfig = &cfg
+	return nil
+}
+
+func (m *mockController) GetQueryLog(ctx context.Context, query querylog.SearchQuery) (*querylog.SearchResult, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return &querylog.SearchResult{
+		Total: 1,
+		Entries: []querylog.Record{
+			{Timestamp: 1700000000000, Domain: "example.com", QType: "A", Status: querylog.StatusAllowed},
+		},
+	}, nil
+}
+
+func (m *mockController) GetQueryStats(ctx context.Context) (*QueryStatsResponse, error) {
+	return &QueryStatsResponse{
+		Summary:    querylog.Summary{Queries: 100, Blocked: 20, Cached: 30, Forwarded: 50, AvgResponseMs: 12.5, CacheHitRate: 0.3},
+		PerHour:    []querylog.HourPoint{{HourMs: 1700000000000, Queries: 10, Blocked: 2, Cached: 3}},
+		TopDomains: []querylog.NameCount{{Name: "example.com", Count: 20}},
+		TopBlocked: []querylog.NameCount{{Name: "ads.example.com", Count: 5}},
+		TopClients: []querylog.NameCount{{Name: "192.168.1.50", Count: 30}},
+	}, nil
+}
+
+func (m *mockController) ClearQueryLog(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.queryLogCleared = true
+	return nil
+}
+
+func (m *mockController) GetQueryLogConfig(ctx context.Context) (*querylog.QueryLogConfig, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.queryLogConfig != nil {
+		cpy := *m.queryLogConfig
+		return &cpy, nil
+	}
+	cfg := querylog.DefaultQueryLogConfig()
+	return &cfg, nil
+}
+
+func (m *mockController) UpdateQueryLogConfig(ctx context.Context, cfg querylog.QueryLogConfig) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.queryLogConfig = &cfg
 	return nil
 }
 
@@ -570,4 +619,3 @@ func TestServer_DNSStart_PortConflict(t *testing.T) {
 		t.Fatalf("expected PortConflictError to contain conflict result with HasICS=true, got %+v", pErr.Result)
 	}
 }
-

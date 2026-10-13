@@ -3,6 +3,7 @@ import { HttpTransport } from './http';
 import { EventChannel } from './ws';
 import { CoreApi } from './core';
 import { CacheApi } from './cache';
+import { QueryLogApi } from './querylog';
 import { FilterApi } from './filter';
 import { NetworkApi } from './network';
 import { WebAuthApi } from './web';
@@ -21,6 +22,7 @@ class IPCService {
 
   private core = new CoreApi(this.http);
   private cache = new CacheApi(this.http);
+  private querylog = new QueryLogApi(this.http);
   private filter = new FilterApi(this.http);
   private network = new NetworkApi(this.http);
   private webAuth = new WebAuthApi(this.http, this.events);
@@ -73,6 +75,13 @@ class IPCService {
   public clearCache = () => this.cache.clear();
   public getCacheConfig = () => this.cache.getConfig();
   public updateCacheConfig = (cfg: Parameters<CacheApi['updateConfig']>[0]) => this.cache.updateConfig(cfg);
+
+  // --- 查询历史与统计中心 ---
+  public searchQueryLog = (q: Parameters<QueryLogApi['search']>[0] = {}) => this.querylog.search(q);
+  public getQueryStats = () => this.querylog.getStats();
+  public clearQueryLog = () => this.querylog.clear();
+  public getQueryLogConfig = () => this.querylog.getConfig();
+  public updateQueryLogConfig = (cfg: Parameters<QueryLogApi['updateConfig']>[0]) => this.querylog.updateConfig(cfg);
 
   // --- 规则拦截 ---
   public getFilterStats = () => this.filter.getStats();

@@ -6,6 +6,7 @@ import (
 
 	"github.com/haoze-evolluling/diting/desktop/internal/core"
 	"github.com/haoze-evolluling/diting/desktop/internal/platform"
+	"github.com/haoze-evolluling/diting/desktop/internal/querylog"
 )
 
 // ServiceController 抽象服务核心控制操作接口
@@ -71,5 +72,9 @@ type ServiceController interface {
 	ConfigurePrivacy(ctx context.Context, req ConfigurePrivacyRequest) error
 	ConfigureRebind(ctx context.Context, req ConfigureRebindRequest) error
 	ConfigureHosts(ctx context.Context, req ConfigureHostsRequest) error
+	GetQueryLog(ctx context.Context, query querylog.SearchQuery) (*querylog.SearchResult, error)
+	GetQueryStats(ctx context.Context) (*QueryStatsResponse, error)
+	ClearQueryLog(ctx context.Context) error
+	GetQueryLogConfig(ctx context.Context) (*querylog.QueryLogConfig, error)
+	UpdateQueryLogConfig(ctx context.Context, cfg querylog.QueryLogConfig) error
 }
-

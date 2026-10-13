@@ -13,6 +13,8 @@ const (
 	DefaultConfigFileName = "config.json"
 	// DefaultFilterDirName 默认规则源缓存目录名。
 	DefaultFilterDirName = "filters"
+	// DefaultQueryLogDirName 默认查询日志落盘目录名。
+	DefaultQueryLogDirName = "querylog"
 )
 
 // EnvDataDir 覆盖数据目录的环境变量名。
@@ -56,4 +58,12 @@ func DefaultStateFilePath() string {
 // DefaultFilterDir 返回默认规则源缓存目录绝对路径。
 func DefaultFilterDir() string {
 	return filepath.Join(DefaultDataDir(), DefaultFilterDirName)
+}
+
+// DefaultQueryLogDir 返回默认查询日志落盘目录绝对路径。
+//
+// 该目录存放按天滚动的 JSON-Lines 查询历史文件，受 DITING_DATA_DIR 整体覆盖；
+// 目录不可写时由调用方降级为纯内存模式，不影响服务启动。
+func DefaultQueryLogDir() string {
+	return filepath.Join(DefaultDataDir(), DefaultQueryLogDirName)
 }

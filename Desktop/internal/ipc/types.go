@@ -3,14 +3,15 @@ package ipc
 import (
 	"github.com/haoze-evolluling/diting/desktop/internal/core"
 	"github.com/haoze-evolluling/diting/desktop/internal/platform"
+	"github.com/haoze-evolluling/diting/desktop/internal/querylog"
 )
 
 // Response 通用 API JSON 响应体
 type Response[T any] struct {
-	Success  bool                     `json:"success"`
-	Message  string                   `json:"message,omitempty"`
-	Data     T                        `json:"data,omitempty"`
-	Error    string                   `json:"error,omitempty"`
+	Success  bool                      `json:"success"`
+	Message  string                    `json:"message,omitempty"`
+	Data     T                         `json:"data,omitempty"`
+	Error    string                    `json:"error,omitempty"`
 	Conflict *platform.PortCheckResult `json:"conflict,omitempty"`
 }
 
@@ -47,7 +48,7 @@ type DNSStatus struct {
 
 // TakeoverStatus 物理网卡接管运行状态
 type TakeoverStatus struct {
-	Active   bool                   `json:"active"`
+	Active   bool                    `json:"active"`
 	Adapters []platform.AdapterState `json:"adapters"`
 }
 
@@ -62,14 +63,14 @@ type MetricsStatus struct {
 
 // StatusResponse GET /api/v1/status 响应载荷
 type StatusResponse struct {
-	Version       string            `json:"version"`
-	PID           int               `json:"pid"`
-	UptimeSeconds int64             `json:"uptimeSeconds"`
-	DNS           DNSStatus         `json:"dns"`
-	Takeover      TakeoverStatus    `json:"takeover"`
-	Metrics       MetricsStatus     `json:"metrics"`
-	Cache         core.CacheStats   `json:"cache"`
-	Filter        core.FilterStats  `json:"filter"`
+	Version       string                   `json:"version"`
+	PID           int                      `json:"pid"`
+	UptimeSeconds int64                    `json:"uptimeSeconds"`
+	DNS           DNSStatus                `json:"dns"`
+	Takeover      TakeoverStatus           `json:"takeover"`
+	Metrics       MetricsStatus            `json:"metrics"`
+	Cache         core.CacheStats          `json:"cache"`
+	Filter        core.FilterStats         `json:"filter"`
 	Hosts         core.HostsConfig         `json:"hosts"`
 	Rebind        core.RebindConfig        `json:"rebind"`
 	Access        core.AccessControlConfig `json:"access"`
@@ -107,6 +108,15 @@ type QueryEventData struct {
 type CacheEntriesResponse struct {
 	Total   int                   `json:"total"`
 	Entries []core.CacheEntryItem `json:"entries"`
+}
+
+// QueryStatsResponse 查询统计中心聚合响应（24h 滚动窗口）
+type QueryStatsResponse struct {
+	Summary    querylog.Summary     `json:"summary"`
+	PerHour    []querylog.HourPoint `json:"perHour"`
+	TopDomains []querylog.NameCount `json:"topDomains"`
+	TopBlocked []querylog.NameCount `json:"topBlocked"`
+	TopClients []querylog.NameCount `json:"topClients"`
 }
 
 // FilterListsResponse 订阅规则列表响应
@@ -305,7 +315,7 @@ type ConfigureClientAliasRequest struct {
 
 // ConfigurePrivacyRequest 隐私保护与协议增强策略配置请求
 type ConfigurePrivacyRequest struct {
-	EnableEDE        *bool `json:"enableEDE,omitempty"`
+	EnableEDE       *bool `json:"enableEDE,omitempty"`
 	BlockPrivatePTR *bool `json:"blockPrivatePTR,omitempty"`
 	BlockIPv6       *bool `json:"blockIPv6,omitempty"`
 	BlockECH        *bool `json:"blockECH,omitempty"`
@@ -325,5 +335,3 @@ type ConfigureHostsRequest struct {
 	CustomFiles   []string `json:"customFiles,omitempty"`
 	TTL           *uint32  `json:"ttl,omitempty"`
 }
-
-

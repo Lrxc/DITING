@@ -13,6 +13,7 @@ import (
 	ditingdns "github.com/haoze-evolluling/diting/desktop/internal/dns"
 	"github.com/haoze-evolluling/diting/desktop/internal/ipc"
 	"github.com/haoze-evolluling/diting/desktop/internal/platform"
+	"github.com/haoze-evolluling/diting/desktop/internal/querylog"
 	miekgdns "github.com/miekg/dns"
 )
 
@@ -24,6 +25,9 @@ func (p *program) StartDNS(ctx context.Context) error {
 	if p.dnsRunning {
 		return nil
 	}
+
+	// 提前捕获引用：查询日志记录位于 DNS 热路径，回调内不得再取 p.mu
+	ql := p.queryLog
 
 	metricsMw := ditingdns.NewMetricsMiddleware(func(dctx *ditingdns.DNSContext, duration time.Duration, err error) {
 		qName := ""
@@ -95,6 +99,42 @@ func (p *program) StartDNS(ctx context.Context) error {
 			if s, ok := val.(string); ok {
 				filterReason = s
 			}
+		}
+
+		// 查询历史与统计收集：复用本回调已算好的字段，无需新增中间件
+		if ql != nil {
+			errStr := ""
+			if err != nil {
+				errStr = err.Error()
+			}
+			status := querylog.StatusAllowed
+			switch {
+			case err != nil:
+				status = querylog.StatusError
+			case filterBlocked:
+				status = querylog.StatusBlocked
+			case cacheHitStr == "stale":
+				status = querylog.StatusStale
+			case cacheHitStr != "":
+				status = querylog.StatusCached
+			}
+			ql.Record(querylog.Record{
+				Timestamp:    time.Now().UnixMilli(),
+				Domain:       qName,
+				QType:        qType,
+				ClientIP:     formatIP(dctx.ClientIP),
+				ClientName:   dctx.ClientName,
+				DurationMs:   float64(duration.Nanoseconds()) / 1e6,
+				RCode:        rcodeStr,
+				Status:       status,
+				Cached:       cacheHitStr != "",
+				CacheHit:     cacheHitStr,
+				Blocked:      filterBlocked,
+				FilterRule:   filterRule,
+				FilterReason: filterReason,
+				Protocol:     dctx.Protocol,
+				Error:        errStr,
+			})
 		}
 
 		if p.ipcServer != nil {

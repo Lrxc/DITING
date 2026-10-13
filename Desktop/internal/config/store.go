@@ -11,6 +11,7 @@ import (
 
 	"github.com/haoze-evolluling/diting/desktop/internal/core"
 	"github.com/haoze-evolluling/diting/desktop/internal/platform"
+	"github.com/haoze-evolluling/diting/desktop/internal/querylog"
 )
 
 var (
@@ -133,4 +134,5 @@ func normalizeConfig(cfg *Config) {
 	}
 	core.NormalizeCacheConfig(&cfg.Cache)
 	core.NormalizeFilterConfig(&cfg.Filter)
+	querylog.NormalizeQueryLogConfig(&cfg.QueryLog)
 }

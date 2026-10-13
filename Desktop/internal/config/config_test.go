@@ -18,6 +18,9 @@ func TestDefaultConfig(t *testing.T) {
 	if !cfg.Upstream.Bootstrap.Enabled || len(cfg.Upstream.Bootstrap.Servers) == 0 {
 		t.Errorf("expected default bootstrap to be enabled with servers")
 	}
+	if !cfg.QueryLog.Enabled || cfg.QueryLog.MaxEntries == 0 || cfg.QueryLog.DataDir == "" {
+		t.Errorf("expected query log defaults to be populated: %+v", cfg.QueryLog)
+	}
 }
 
 func TestSaveAndLoadConfig(t *testing.T) {
@@ -78,6 +81,10 @@ func TestConfig_StringDuration(t *testing.T) {
 	}
 	if cfg.DNS.WriteTimeout != 2500*time.Millisecond {
 		t.Errorf("expected WriteTimeout 2500ms, got %v", cfg.DNS.WriteTimeout)
+	}
+	// 旧版配置文件缺失 querylog 键时，应自动补齐默认值（向后兼容）
+	if !cfg.QueryLog.Enabled || cfg.QueryLog.MaxEntries == 0 || cfg.QueryLog.DataDir == "" {
+		t.Errorf("expected query log defaults backfilled for legacy config: %+v", cfg.QueryLog)
 	}
 }
 
