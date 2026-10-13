@@ -41,6 +41,21 @@ func NewHostsMiddleware(resolver *core.HostsResolver) Middleware {
 			return nil
 		}
 
+		// 若 hosts 中明确记录了该主机名（例如配置了 IPv4 映射），但未匹配当前查询类型（如 AAAA），
+		// 则应权威返回 NODATA (NOERROR, 0 answers)，杜绝局域网内部域名向公网上游泄露
+		if (q.Qtype == dns.TypeA || q.Qtype == dns.TypeAAAA) && resolver.HasDomain(domain) {
+			resp := new(dns.Msg)
+			resp.SetReply(ctx.Req)
+			resp.Authoritative = true
+			resp.RecursionAvailable = true
+			resp.Rcode = dns.RcodeSuccess
+			resp.Answer = nil
+			ctx.Resp = resp
+			ctx.Set("source", "hosts")
+			ctx.Set("cache_hit", "hosts_nodata")
+			return nil
+		}
+
 		return next()
 	}
 }

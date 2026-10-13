@@ -10,9 +10,11 @@ import (
 
 func TestEDEMiddleware_BlockedByFilter(t *testing.T) {
 	mw := NewEDEMiddleware(true)
+	req := new(dns.Msg)
+	req.SetEdns0(4096, false)
 	ctx := &DNSContext{
 		Context: context.Background(),
-		Req:     new(dns.Msg),
+		Req:     req,
 		Resp:    new(dns.Msg),
 	}
 	ctx.Set("filter_blocked", true)
@@ -39,9 +41,11 @@ func TestEDEMiddleware_BlockedByFilter(t *testing.T) {
 
 func TestEDEMiddleware_BlockedByRebind(t *testing.T) {
 	mw := NewEDEMiddleware(true)
+	req := new(dns.Msg)
+	req.SetEdns0(4096, false)
 	ctx := &DNSContext{
 		Context: context.Background(),
-		Req:     new(dns.Msg),
+		Req:     req,
 		Resp:    new(dns.Msg),
 	}
 	ctx.Set("rebinding_blocked", true)
@@ -64,9 +68,11 @@ func TestEDEMiddleware_BlockedByRebind(t *testing.T) {
 
 func TestEDEMiddleware_UpstreamFailure(t *testing.T) {
 	mw := NewEDEMiddleware(true)
+	req := new(dns.Msg)
+	req.SetEdns0(4096, false)
 	ctx := &DNSContext{
 		Context: context.Background(),
-		Req:     new(dns.Msg),
+		Req:     req,
 		Resp:    new(dns.Msg),
 		Err:     errors.New("connection timeout"),
 	}
@@ -85,11 +91,30 @@ func TestEDEMiddleware_UpstreamFailure(t *testing.T) {
 	}
 }
 
-func TestEDEMiddleware_Disabled(t *testing.T) {
-	mw := NewEDEMiddleware(false)
+func TestEDEMiddleware_NoClientEDNS0(t *testing.T) {
+	// 验证 RFC 8914 Section 3: 客户端请求未提供 OPT RR 时，响应严禁附带 EDE
+	mw := NewEDEMiddleware(true)
+	req := new(dns.Msg) // 未调用 SetEdns0
 	ctx := &DNSContext{
 		Context: context.Background(),
-		Req:     new(dns.Msg),
+		Req:     req,
+		Resp:    new(dns.Msg),
+	}
+	ctx.Set("filter_blocked", true)
+
+	_ = mw(ctx, func() error { return nil })
+	if GetEdns0Option[*dns.EDNS0_EDE](ctx.Resp) != nil {
+		t.Fatal("RFC 8914 violation: EDE option must not be attached when client request lacks EDNS0")
+	}
+}
+
+func TestEDEMiddleware_Disabled(t *testing.T) {
+	mw := NewEDEMiddleware(false)
+	req := new(dns.Msg)
+	req.SetEdns0(4096, false)
+	ctx := &DNSContext{
+		Context: context.Background(),
+		Req:     req,
 		Resp:    new(dns.Msg),
 	}
 	ctx.Set("filter_blocked", true)

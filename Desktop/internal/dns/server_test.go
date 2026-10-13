@@ -1,4 +1,4 @@
-﻿package dns
+package dns
 
 import (
 	"context"
@@ -12,21 +12,21 @@ import (
 )
 
 func findAvailableLocalPort(t *testing.T) string {
-	for attempt := 0; attempt < 200; attempt++ {
-		l, err := net.Listen("tcp", "127.0.0.1:0")
+	for attempt := 0; attempt < 300; attempt++ {
+		pc, err := net.ListenPacket("udp", "127.0.0.1:0")
 		if err != nil {
-			time.Sleep(2 * time.Millisecond)
+			time.Sleep(5 * time.Millisecond)
 			continue
 		}
-		addr := l.Addr().String()
-		_ = l.Close()
+		addr := pc.LocalAddr().String()
+		_ = pc.Close()
 
-		pc, err := net.ListenPacket("udp", addr)
+		l, err := net.Listen("tcp", addr)
 		if err == nil {
-			_ = pc.Close()
+			_ = l.Close()
 			return addr
 		}
-		time.Sleep(2 * time.Millisecond)
+		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatalf("failed to find available dual port")
 	return ""

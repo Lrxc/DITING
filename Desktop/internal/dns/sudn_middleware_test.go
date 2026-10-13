@@ -55,7 +55,7 @@ func TestSUDNMiddleware_Localhost(t *testing.T) {
 func TestSUDNMiddleware_NXDomainZones(t *testing.T) {
 	mw := NewSUDNMiddleware()
 
-	zones := []string{"hidden.onion.", "something.invalid.", "test.", "sub.test."}
+	zones := []string{"hidden.onion.", "something.invalid.", "test.", "sub.test.", "mydevice.home.arpa."}
 	for _, z := range zones {
 		req := new(dns.Msg)
 		req.SetQuestion(z, dns.TypeA)

@@ -218,7 +218,12 @@ func (r *CoreResolver) Exchange(ctx context.Context, req *dns.Msg) (*dns.Msg, er
 		return nil, fmt.Errorf("pack dns query: %w", err)
 	}
 
-	rawResp, err := r.Resolve(ctx, rawQuery)
+	r.mu.RLock()
+	mode := r.mode
+	providers := r.providers
+	r.mu.RUnlock()
+
+	rawResp, err := r.scheduler.Resolve(ctx, mode, providers, rawQuery)
 	if err != nil {
 		return nil, err
 	}
@@ -238,6 +243,9 @@ type conditionalProviderAdapter struct {
 }
 
 func (a *conditionalProviderAdapter) Resolve(ctx context.Context, rawQuery []byte) ([]byte, error) {
+	if a.resolver != nil && a.resolver.scheduler != nil {
+		return a.resolver.scheduler.queryWithValidation(ctx, a.provider, rawQuery)
+	}
 	return a.resolver.executeProvider(ctx, a.provider, rawQuery)
 }
 

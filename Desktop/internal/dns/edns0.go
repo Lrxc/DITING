@@ -1,7 +1,6 @@
 package dns
 
 import (
-	"fmt"
 	"unicode/utf8"
 
 	"github.com/miekg/dns"
@@ -51,13 +50,8 @@ func GetEdns0Option[T EDNS0Option](msg *dns.Msg) T {
 	if optRecord == nil {
 		return nil
 	}
-	var t T
 	for _, o := range optRecord.Option {
-		if o.Option() == t.Option() {
-			res, ok := o.(T)
-			if !ok {
-				panic(fmt.Errorf("dns option with code %d is not of type %T", t.Option(), t))
-			}
+		if res, ok := o.(T); ok {
 			return res
 		}
 	}

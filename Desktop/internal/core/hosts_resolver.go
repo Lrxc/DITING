@@ -50,11 +50,11 @@ func SystemHostsPath() string {
 // HostsResolver 本地系统与自定义 Hosts 文件解析器
 // 借鉴自 blocky (hosts_file_resolver.go) 与 AdGuard Home
 type HostsResolver struct {
-	mu        sync.RWMutex
-	v4Map     map[string][]net.IP // domain -> []IPv4
-	v6Map     map[string][]net.IP // domain -> []IPv6
-	ptrMap    map[string]string   // ip.String() -> hostname
-	ttl       uint32
+	mu          sync.RWMutex
+	v4Map       map[string][]net.IP   // domain -> []IPv4
+	v6Map       map[string][]net.IP   // domain -> []IPv6
+	ptrMap      map[string][]string // ip.String() -> []hostname (支持多别名)
+	ttl         uint32
 	loadedFiles []string
 }
 
@@ -67,7 +67,7 @@ func NewHostsResolver(cfg HostsConfig) (*HostsResolver, error) {
 	r := &HostsResolver{
 		v4Map:  make(map[string][]net.IP),
 		v6Map:  make(map[string][]net.IP),
-		ptrMap: make(map[string]string),
+		ptrMap: make(map[string][]string),
 		ttl:    ttl,
 	}
 
@@ -81,6 +81,26 @@ func NewHostsResolver(cfg HostsConfig) (*HostsResolver, error) {
 		}
 	}
 	return r, nil
+}
+
+// Reload 重新加载所有已注册的 hosts 文件
+func (r *HostsResolver) Reload() error {
+	r.mu.Lock()
+	files := make([]string, len(r.loadedFiles))
+	copy(files, r.loadedFiles)
+	r.v4Map = make(map[string][]net.IP)
+	r.v6Map = make(map[string][]net.IP)
+	r.ptrMap = make(map[string][]string)
+	r.loadedFiles = nil
+	r.mu.Unlock()
+
+	var lastErr error
+	for _, f := range files {
+		if err := r.LoadFile(f); err != nil {
+			lastErr = err
+		}
+	}
+	return lastErr
 }
 
 // LoadFile 加载并解析指定的 hosts 文件内容
@@ -121,12 +141,20 @@ func (r *HostsResolver) parseReader(rd io.Reader) {
 			continue
 		}
 
-		ip := net.ParseIP(fields[0])
+		// 剥离 Windows/Linux 接口 Zone Scope 标识（如 fe80::1%eth0）
+		rawIP := fields[0]
+		if idx := strings.Index(rawIP, "%"); idx != -1 {
+			rawIP = rawIP[:idx]
+		}
+
+		ip := net.ParseIP(rawIP)
 		if ip == nil {
 			continue
 		}
 
 		isV4 := (ip.To4() != nil)
+		ipStr := ip.String()
+
 		for _, rawHost := range fields[1:] {
 			host := strings.ToLower(strings.Trim(rawHost, "."))
 			if host == "" {
@@ -144,13 +172,21 @@ func (r *HostsResolver) parseReader(rd io.Reader) {
 				}
 			}
 
-			// 记录反向 PTR 查找（以首个非别名主机名为准）
-			ipStr := ip.String()
-			if _, exists := r.ptrMap[ipStr]; !exists {
-				r.ptrMap[ipStr] = host
+			// 记录反向 PTR 查找（支持多别名映射）
+			if !containsString(r.ptrMap[ipStr], host) {
+				r.ptrMap[ipStr] = append(r.ptrMap[ipStr], host)
 			}
 		}
 	}
+}
+
+func containsString(list []string, target string) bool {
+	for _, s := range list {
+		if s == target {
+			return true
+		}
+	}
+	return false
 }
 
 func containsIP(list []net.IP, target net.IP) bool {
@@ -160,6 +196,17 @@ func containsIP(list []net.IP, target net.IP) bool {
 		}
 	}
 	return false
+}
+
+// HasDomain 检查本地 hosts 是否收录了指定域名（用于判定是否可提供权威 NODATA）
+func (r *HostsResolver) HasDomain(domain string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	host := strings.ToLower(strings.Trim(domain, "."))
+	_, inV4 := r.v4Map[host]
+	_, inV6 := r.v6Map[host]
+	return inV4 || inV6
 }
 
 // Lookup 正向解析 domain
@@ -194,7 +241,7 @@ func (r *HostsResolver) Lookup(domain string, qtype uint16) []dns.RR {
 	return records
 }
 
-// LookupPTR 反向解析 IP 对应的 PTR 记录
+// LookupPTR 反向解析 IP 对应的 PTR 记录（返回所有关联主机名别名）
 func (r *HostsResolver) LookupPTR(arpaName string) []dns.RR {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -204,17 +251,32 @@ func (r *HostsResolver) LookupPTR(arpaName string) []dns.RR {
 		return nil
 	}
 
-	host, ok := r.ptrMap[ip.String()]
-	if !ok || host == "" {
+	hosts, ok := r.ptrMap[ip.String()]
+	if !ok || len(hosts) == 0 {
 		return nil
 	}
 
 	fqdn := dns.Fqdn(arpaName)
-	return []dns.RR{
-		&dns.PTR{
+	records := make([]dns.RR, 0, len(hosts))
+	for _, host := range hosts {
+		records = append(records, &dns.PTR{
 			Hdr: dns.RR_Header{Name: fqdn, Rrtype: dns.TypePTR, Class: dns.ClassINET, Ttl: r.ttl},
 			Ptr: dns.Fqdn(host),
-		},
+		})
+	}
+	return records
+}
+
+func parseHexNibble(c byte) (byte, bool) {
+	switch {
+	case c >= '0' && c <= '9':
+		return c - '0', true
+	case c >= 'a' && c <= 'f':
+		return c - 'a' + 10, true
+	case c >= 'A' && c <= 'F':
+		return c - 'A' + 10, true
+	default:
+		return 0, false
 	}
 }
 
@@ -240,14 +302,15 @@ func ParseIPFromArpa(arpa string) net.IP {
 		// 逆序组装 16 字节
 		var ipBytes [16]byte
 		for i := 0; i < 16; i++ {
-			lowHex := hexs[i*2]
-			highHex := hexs[i*2+1]
-			var val byte
-			if b, err := fmt.Sscanf(highHex+lowHex, "%02x", &val); b == 1 && err == nil {
-				ipBytes[15-i] = val
-			} else {
+			if len(hexs[i*2]) != 1 || len(hexs[i*2+1]) != 1 {
 				return nil
 			}
+			low, ok1 := parseHexNibble(hexs[i*2][0])
+			high, ok2 := parseHexNibble(hexs[i*2+1][0])
+			if !ok1 || !ok2 {
+				return nil
+			}
+			ipBytes[15-i] = (high << 4) | low
 		}
 		return net.IP(ipBytes[:])
 	}

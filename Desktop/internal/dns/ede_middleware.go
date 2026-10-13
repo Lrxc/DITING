@@ -11,7 +11,8 @@ import (
 func NewEDEMiddleware(enabled bool) Middleware {
 	return func(ctx *DNSContext, next func() error) error {
 		err := next()
-		if !enabled || ctx.Resp == nil {
+		// RFC 8914 Section 3: 响应中不得包含 EDE 选项，除非客户端查询本身携带了 OPT pseudo-RR (EDNS0)
+		if !enabled || ctx.Resp == nil || ctx.Req == nil || ctx.Req.IsEdns0() == nil {
 			return err
 		}
 

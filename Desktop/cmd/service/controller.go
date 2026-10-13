@@ -1,4 +1,4 @@
-﻿package main
+package main
 
 import (
 	"bytes"
@@ -35,6 +35,9 @@ func (p *program) ConfigureUpstream(ctx context.Context, req ipc.ConfigureUpstre
 			return err
 		}
 		cfg.Bootstrap = *req.Bootstrap
+	}
+	if req.ConditionalRoutes != nil {
+		cfg.ConditionalRoutes = req.ConditionalRoutes
 	}
 	if p.resolver != nil {
 		if err := p.resolver.Configure(cfg); err != nil {

@@ -47,10 +47,11 @@ func NewSUDNMiddleware() Middleware {
 			return nil
 		}
 
-		// 2. test, invalid (RFC 6761 §6.2, §6.4) 与 onion (RFC 7686) 返回 NXDOMAIN
+		// 2. test, invalid (RFC 6761 §6.2, §6.4), onion (RFC 7686) 与 home.arpa (RFC 8375 §4) 返回 NXDOMAIN
 		if name == "test" || strings.HasSuffix(name, ".test") ||
 			name == "invalid" || strings.HasSuffix(name, ".invalid") ||
-			name == "onion" || strings.HasSuffix(name, ".onion") {
+			name == "onion" || strings.HasSuffix(name, ".onion") ||
+			name == "home.arpa" || strings.HasSuffix(name, ".home.arpa") {
 			resp := new(dns.Msg)
 			resp.SetReply(ctx.Req)
 			resp.Authoritative = true

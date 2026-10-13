@@ -5,6 +5,7 @@ import (
 	"net"
 	"testing"
 
+	"github.com/haoze-evolluling/diting/desktop/internal/core"
 	"github.com/miekg/dns"
 )
 
@@ -141,5 +142,46 @@ func TestRebindMiddleware_PublicIPPassed(t *testing.T) {
 
 	if val, ok := ctx.Get("rebinding_blocked"); ok && val == true {
 		t.Fatal("expected public IP to be allowed")
+	}
+}
+
+func TestRebindMiddleware_CacheEvictionOnBlock(t *testing.T) {
+	cache := core.NewDNSCache(core.DefaultCacheConfig())
+	defer cache.Close()
+
+	mgr := NewRebindProtectionManager(DefaultRebindConfig())
+	mw := NewRebindMiddleware(mgr, cache)
+
+	req := new(dns.Msg)
+	req.SetQuestion("attacker.org.", dns.TypeA)
+
+	// 先在缓存中写入恶意条目
+	badResp := new(dns.Msg)
+	badResp.SetReply(req)
+	badResp.Answer = append(badResp.Answer, &dns.A{
+		Hdr: dns.RR_Header{Name: "attacker.org.", Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 300},
+		A:   net.ParseIP("10.0.0.1"),
+	})
+	cache.Put(req, badResp)
+
+	// 确认缓存已写入
+	if _, hit, _, _ := cache.Get(req); !hit {
+		t.Fatal("expected cache hit prior to rebind test")
+	}
+
+	ctx := &DNSContext{
+		Context: context.Background(),
+		Req:     req,
+		Resp:    badResp.Copy(),
+	}
+
+	_ = mw(ctx, func() error { return nil })
+
+	// 验证中间件阻断并剔除了缓存
+	if val, ok := ctx.Get("rebinding_blocked"); !ok || val != true {
+		t.Fatal("expected rebinding_blocked to be true")
+	}
+	if _, hit, _, _ := cache.Get(req); hit {
+		t.Fatal("expected poisoned cache entry to be purged upon rebinding block")
 	}
 }

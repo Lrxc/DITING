@@ -121,7 +121,12 @@ func findBlockedHintIP(values []dns.SVCBKeyValue) net.IP {
 
 // NewRebindMiddleware 创建防 DNS 重新绑定攻击流水线中间件
 // 借鉴自 blocky (rebinding_resolver.go) 与 AdGuard Home (dnsforward/access.go)
-func NewRebindMiddleware(mgr *RebindProtectionManager) Middleware {
+func NewRebindMiddleware(mgr *RebindProtectionManager, cache ...*core.DNSCache) Middleware {
+	var c *core.DNSCache
+	if len(cache) > 0 {
+		c = cache[0]
+	}
+
 	return func(ctx *DNSContext, next func() error) error {
 		err := next()
 		if mgr == nil || !mgr.enabled || ctx.Resp == nil || ctx.Req == nil || len(ctx.Req.Question) == 0 {
@@ -150,6 +155,11 @@ func NewRebindMiddleware(mgr *RebindProtectionManager) Middleware {
 		ctx.Set("filter_action", "block")
 		ctx.Set("filter_blocked", true)
 		ctx.Set("filter_reason", reason)
+
+		// 同步从缓存中剔除被投毒的记录
+		if c != nil {
+			c.Remove(ctx.Req)
+		}
 
 		// 替换为安全的空应答或指定拒绝
 		cleanResp := new(dns.Msg)

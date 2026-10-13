@@ -44,4 +44,20 @@ func TestHostsMiddleware_HitAndPass(t *testing.T) {
 	if err != nil || !calledNext {
 		t.Fatalf("expected next to be called on miss, err=%v, calledNext=%v", err, calledNext)
 	}
+
+	// NODATA case: router.lan 仅有 A 记录，查询 AAAA 时权威返回 NODATA 且不转发上游
+	reqAAAA := new(dns.Msg)
+	reqAAAA.SetQuestion("router.lan.", dns.TypeAAAA)
+	ctxAAAA := &DNSContext{Context: context.Background(), Req: reqAAAA}
+
+	err = mw(ctxAAAA, func() error {
+		t.Fatal("should not forward to next resolver when domain is locally owned in hosts")
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected error on NODATA query: %v", err)
+	}
+	if ctxAAAA.Resp == nil || ctxAAAA.Resp.Rcode != dns.RcodeSuccess || len(ctxAAAA.Resp.Answer) != 0 {
+		t.Fatalf("expected authoritative NODATA (NOERROR, 0 answers), got %v", ctxAAAA.Resp)
+	}
 }

@@ -102,14 +102,14 @@ func (p *program) StartDNS(ctx context.Context) error {
 	if rebindMgr == nil {
 		rebindMgr = ditingdns.NewRebindProtectionManager(p.cfg.Rebind)
 	}
-	rebindMw := ditingdns.NewRebindMiddleware(rebindMgr)
+	rebindMw := ditingdns.NewRebindMiddleware(rebindMgr, p.cache)
 	edeMw := ditingdns.NewEDEMiddleware(p.cfg.DNS.EnableEDE)
 	sudnMw := ditingdns.NewSUDNMiddleware()
 	hostsMw := ditingdns.NewHostsMiddleware(p.hostsResolver)
 	filterMw := ditingdns.NewFilterMiddleware(p.filterEngine)
 	cacheMw := ditingdns.NewCacheMiddleware(p.cache, p.resolver)
 	forwardMw := ditingdns.NewForwardMiddleware(p.resolver)
-	pipeline := ditingdns.NewPipeline(metricsMw, edeMw, sudnMw, hostsMw, filterMw, cacheMw, forwardMw, rebindMw)
+	pipeline := ditingdns.NewPipeline(metricsMw, edeMw, sudnMw, hostsMw, filterMw, rebindMw, cacheMw, forwardMw)
 	udpAddrs, tcpAddrs := p.cfg.DNS.EffectiveListenAddresses()
 	serverCfg := ditingdns.ServerConfig{
 		UDPAddresses: udpAddrs,
@@ -263,13 +263,14 @@ func (p *program) GetStatus(ctx context.Context) (*ipc.StatusResponse, error) {
 		PID:           os.Getpid(),
 		UptimeSeconds: int64(time.Since(p.startTime).Seconds()),
 		DNS: ipc.DNSStatus{
-			Running:         dnsRun,
-			ListenAddresses: effUDP,
-			AllowLAN:        p.cfg.DNS.AllowLAN,
-			LANAddresses:    lanAddrs,
-			Mode:            p.cfg.Upstream.Mode,
-			Upstreams:       upstreams,
-			Bootstrap:       p.cfg.Upstream.Bootstrap,
+			Running:           dnsRun,
+			ListenAddresses:   effUDP,
+			AllowLAN:          p.cfg.DNS.AllowLAN,
+			LANAddresses:      lanAddrs,
+			Mode:              p.cfg.Upstream.Mode,
+			Upstreams:         upstreams,
+			Bootstrap:         p.cfg.Upstream.Bootstrap,
+			ConditionalRoutes: p.cfg.Upstream.ConditionalRoutes,
 		},
 		Takeover: ipc.TakeoverStatus{
 			Active:   p.takeoverMgr.IsTakeoverActive(),
@@ -278,6 +279,8 @@ func (p *program) GetStatus(ctx context.Context) (*ipc.StatusResponse, error) {
 		Metrics: p.metrics.Snapshot(),
 		Cache:   p.getCacheStatsSnapshot(),
 		Filter:  p.getFilterStatsSnapshot(),
+		Hosts:   p.cfg.Hosts,
+		Rebind:  p.cfg.Rebind,
 	}, nil
 }
 

@@ -1,4 +1,4 @@
-﻿package ipc
+package ipc
 
 import (
 	"github.com/haoze-evolluling/diting/desktop/internal/core"
@@ -29,13 +29,14 @@ type UpstreamInfo struct {
 
 // DNSStatus DNS 监听器运行状态
 type DNSStatus struct {
-	Running         bool                 `json:"running"`
-	ListenAddresses []string             `json:"listenAddresses"`
-	AllowLAN        bool                 `json:"allowLAN"`
-	LANAddresses    []string             `json:"lanAddresses,omitempty"`
-	Mode            string               `json:"mode"`
-	Upstreams       []UpstreamInfo       `json:"upstreams"`
-	Bootstrap       core.BootstrapConfig `json:"bootstrap"`
+	Running           bool                 `json:"running"`
+	ListenAddresses   []string             `json:"listenAddresses"`
+	AllowLAN          bool                 `json:"allowLAN"`
+	LANAddresses      []string             `json:"lanAddresses,omitempty"`
+	Mode              string               `json:"mode"`
+	Upstreams         []UpstreamInfo       `json:"upstreams"`
+	Bootstrap         core.BootstrapConfig `json:"bootstrap"`
+	ConditionalRoutes map[string]string    `json:"conditionalRoutes,omitempty"`
 }
 
 // TakeoverStatus 物理网卡接管运行状态
@@ -55,14 +56,16 @@ type MetricsStatus struct {
 
 // StatusResponse GET /api/v1/status 响应载荷
 type StatusResponse struct {
-	Version       string          `json:"version"`
-	PID           int             `json:"pid"`
-	UptimeSeconds int64           `json:"uptimeSeconds"`
-	DNS           DNSStatus       `json:"dns"`
-	Takeover      TakeoverStatus  `json:"takeover"`
-	Metrics       MetricsStatus    `json:"metrics"`
-	Cache         core.CacheStats  `json:"cache"`
-	Filter        core.FilterStats `json:"filter"`
+	Version       string            `json:"version"`
+	PID           int               `json:"pid"`
+	UptimeSeconds int64             `json:"uptimeSeconds"`
+	DNS           DNSStatus         `json:"dns"`
+	Takeover      TakeoverStatus    `json:"takeover"`
+	Metrics       MetricsStatus     `json:"metrics"`
+	Cache         core.CacheStats   `json:"cache"`
+	Filter        core.FilterStats  `json:"filter"`
+	Hosts         core.HostsConfig  `json:"hosts"`
+	Rebind        core.RebindConfig `json:"rebind"`
 }
 
 // Event WebSocket 事件推送载荷
@@ -111,9 +114,10 @@ type FilterActionRequest struct {
 
 // ConfigureUpstreamRequest 动态配置上游请求
 type ConfigureUpstreamRequest struct {
-	Mode      string                `json:"mode"`
-	Providers []core.ProviderConfig `json:"providers"`
-	Bootstrap *core.BootstrapConfig `json:"bootstrap,omitempty"`
+	Mode              string                `json:"mode"`
+	Providers         []core.ProviderConfig `json:"providers"`
+	Bootstrap         *core.BootstrapConfig `json:"bootstrap,omitempty"`
+	ConditionalRoutes map[string]string     `json:"conditionalRoutes,omitempty"`
 }
 
 // ConfigureBootstrapRequest 单独配置 Bootstrap 引导 DNS 请求

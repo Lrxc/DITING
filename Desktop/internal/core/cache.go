@@ -305,3 +305,24 @@ func (c *DNSCache) Put(req *dns.Msg, resp *dns.Msg) bool {
 func (c *DNSCache) SingleFlight(key string, fn func() (*dns.Msg, error)) (*dns.Msg, bool, error) {
 	return c.flight.Do(key, fn)
 }
+
+// Remove 从分片缓存中主动剔除指定请求的条目
+func (c *DNSCache) Remove(req *dns.Msg) bool {
+	if req == nil || len(req.Question) == 0 {
+		return false
+	}
+	q := req.Question[0]
+	key := CacheKey(q.Name, q.Qtype, q.Qclass)
+	shard := c.shard(key)
+	shard.mu.Lock()
+	defer shard.mu.Unlock()
+	if old, exists := shard.entries[key]; exists {
+		if old.elem != nil {
+			shard.lruList.Remove(old.elem)
+			old.elem = nil
+		}
+		delete(shard.entries, key)
+		return true
+	}
+	return false
+}
