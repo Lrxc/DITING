@@ -66,7 +66,19 @@ func IsBlockedIP(ip net.IP) bool {
 	if ip == nil {
 		return false
 	}
-	return ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsUnspecified()
+	if ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() {
+		return true
+	}
+	// 针对 DNS64 / NAT64 (RFC 6052 64:ff9b::/96) 合成地址，提取内嵌 IPv4 检查是否为内网私有地址
+	if len(ip) == 16 && ip[0] == 0x00 && ip[1] == 0x64 && ip[2] == 0xff && ip[3] == 0x9b &&
+		ip[4] == 0 && ip[5] == 0 && ip[6] == 0 && ip[7] == 0 &&
+		ip[8] == 0 && ip[9] == 0 && ip[10] == 0 && ip[11] == 0 {
+		embeddedV4 := net.IPv4(ip[12], ip[13], ip[14], ip[15])
+		if embeddedV4.IsPrivate() || embeddedV4.IsLoopback() || embeddedV4.IsLinkLocalUnicast() || embeddedV4.IsUnspecified() {
+			return true
+		}
+	}
+	return false
 }
 
 // FindBlockedIPInMsg 遍历报文各 Section 提取首个非公网内网 IP（防御 DNS 重新绑定攻击）

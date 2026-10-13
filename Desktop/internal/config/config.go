@@ -16,8 +16,9 @@ type DNSConfig struct {
 	TCPAddresses []string      `json:"tcpAddresses"`
 	ReadTimeout  time.Duration `json:"readTimeout"`
 	WriteTimeout time.Duration `json:"writeTimeout"`
-	AllowLAN     bool          `json:"allowLAN"` // 是否启用局域网 DNS 服务器功能（监听 0.0.0.0 与所有局域网地址）
-	EnableEDE    bool          `json:"enableEDE"` // 是否启用 RFC 8914 Extended DNS Errors 选项
+	AllowLAN         bool          `json:"allowLAN"`         // 是否启用局域网 DNS 服务器功能（监听 0.0.0.0 与所有局域网地址）
+	EnableEDE        bool          `json:"enableEDE"`        // 是否启用 RFC 8914 Extended DNS Errors 选项
+	BlockUnqualified bool          `json:"blockUnqualified"` // 是否阻止无点单标签不完整域名外泄至公网解析
 }
 
 // EffectiveListenAddresses 根据 AllowLAN 配置返回实际应监听的双栈 UDP 与 TCP 地址
@@ -172,22 +173,26 @@ type Config struct {
 	IPC      IPCConfig           `json:"ipc"`
 	Takeover TakeoverConfig      `json:"takeover"`
 	Cache    core.CacheConfig    `json:"cache"`
-	Filter   core.FilterConfig   `json:"filter"`
-	Hosts    core.HostsConfig    `json:"hosts"`
-	Rebind   core.RebindConfig   `json:"rebind"`
-	Web      WebConfig           `json:"web"`
+	Filter    core.FilterConfig        `json:"filter"`
+	Hosts     core.HostsConfig         `json:"hosts"`
+	Rebind    core.RebindConfig        `json:"rebind"`
+	Access    core.AccessControlConfig `json:"access"`
+	RateLimit core.RateLimitConfig     `json:"rateLimit"`
+	DNS64     core.DNS64Config         `json:"dns64"`
+	Web       WebConfig                `json:"web"`
 }
 
 // DefaultConfig 生成默认系统配置
 func DefaultConfig() *Config {
 	return &Config{
 		DNS: DNSConfig{
-			UDPAddresses: []string{"127.0.0.1:53", "[::1]:53"},
-			TCPAddresses: []string{"127.0.0.1:53", "[::1]:53"},
-			ReadTimeout:  5 * time.Second,
-			WriteTimeout: 5 * time.Second,
-			AllowLAN:     false,
-			EnableEDE:    true,
+			UDPAddresses:     []string{"127.0.0.1:53", "[::1]:53"},
+			TCPAddresses:     []string{"127.0.0.1:53", "[::1]:53"},
+			ReadTimeout:      5 * time.Second,
+			WriteTimeout:     5 * time.Second,
+			AllowLAN:         false,
+			EnableEDE:        true,
+			BlockUnqualified: false,
 		},
 		Upstream: core.ResolverConfig{
 			Mode: core.ModePrimaryBackup,
@@ -211,10 +216,13 @@ func DefaultConfig() *Config {
 			AutoTakeoverOnStart: false,
 			StateFilePath:       "",
 		},
-		Cache:  core.DefaultCacheConfig(),
-		Filter: core.DefaultFilterConfig(),
-		Hosts:  core.DefaultHostsConfig(),
-		Rebind: core.DefaultRebindConfig(),
+		Cache:     core.DefaultCacheConfig(),
+		Filter:    core.DefaultFilterConfig(),
+		Hosts:     core.DefaultHostsConfig(),
+		Rebind:    core.DefaultRebindConfig(),
+		Access:    core.DefaultAccessControlConfig(),
+		RateLimit: core.DefaultRateLimitConfig(),
+		DNS64:     core.DefaultDNS64Config(),
 		Web: WebConfig{
 			Enabled:        true,
 			ListenPort:     15353,

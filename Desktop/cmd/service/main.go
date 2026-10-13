@@ -39,6 +39,9 @@ type program struct {
 	filterEngine  *core.RuleEngine
 	hostsResolver *core.HostsResolver
 	rebindMgr     *ditingdns.RebindProtectionManager
+	accessControl *core.AccessControl
+	rateLimiter   *core.RateLimiter
+	dns64Synth    *core.DNS64Synthesizer
 	takeoverMgr   platform.DNSManager
 	adapterScan  platform.AdapterScanner
 	stateStore   platform.StateStore
@@ -128,6 +131,18 @@ func (p *program) run() error {
 	}
 	p.hostsResolver = hostsRes
 	p.rebindMgr = ditingdns.NewRebindProtectionManager(cfg.Rebind)
+
+	accessCtrl, err := core.NewAccessControl(cfg.Access)
+	if err != nil {
+		log.Printf("[Access] 初始化访问控制警告: %v\n", err)
+	}
+	p.accessControl = accessCtrl
+	p.rateLimiter = core.NewRateLimiter(context.Background(), cfg.RateLimit)
+	dns64Synth, err := core.NewDNS64Synthesizer(cfg.DNS64)
+	if err != nil {
+		log.Printf("[DNS64] 初始化 DNS64 合成器警告: %v\n", err)
+	}
+	p.dns64Synth = dns64Synth
 
 	// 5.1 初始化 Web 远程管理与认证引擎
 	p.authMgr = auth.NewManager(cfg.Web.Username, cfg.Web.PasswordHash, cfg.Web.Salt, cfg.Web.SessionTimeout)

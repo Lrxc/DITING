@@ -16,7 +16,31 @@ func NewEDEMiddleware(enabled bool) Middleware {
 			return err
 		}
 
-		// 1. DNS Rebinding 防御拦截
+		// 1. 客户端访问控制拦截 (ACL Prohibited)
+		if val, ok := ctx.Get("access_blocked"); ok && val == true {
+			reason := "DITING: Client query prohibited by access policy"
+			if rVal, ok := ctx.Get("filter_reason"); ok {
+				if rStr, ok := rVal.(string); ok && rStr != "" {
+					reason = fmt.Sprintf("DITING: %s", rStr)
+				}
+			}
+			SetEDE(ctx.Resp, dns.ExtendedErrorCodeProhibited, reason)
+			return err
+		}
+
+		// 2. 客户端请求速率限制拦截 (Rate Limit Prohibited)
+		if val, ok := ctx.Get("ratelimit_blocked"); ok && val == true {
+			reason := "DITING: Client query rate limit exceeded"
+			if rVal, ok := ctx.Get("filter_reason"); ok {
+				if rStr, ok := rVal.(string); ok && rStr != "" {
+					reason = fmt.Sprintf("DITING: %s", rStr)
+				}
+			}
+			SetEDE(ctx.Resp, dns.ExtendedErrorCodeProhibited, reason)
+			return err
+		}
+
+		// 3. DNS Rebinding 防御拦截
 		if val, ok := ctx.Get("rebinding_blocked"); ok && val == true {
 			reason := "DITING: Blocked by DNS rebinding protection"
 			if rVal, ok := ctx.Get("filter_reason"); ok {
@@ -28,7 +52,19 @@ func NewEDEMiddleware(enabled bool) Middleware {
 			return err
 		}
 
-		// 2. 规则过滤拦截 (AdGuard / 黑名单)
+		// 4. 单标签不完整域名外泄阻断 (Unqualified Blocked)
+		if val, ok := ctx.Get("unqualified_blocked"); ok && val == true {
+			reason := "DITING: Blocked unqualified domain leak"
+			if rVal, ok := ctx.Get("filter_reason"); ok {
+				if rStr, ok := rVal.(string); ok && rStr != "" {
+					reason = fmt.Sprintf("DITING: %s", rStr)
+				}
+			}
+			SetEDE(ctx.Resp, dns.ExtendedErrorCodeBlocked, reason)
+			return err
+		}
+
+		// 5. 规则过滤拦截 (AdGuard / 黑名单)
 		if val, ok := ctx.Get("filter_blocked"); ok && val == true {
 			reason := "DITING: Blocked by filter rule"
 			if rVal, ok := ctx.Get("filter_reason"); ok {

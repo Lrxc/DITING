@@ -64,8 +64,11 @@ type StatusResponse struct {
 	Metrics       MetricsStatus     `json:"metrics"`
 	Cache         core.CacheStats   `json:"cache"`
 	Filter        core.FilterStats  `json:"filter"`
-	Hosts         core.HostsConfig  `json:"hosts"`
-	Rebind        core.RebindConfig `json:"rebind"`
+	Hosts         core.HostsConfig         `json:"hosts"`
+	Rebind        core.RebindConfig        `json:"rebind"`
+	Access        core.AccessControlConfig `json:"access"`
+	RateLimit     core.RateLimitConfig     `json:"rateLimit"`
+	DNS64         core.DNS64Config         `json:"dns64"`
 }
 
 // Event WebSocket 事件推送载荷
