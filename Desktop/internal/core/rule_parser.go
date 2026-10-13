@@ -23,6 +23,13 @@ type ParsedRule struct {
 	IsWildcard bool           // 是否含通配符 (*)
 	IsExact    bool           // 是否为精确匹配 (|domain|)
 	Source     string         // 来源 (如 "custom" 或 订阅列表 ID)
+
+	// DenyAllow 目标域排除后缀（$denyallow=，小写去点）。
+	// 借鉴自 AdGuard Home urlfilter 修饰符：命中该后缀集合的查询不受本条规则约束。
+	DenyAllow []string
+	// To 目标域排除后缀（$to=，小写去点）。
+	// 在 DNS 层 $to= 与 $denyallow= 语义等价（均针对查询目标域），统一作为排除集合处理。
+	To []string
 }
 
 // ParseRules 从 io.Reader 读取并解析全部规则
@@ -122,6 +129,8 @@ func ParseRuleLine(line, source string) (*ParsedRule, bool) {
 	// 3. 处理修饰符 ($ 开头)
 	important := false
 	var dnsType uint16 = 0
+	var denyAllow []string
+	var toDomains []string
 	var modPart string
 
 	if strings.HasPrefix(line, "/") {
@@ -152,6 +161,12 @@ func ParseRuleLine(line, source string) (*ParsedRule, bool) {
 				if t, ok := dns.StringToType[strings.ToUpper(typeStr)]; ok {
 					dnsType = t
 				}
+			} else if strings.HasPrefix(mod, "denyallow=") {
+				denyAllow = parseModifierDomains(strings.TrimPrefix(mod, "denyallow="))
+			} else if strings.HasPrefix(mod, "to=") {
+				toDomains = parseModifierDomains(strings.TrimPrefix(mod, "to="))
+			} else if strings.HasPrefix(mod, "~denyallow=") || strings.HasPrefix(mod, "~to=") {
+				// 取反形式在 DNS 层无可靠等价语义，安全忽略该修饰符（保留整条规则）
 			} else if isWebOnlyModifier(mod) {
 				// 浏览器专有资源修饰符，在 DNS 阶段安全跳过，防止整域误杀
 				return nil, false
@@ -175,6 +190,8 @@ func ParseRuleLine(line, source string) (*ParsedRule, bool) {
 			Regex:     rx,
 			DNSType:   dnsType,
 			Source:    source,
+			DenyAllow: denyAllow,
+			To:        toDomains,
 		}, true
 	}
 
@@ -243,7 +260,37 @@ func ParseRuleLine(line, source string) (*ParsedRule, bool) {
 		IsWildcard: isWildcard,
 		IsExact:    isExact,
 		Source:     source,
+		DenyAllow:  denyAllow,
+		To:         toDomains,
 	}, true
+}
+
+// parseModifierDomains 解析修饰符中以 "|" 分隔的域名列表。
+//
+// 借鉴自 AdGuard Home urlfilter 的 $denyallow=/$to= 语义：条目为小写去点的域名后缀；
+// 以 "~" 前缀的取反条目在 DNS 层无可靠等价语义，直接跳过（不丢弃整条规则）。
+func parseModifierDomains(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	var out []string
+	for _, part := range strings.Split(raw, "|") {
+		part = strings.ToLower(strings.TrimSpace(part))
+		if part == "" || strings.HasPrefix(part, "~") {
+			continue
+		}
+		part = strings.TrimPrefix(part, "*")
+		part = strings.Trim(part, ".")
+		part = strings.TrimSuffix(part, "^")
+		if part == "" || strings.ContainsAny(part, "/?#*") {
+			continue
+		}
+		out = append(out, part)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func isLiteralIP(val string) bool {
@@ -326,9 +373,10 @@ func isWebOnlyModifier(mod string) bool {
 		"strict-first-party", "match-case", "all":
 		return true
 	}
+	// 注意：denyallow=/to= 已在修饰符循环中单独解析为排除集合，不再视为浏览器专有修饰符丢弃整条规则。
 	if strings.HasPrefix(mod, "domain=") || strings.HasPrefix(mod, "app=") ||
 		strings.HasPrefix(mod, "~app=") || strings.HasPrefix(mod, "method=") ||
-		strings.HasPrefix(mod, "~method=") || strings.HasPrefix(mod, "denyallow=") {
+		strings.HasPrefix(mod, "~method=") {
 		return true
 	}
 	return false

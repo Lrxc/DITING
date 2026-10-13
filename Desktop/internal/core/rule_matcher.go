@@ -28,6 +28,10 @@ type RuleMatcher struct {
 	blockTrie       *DomainTrie
 	blockRules      []*ParsedRule
 	totalRulesCount int
+
+	// hasDenyAllow 标记是否存在带 $denyallow=/$to= 排除修饰符的规则。
+	// 为 false 时匹配热路径完全跳过排除判定，零额外开销。
+	hasDenyAllow bool
 }
 
 // NewRuleMatcher 创建规则评估匹配器
@@ -64,6 +68,9 @@ func (m *RuleMatcher) BuildFromRules(rules []*ParsedRule) {
 
 	blockDomains := make([]string, 0, len(rules))
 
+	// 是否出现带 $denyallow=/$to= 排除修饰符的黑名单规则
+	hasDenyAllow := false
+
 	for _, r := range rules {
 		if r == nil {
 			continue
@@ -84,6 +91,9 @@ func (m *RuleMatcher) BuildFromRules(rules []*ParsedRule) {
 				}
 			}
 		} else {
+			if len(r.DenyAllow) > 0 || len(r.To) > 0 {
+				hasDenyAllow = true
+			}
 			if r.Important {
 				if r.IsRegex || r.IsWildcard {
 					importantBlockRules = append(importantBlockRules, r)
@@ -118,6 +128,7 @@ func (m *RuleMatcher) BuildFromRules(rules []*ParsedRule) {
 	m.blockTrie = blockTrie
 	m.blockRules = blockRules
 	m.totalRulesCount = len(rules)
+	m.hasDenyAllow = hasDenyAllow
 }
 
 // Match 对域名进行多策略优先级匹配评估 (Important Allow > Important Block > Whitelist Allow > Bloom+Trie Block > Wildcard/Regex)
@@ -153,7 +164,7 @@ func (m *RuleMatcher) Match(domain string, qtype uint16) CheckHostResult {
 	}
 
 	// 2. 次高优先级: 带 $important 的黑名单拦截规则 (Trie -> Wildcard/Regex)
-	if hit, rule := m.importantBlockTrie.Match(domain); hit && matchDNSType(rule, qtype) {
+	if hit, rule := m.importantBlockTrie.Match(domain); hit && matchRuleApplicable(rule, domain, qtype) {
 		return CheckHostResult{
 			Blocked:     true,
 			Action:      "block",
@@ -163,7 +174,7 @@ func (m *RuleMatcher) Match(domain string, qtype uint16) CheckHostResult {
 		}
 	}
 	for _, rule := range m.importantBlockRules {
-		if matchDNSType(rule, qtype) && matchRulePattern(rule, domain) {
+		if matchRuleApplicable(rule, domain, qtype) && matchRulePattern(rule, domain) {
 			return CheckHostResult{
 				Blocked:     true,
 				Action:      "block",
@@ -202,7 +213,7 @@ func (m *RuleMatcher) Match(domain string, qtype uint16) CheckHostResult {
 		inBloom = false
 	}
 	if inBloom {
-		if hit, rule := m.blockTrie.Match(domain); hit && matchDNSType(rule, qtype) {
+		if hit, rule := m.blockTrie.Match(domain); hit && matchRuleApplicable(rule, domain, qtype) {
 			return CheckHostResult{
 				Blocked:     true,
 				Action:      "block",
@@ -215,7 +226,7 @@ func (m *RuleMatcher) Match(domain string, qtype uint16) CheckHostResult {
 
 	// 5. 第五优先级: 常规黑名单通配符与正则规则
 	for _, rule := range m.blockRules {
-		if matchDNSType(rule, qtype) && matchRulePattern(rule, domain) {
+		if matchRuleApplicable(rule, domain, qtype) && matchRulePattern(rule, domain) {
 			reason := "wildcard_block"
 			if rule.IsRegex {
 				reason = "regex_block"
