@@ -48,6 +48,11 @@ type FilterConfig struct {
 	// 分时拦截（时间计划）：开启后仅在命中计划的窗口内执行拦截
 	ScheduleEnabled bool               `json:"scheduleEnabled"`
 	Schedules       []BlockingSchedule `json:"schedules"`
+
+	// FilterResponse 响应侧别名链复检开关（默认关闭）。
+	// 开启后对上游应答中的 CNAME 目标与 A/AAAA 记录所属名二次匹配黑名单规则，
+	// 用于拦截「QNAME 合法但别名指向黑名单域」的深链绕过。
+	FilterResponse bool `json:"filterResponse"`
 }
 
 // DefaultFilterConfig 生成默认过滤配置
@@ -63,6 +68,7 @@ func DefaultFilterConfig() FilterConfig {
 		DataDir:             platform.DefaultFilterDir(),
 		ScheduleEnabled:     false,
 		Schedules:           []BlockingSchedule{},
+		FilterResponse:      false,
 	}
 }
 

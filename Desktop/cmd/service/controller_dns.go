@@ -200,11 +200,18 @@ func (p *program) StartDNS(ctx context.Context) error {
 	})
 	filterMw := ditingdns.NewFilterMiddlewareWithGroups(p.filterEngine, p.groupResolver)
 	rebindMw := ditingdns.NewRebindMiddleware(rebindMgr, p.cache)
+	filterResponseMw := ditingdns.NewFilterResponseMiddleware(p.filterEngine, p.groupResolver, func() bool {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		return p.cfg.Filter.FilterResponse
+	}, p.cache)
 	dns64Mw := ditingdns.NewDNS64Middleware(p.dns64Synth, p.resolver)
 	ecsMw := ditingdns.NewECSMiddleware(p.ecsMgr)
 	cacheMw := ditingdns.NewCacheMiddleware(p.cache, p.resolver)
 	forwardMw := ditingdns.NewForwardMiddleware(p.resolver)
-	pipeline := ditingdns.NewPipeline(metricsMw, edeMw, echMw, clientMw, accessMw, rateLimitMw, sudnMw, hostsMw, rewriteMw, ipv6Mw, privatePTRMw, unqualifiedMw, filterMw, rebindMw, dns64Mw, ecsMw, cacheMw, forwardMw)
+	// 响应侧复检位于 rebindMw 之后、dns64Mw 之前：
+	// 既包裹缓存（缓存命中也复检），又在 DNS64 合成之后获得最终应答，且被 rebindMw 的已阻断判定短路。
+	pipeline := ditingdns.NewPipeline(metricsMw, edeMw, echMw, clientMw, accessMw, rateLimitMw, sudnMw, hostsMw, rewriteMw, ipv6Mw, privatePTRMw, unqualifiedMw, filterMw, rebindMw, filterResponseMw, dns64Mw, ecsMw, cacheMw, forwardMw)
 	udpAddrs, tcpAddrs := p.cfg.DNS.EffectiveListenAddresses()
 	serverCfg := ditingdns.ServerConfig{
 		UDPAddresses: udpAddrs,
