@@ -74,6 +74,7 @@ export const SUB_TABS: Record<NavTab, readonly SubTabDef[]> = {
     { id: 'custom', label: '自定义规则' },
     { id: 'test', label: '规则检测' },
     { id: 'config', label: '拦截方式' },
+    { id: 'advanced', label: '高级拦截' },
     { id: 'schedule', label: '时间计划' },
     { id: 'rewrite', label: 'DNS 重写' },
     { id: 'privacy', label: '安全隐私' },

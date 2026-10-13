@@ -1,4 +1,4 @@
-import type { FilterStats, FilterConfig, FilterList, CheckHostResult, ScheduleConfigResponse, UpdateScheduleRequest } from './types';
+import type { FilterStats, FilterConfig, FilterList, CheckHostResult, ScheduleConfigResponse, UpdateScheduleRequest, FilterPauseResponse, FilterPauseRequest } from './types';
 import type { HttpTransport } from './http';
 
 /** 规则拦截（过滤引擎、订阅列表与自定义规则） */
@@ -78,6 +78,19 @@ export class FilterApi {
 
   public async configureSchedule(req: UpdateScheduleRequest): Promise<void> {
     await this.http.request<void>('/api/v1/filter/schedule', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    });
+  }
+
+  /** 读取定时暂停拦截状态（含剩余秒数倒计时） */
+  public getPause(): Promise<FilterPauseResponse> {
+    return this.http.request<FilterPauseResponse>('/api/v1/filter/pause');
+  }
+
+  /** 暂停或恢复拦截；暂停需给出时长（秒） */
+  public async setPause(req: FilterPauseRequest): Promise<void> {
+    await this.http.request<void>('/api/v1/filter/pause', {
       method: 'POST',
       body: JSON.stringify(req),
     });

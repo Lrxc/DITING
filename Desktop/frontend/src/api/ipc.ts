@@ -97,6 +97,8 @@ class IPCService {
   public checkHost = (domain: string, qtype: string | number = 'A') => this.filter.checkHost(domain, qtype);
   public getBlockingSchedule = () => this.filter.getSchedule();
   public configureBlockingSchedule = (req: Parameters<FilterApi['configureSchedule']>[0]) => this.filter.configureSchedule(req);
+  public getFilterPause = () => this.filter.getPause();
+  public setFilterPause = (req: Parameters<FilterApi['setPause']>[0]) => this.filter.setPause(req);
 
   // --- 自定义重写与客户端管理 ---
   public getRewriteRules = () => this.rewrite.getRewriteRules();
@@ -117,6 +119,8 @@ class IPCService {
   public configureECS = (req: Parameters<SecurityApi['configureECS']>[0]) => this.security.configureECS(req);
   public configureRebind = (req: Parameters<SecurityApi['configureRebind']>[0]) => this.security.configureRebind(req);
   public configureHosts = (req: Parameters<SecurityApi['configureHosts']>[0]) => this.security.configureHosts(req);
+  public getSafeSearch = () => this.security.getSafeSearch();
+  public configureSafeSearch = (req: Parameters<SecurityApi['configureSafeSearch']>[0]) => this.security.configureSafeSearch(req);
 
   // --- 局域网 DNS ---
   public getLANStatus = () => this.network.getLANStatus();

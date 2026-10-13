@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { ipc } from '../../api/ipc';
-import type { FilterStats, FilterConfig } from '../../api/types';
+import type { FilterStats, FilterConfig, FilterPauseResponse } from '../../api/types';
 import StatusBadge from '../../components/StatusBadge.vue';
 import M3Icon from '../../components/M3Icon.vue';
 import AppCard from '../../components/ui/AppCard.vue';
@@ -34,10 +34,16 @@ const config = ref<FilterConfig>({
   updateIntervalHours: 24,
   scheduleEnabled: false,
   schedules: [],
+  filterResponse: false,
+  allowlistOnly: false,
 });
 
 const listCount = ref(0);
 const customRulesText = ref('');
+/** 定时暂停拦截状态与倒计时 */
+const pause = ref<FilterPauseResponse>({ paused: false, remainingSeconds: 0, pausedUntilMs: 0, blockingEnabled: true });
+const pauseBusy = ref(false);
+const pauseTarget = ref(30);
 /** 子页签由上层 RulesView 的分段控件驱动（hash 可直达） */
 const activeTab = defineModel<string>('sub', { default: 'lists' });
 
@@ -53,18 +59,43 @@ const { toast, show: showToast, dismiss } = useToast();
 
 async function fetchData() {
   try {
-    const [st, cfg, l, rules] = await Promise.all([
+    const [st, cfg, l, rules, ps] = await Promise.all([
       ipc.getFilterStats(),
       ipc.getFilterConfig(),
       ipc.getFilterLists(),
       ipc.getCustomRules(),
+      ipc.getFilterPause(),
     ]);
     if (st) stats.value = st;
     if (cfg) config.value = cfg;
     listCount.value = (l || []).length;
     customRulesText.value = (rules || []).join('\n');
+    if (ps) pause.value = ps;
   } catch (err: any) {
     showToast(err?.message || '获取规则数据失败', true);
+  }
+}
+
+/** 暂停剩余时间的人类可读文本 */
+const pauseRemainingText = computed(() => {
+  const sec = pause.value.remainingSeconds || 0;
+  if (sec <= 0) return '';
+  if (sec >= 86400) return `${Math.ceil(sec / 86400)} 天`;
+  if (sec >= 3600) return `${Math.floor(sec / 3600)} 小时 ${Math.floor((sec % 3600) / 60)} 分`;
+  if (sec >= 60) return `${Math.floor(sec / 60)} 分 ${sec % 60} 秒`;
+  return `${sec} 秒`;
+});
+
+async function setPause(paused: boolean, durationSec?: number) {
+  try {
+    pauseBusy.value = true;
+    await ipc.setFilterPause({ paused, durationSec });
+    pause.value = await ipc.getFilterPause();
+    showToast(paused ? `拦截已暂停（${pauseRemainingText.value}后自动恢复）` : '拦截已恢复');
+  } catch (err: any) {
+    showToast(err?.message || '操作拦截暂停状态失败', true);
+  } finally {
+    pauseBusy.value = false;
   }
 }
 
@@ -79,6 +110,36 @@ async function toggleMasterSwitch(e: Event) {
   } catch (err: any) {
     revertSwitch(e, !nextVal);
     showToast(err?.message || '更新开关失败', true);
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function toggleResponseFilter(e: Event) {
+  const next = extractSwitchValue(e);
+  try {
+    saving.value = true;
+    await ipc.updateFilterConfig({ filterResponse: next });
+    config.value.filterResponse = next;
+    showToast(`响应侧别名链复检已${next ? '开启' : '关闭'}`);
+  } catch (err: any) {
+    revertSwitch(e, !next);
+    showToast(err?.message || '更新深链拦截开关失败', true);
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function toggleAllowlistOnly(e: Event) {
+  const next = extractSwitchValue(e);
+  try {
+    saving.value = true;
+    await ipc.updateFilterConfig({ allowlistOnly: next });
+    config.value.allowlistOnly = next;
+    showToast(`仅白名单模式已${next ? '开启' : '关闭'}`);
+  } catch (err: any) {
+    revertSwitch(e, !next);
+    showToast(err?.message || '更新仅白名单模式失败', true);
   } finally {
     saving.value = false;
   }
@@ -156,6 +217,47 @@ usePoller(fetchData, 4000);
       <!-- 拦截指标带 -->
       <div class="mt-3">
         <MetricStrip :stats="ruleStats" />
+      </div>
+
+      <!-- 定时暂停拦截快捷管控 -->
+      <div class="mt-4 pt-4 border-t border-surface-border-sub">
+        <div v-if="pause.paused" class="flex flex-wrap items-center justify-between gap-3 p-3 rounded-md border border-status-warning/40 bg-status-warning/10">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <M3Icon name="schedule" :size="18" class="text-status-warning shrink-0" />
+            <div class="min-w-0">
+              <div class="text-[12.5px] font-bold text-text-main">拦截已暂停</div>
+              <div class="text-[11px] text-text-sub">
+                剩余 <span class="font-mono font-semibold">{{ pauseRemainingText }}</span> 后自动恢复拦截
+              </div>
+            </div>
+          </div>
+          <button type="button" class="app-btn-primary app-btn-compact" :disabled="pauseBusy" @click="setPause(false)">
+            <M3Icon name="play_arrow" :size="14" />
+            <span>立即恢复拦截</span>
+          </button>
+        </div>
+
+        <div v-else class="flex flex-wrap items-center justify-between gap-3">
+          <div class="min-w-0">
+            <div class="text-[12.5px] font-semibold text-text-main">临时暂停拦截</div>
+            <div class="text-[11px] text-text-sub">在指定时长内整体放行全部查询，到期自动恢复（重启服务亦恢复）</div>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <select
+              v-model.number="pauseTarget"
+              class="h-[32px] px-2.5 rounded-md border border-surface-border bg-surface-card text-xs text-text-main font-mono focus:outline-none focus:border-accent-seal"
+            >
+              <option :value="5">5 分钟</option>
+              <option :value="30">30 分钟</option>
+              <option :value="60">1 小时</option>
+              <option :value="480">8 小时</option>
+            </select>
+            <button type="button" class="app-btn-secondary app-btn-compact" :disabled="pauseBusy" @click="setPause(true, pauseTarget * 60)">
+              <M3Icon name="pause" :size="14" />
+              <span>暂停</span>
+            </button>
+          </div>
+        </div>
       </div>
     </AppCard>
 
@@ -365,5 +467,49 @@ usePoller(fetchData, 4000);
         </template>
       </AppCard>
     </div>
+
+    <!-- TAB 5: 高级拦截能力（深链复检 / 仅白名单，均为新增能力，默认关闭） -->
+    <AppCard
+      v-if="activeTab === 'advanced'"
+      title="高级拦截能力"
+      subtitle="针对绕过手法的增强拦截策略，默认关闭，按需开启"
+      icon="shield"
+      :iconSize="16"
+    >
+      <div class="space-y-3 mt-3 text-xs">
+        <!-- 响应侧别名链复检 -->
+        <div class="app-card-sub p-3 space-y-2">
+          <div class="flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <span class="font-bold text-text-main text-[13px]">响应侧别名链深度复检</span>
+              <span class="text-[10px] text-text-muted ml-2 font-mono">CNAME 深链拦截</span>
+            </div>
+            <md-switch :selected="!!config.filterResponse" :disabled="saving" @change="toggleResponseFilter" />
+          </div>
+          <p class="text-[11px] text-text-sub leading-relaxed">
+            对上游应答中的 CNAME 目标与 A/AAAA 记录所属名二次匹配黑名单，拦截「查询域名合法但别名指向黑名单域」的
+            CDN 换域或跳转器绕过。缓存命中的应答同样复检，命中后立即剔除被投毒的缓存条目。
+          </p>
+        </div>
+
+        <!-- 仅白名单模式 -->
+        <div class="app-card-sub p-3 space-y-2">
+          <div class="flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <span class="font-bold text-text-main text-[13px]">仅白名单模式</span>
+              <span class="text-[10px] text-text-muted ml-2 font-mono">Allowlist Only</span>
+            </div>
+            <md-switch :selected="!!config.allowlistOnly" :disabled="saving" @change="toggleAllowlistOnly" />
+          </div>
+          <p class="text-[11px] text-text-sub leading-relaxed">
+            开启后仅命中放行规则（<code class="font-mono">@@</code> 例外）的查询才被放行，其余一律阻断（含未命中任何规则）。
+            本地 Hosts / 重写 / 内网域名等本地权威应答不受影响。
+          </p>
+          <p v-if="config.allowlistOnly" class="text-[11px] text-status-warning leading-relaxed">
+            注意：请先确保已配置充分的放行白名单，否则可能造成大面积域名解析失败。
+          </p>
+        </div>
+      </div>
+    </AppCard>
   </div>
 </template>

@@ -1,35 +1,15 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { ipc } from '../../api/ipc';
-import type { BlockingSchedule, ScheduleConfigResponse } from '../../api/types';
+import type { ScheduleConfigResponse } from '../../api/types';
 import M3Icon from '../M3Icon.vue';
 import AppCard from '../ui/AppCard.vue';
 import StatusBadge from '../StatusBadge.vue';
 import ToastBanner from '../ToastBanner.vue';
-import ConfirmModal from '../ConfirmModal.vue';
+import ScheduleEditor from './ScheduleEditor.vue';
 import { extractSwitchValue } from '../../utils/switch';
 import { usePoller } from '../../composables/usePoller';
 import { useToast } from '../../composables/useToast';
-
-/** 星期选择项（键值与后端 BlockingSchedule.Weekdays 一致） */
-const WEEKDAYS = [
-  { key: 'mon', label: '一' },
-  { key: 'tue', label: '二' },
-  { key: 'wed', label: '三' },
-  { key: 'thu', label: '四' },
-  { key: 'fri', label: '五' },
-  { key: 'sat', label: '六' },
-  { key: 'sun', label: '日' },
-] as const;
-
-const emptySchedule = (): BlockingSchedule => ({
-  id: '',
-  name: '',
-  enabled: true,
-  weekdays: [],
-  start: '08:00',
-  end: '18:00',
-});
 
 const config = ref<ScheduleConfigResponse>({
   enabled: false,
@@ -39,7 +19,6 @@ const config = ref<ScheduleConfigResponse>({
 });
 
 const saving = ref(false);
-const deleteIndex = ref<number>(-1);
 const { toast, show: showToast, dismiss } = useToast();
 
 const enabledCount = computed(() => config.value.schedules.filter((s) => s.enabled).length);
@@ -54,30 +33,6 @@ const stateBadge = computed(() => {
   }
   return { status: 'warning' as const, text: '计划暂停 · 放行全部' };
 });
-
-function toggleWeekday(row: BlockingSchedule, key: string) {
-  const idx = row.weekdays.indexOf(key);
-  if (idx >= 0) {
-    row.weekdays.splice(idx, 1);
-  } else {
-    row.weekdays.push(key);
-  }
-}
-
-function addSchedule() {
-  config.value.schedules.push(emptySchedule());
-}
-
-function requestDelete(index: number) {
-  deleteIndex.value = index;
-}
-
-function confirmDelete() {
-  if (deleteIndex.value >= 0) {
-    config.value.schedules.splice(deleteIndex.value, 1);
-  }
-  deleteIndex.value = -1;
-}
 
 async function fetchData() {
   try {
@@ -149,97 +104,9 @@ usePoller(fetchData, 5000);
           />
         </div>
 
-        <!-- 计划列表 -->
+        <!-- 计划列表（编辑组件与客户端分组计划共用） -->
         <div v-if="config.enabled" class="space-y-3">
-          <div
-            v-for="(row, index) in config.schedules"
-            :key="index"
-            class="app-card-sub p-3 space-y-3"
-          >
-            <div class="flex items-center justify-between gap-2">
-              <div class="flex items-center gap-2 min-w-0 flex-1">
-                <md-outlined-text-field
-                  label="计划名称"
-                  class="flex-1 min-w-0"
-                  :value="row.name"
-                  @input="row.name = ($event.target as any).value"
-                ></md-outlined-text-field>
-                <md-switch
-                  :selected="row.enabled"
-                  @change="row.enabled = extractSwitchValue($event)"
-                  class="shrink-0"
-                />
-              </div>
-              <button
-                type="button"
-                class="app-btn-icon shrink-0"
-                @click="requestDelete(index)"
-                title="删除该计划"
-              >
-                <M3Icon name="delete" :size="15" />
-              </button>
-            </div>
-
-            <div class="grid grid-cols-2 gap-3">
-              <div class="space-y-1">
-                <label class="text-[11px] font-semibold text-text-muted block">生效开始时刻</label>
-                <input
-                  type="time"
-                  class="w-full h-[34px] px-3 rounded-md border border-surface-border bg-surface-card-sub text-xs text-text-main font-mono focus:outline-none focus:border-accent-seal"
-                  :value="row.start"
-                  @input="row.start = ($event.target as HTMLInputElement).value"
-                />
-              </div>
-              <div class="space-y-1">
-                <label class="text-[11px] font-semibold text-text-muted block">
-                  生效结束时刻
-                  <span class="text-text-muted/70 font-normal">(早于开始即跨夜)</span>
-                </label>
-                <input
-                  type="time"
-                  class="w-full h-[34px] px-3 rounded-md border border-surface-border bg-surface-card-sub text-xs text-text-main font-mono focus:outline-none focus:border-accent-seal"
-                  :value="row.end"
-                  @input="row.end = ($event.target as HTMLInputElement).value"
-                />
-              </div>
-            </div>
-
-            <div class="space-y-1.5">
-              <div class="flex items-center justify-between">
-                <label class="text-[11px] font-semibold text-text-muted">生效星期</label>
-                <button
-                  type="button"
-                  class="text-[11px] text-brand-primary hover:underline"
-                  @click="row.weekdays = []"
-                >
-                  每天
-                </button>
-              </div>
-              <div class="flex flex-wrap gap-1.5">
-                <button
-                  v-for="day in WEEKDAYS"
-                  :key="day.key"
-                  type="button"
-                  class="w-8 h-8 rounded-full text-[11px] font-semibold border transition-colors"
-                  :class="row.weekdays.includes(day.key)
-                    ? 'bg-brand-primary text-white border-brand-primary'
-                    : 'bg-surface-card text-text-muted border-surface-border-sub hover:border-brand-primary/60'"
-                  @click="toggleWeekday(row, day.key)"
-                >
-                  {{ day.label }}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            class="w-full py-2 rounded-lg border border-dashed border-surface-border-sub text-text-muted hover:text-brand-primary hover:border-brand-primary/60 transition-colors flex items-center justify-center gap-1.5"
-            @click="addSchedule"
-          >
-            <M3Icon name="add" :size="15" />
-            <span>新增时间计划</span>
-          </button>
+          <ScheduleEditor v-model="config.schedules" />
 
           <p v-if="enabledCount === 0" class="text-[11px] text-status-warning">
             当前无已启用计划，拦截将保持常开。请至少启用一条计划以限制拦截时段。
@@ -247,15 +114,5 @@ usePoller(fetchData, 5000);
         </div>
       </div>
     </AppCard>
-
-    <ConfirmModal
-      :open="deleteIndex >= 0"
-      title="删除时间计划"
-      :message="`确定要删除该时间计划吗？此操作将立即从内存移除，保存后不再生效。`"
-      confirm-text="删除"
-      danger
-      @confirm="confirmDelete"
-      @cancel="deleteIndex = -1"
-    />
   </div>
 </template>

@@ -6,6 +6,7 @@ import M3Icon from '../M3Icon.vue';
 import AppCard from '../ui/AppCard.vue';
 import AppModal from '../AppModal.vue';
 import StatusBadge from '../StatusBadge.vue';
+import SafeSearchCard from './SafeSearchCard.vue';
 import ToastBanner from '../ToastBanner.vue';
 import { extractSwitchValue } from '../../utils/switch';
 import { useToast } from '../../composables/useToast';
@@ -506,6 +507,9 @@ onMounted(() => {
         </div>
       </AppCard>
     </div>
+
+    <!-- 强制安全搜索（独立子卡片，避免本文件继续膨胀） -->
+    <SafeSearchCard @error="(m) => showToast(m, true)" @success="(m) => showToast(m)" />
 
     <!-- 弹窗：编辑 Rebinding 白名单域名 -->
     <AppModal

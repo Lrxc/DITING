@@ -1,21 +1,56 @@
 <script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import type { StatusResponse } from '../../api/types';
 import type { NavTab } from '../../constants/navigation';
+import { formatDuration } from '../../utils/format';
 import M3Icon from '../M3Icon.vue';
 import AppCard from '../ui/AppCard.vue';
 import CardTile from '../ui/CardTile.vue';
+import StatusBadge from '../StatusBadge.vue';
 
-defineProps<{
-  status: StatusResponse | null;
-  formatDnsMode: string;
-  allowLAN: boolean;
-  primaryLanIP: string;
-  takeoverActive: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    status: StatusResponse | null;
+    formatDnsMode: string;
+    allowLAN: boolean;
+    primaryLanIP: string;
+    takeoverActive: boolean;
+    /** 暂停/恢复请求进行中 */
+    pauseBusy?: boolean;
+  }>(),
+  { pauseBusy: false }
+);
 
 const emit = defineEmits<{
   (e: 'navigate', tab: NavTab): void;
+  (e: 'pause', paused: boolean): void;
 }>();
+
+/** 暂停剩余时间倒计时：以服务端截止时刻为准，本地每秒刷新，避免等待 5 秒轮询 */
+const nowMs = ref(Date.now());
+let ticker: ReturnType<typeof setInterval> | null = null;
+
+onMounted(() => {
+  ticker = setInterval(() => {
+    nowMs.value = Date.now();
+  }, 1000);
+});
+
+onUnmounted(() => {
+  if (ticker) clearInterval(ticker);
+});
+
+const paused = computed(() => Boolean(props.status?.filter?.paused));
+
+const pauseRemainingText = computed(() => {
+  const f = props.status?.filter;
+  if (!f?.paused) return '';
+  const sec = f.pausedUntilMs
+    ? Math.max(0, Math.round((f.pausedUntilMs - nowMs.value) / 1000))
+    : f.pausedRemainingSec || 0;
+  // 到期后由下一次状态轮询回收暂停态，此处先显示 0 秒避免出现负数
+  return formatDuration(sec);
+});
 </script>
 
 <template>
@@ -99,6 +134,15 @@ const emit = defineEmits<{
       iconBoxClass="w-7 h-7"
       :iconSize="16"
     >
+      <template #badge>
+        <StatusBadge
+          v-if="paused"
+          status="warning"
+          :text="`拦截已暂停 · ${pauseRemainingText}`"
+          size="sm"
+        />
+      </template>
+
       <template #actions>
         <button
           type="button"
@@ -122,6 +166,33 @@ const emit = defineEmits<{
             {{ status?.filter?.blockedQueries || 0 }} / {{ status?.filter?.totalRules || 0 }}
           </div>
         </CardTile>
+      </div>
+
+      <!-- 快捷暂停 / 恢复拦截 -->
+      <div class="mt-3 pt-3 border-t border-surface-border-sub flex items-center justify-between gap-3">
+        <span class="text-[11px] text-text-sub min-w-0 truncate">
+          {{ paused ? `剩余 ${pauseRemainingText} 自动恢复` : '临时暂停全部拦截' }}
+        </span>
+        <button
+          v-if="paused"
+          type="button"
+          class="app-btn-primary app-btn-compact shrink-0"
+          :disabled="pauseBusy"
+          @click="emit('pause', false)"
+        >
+          <M3Icon name="play_arrow" :size="13" />
+          <span>恢复拦截</span>
+        </button>
+        <button
+          v-else
+          type="button"
+          class="app-btn-secondary app-btn-compact shrink-0"
+          :disabled="pauseBusy"
+          @click="emit('pause', true)"
+        >
+          <M3Icon name="pause" :size="13" />
+          <span>暂停 30 分钟</span>
+        </button>
       </div>
     </AppCard>
 

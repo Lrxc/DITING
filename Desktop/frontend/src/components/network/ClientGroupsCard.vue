@@ -1,18 +1,20 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { ipc } from '../../api/ipc';
-import type { ClientGroup, ClientGroupRuleListOption, ClientGroupConfigResponse } from '../../api/types';
+import type { BlockingSchedule, ClientGroup, ClientGroupRuleListOption, ClientGroupConfigResponse } from '../../api/types';
 import M3Icon from '../M3Icon.vue';
 import AppCard from '../ui/AppCard.vue';
 import StatusBadge from '../StatusBadge.vue';
 import ToastBanner from '../ToastBanner.vue';
 import ConfirmModal from '../ConfirmModal.vue';
+import ScheduleEditor from '../rules/ScheduleEditor.vue';
 import { extractSwitchValue } from '../../utils/switch';
 import { useToast } from '../../composables/useToast';
 
 /** 分组编辑草稿：成员以多行文本编辑，保存时切回数组 */
-interface GroupDraft extends Omit<ClientGroup, 'clients'> {
+interface GroupDraft extends Omit<ClientGroup, 'clients' | 'schedules'> {
   clientsText: string;
+  schedules: BlockingSchedule[];
 }
 
 /** 组级拦截方式选项（空 = 继承全局） */
@@ -33,8 +35,12 @@ const { toast, show: showToast, dismiss } = useToast();
 const enabledGroups = computed(() => drafts.value.filter((g) => g.enabled).length);
 
 function toDraft(g: ClientGroup): GroupDraft {
-  const { clients, ...rest } = g;
-  return { ...rest, clientsText: (clients || []).join('\n') };
+  const { clients, schedules, ...rest } = g;
+  return {
+    ...rest,
+    clientsText: (clients || []).join('\n'),
+    schedules: (schedules || []).map((s) => ({ ...s, weekdays: [...(s.weekdays || [])] })),
+  };
 }
 
 function newDraft(index: number): GroupDraft {
@@ -45,6 +51,9 @@ function newDraft(index: number): GroupDraft {
     clientsText: '',
     ruleListIds: [],
     blockMode: '',
+    scheduleEnabled: false,
+    schedules: [],
+    allowlistOnly: false,
   };
 }
 
@@ -105,7 +114,11 @@ async function saveConfig() {
     const groups: ClientGroup[] = drafts.value
       .map((d) => {
         const { clientsText, ...rest } = d;
-        return { ...rest, clients: splitClients(clientsText) };
+        return {
+          ...rest,
+          clients: splitClients(clientsText),
+          schedules: rest.scheduleEnabled ? (rest.schedules || []).filter((s) => s.start && s.end) : [],
+        };
       })
       .filter((g) => g.clients.length > 0);
 
@@ -227,6 +240,35 @@ fetchData();
                 </select>
                 <span class="text-[10px] text-text-muted block">仅覆盖本组的拦截应答策略</span>
               </div>
+            </div>
+
+            <!-- 组级仅白名单模式 -->
+            <div class="flex items-center justify-between gap-3 p-2.5 rounded-md border border-surface-border-sub bg-surface-card">
+              <div class="min-w-0">
+                <span class="font-semibold text-text-main text-[11.5px] block">仅白名单模式</span>
+                <span class="text-[10px] text-text-muted">开启后该组仅放行命中放行规则（@@）的查询，其余一律阻断</span>
+              </div>
+              <md-switch
+                :selected="!!row.allowlistOnly"
+                @change="row.allowlistOnly = extractSwitchValue($event)"
+                class="shrink-0"
+              />
+            </div>
+
+            <!-- 组级时间计划 -->
+            <div class="space-y-2 p-2.5 rounded-md border border-surface-border-sub bg-surface-card">
+              <div class="flex items-center justify-between gap-3">
+                <div class="min-w-0">
+                  <span class="font-semibold text-text-main text-[11.5px] block">组级时间计划</span>
+                  <span class="text-[10px] text-text-muted">开启后该组按自身窗口拦截；关闭则继承全局时间计划策略</span>
+                </div>
+                <md-switch
+                  :selected="!!row.scheduleEnabled"
+                  @change="row.scheduleEnabled = extractSwitchValue($event)"
+                  class="shrink-0"
+                />
+              </div>
+              <ScheduleEditor v-if="row.scheduleEnabled" v-model="row.schedules" />
             </div>
 
             <!-- 规则集绑定 -->

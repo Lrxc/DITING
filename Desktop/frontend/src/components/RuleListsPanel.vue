@@ -5,6 +5,7 @@ import type { FilterList } from '../api/types';
 import M3Icon from './M3Icon.vue';
 import AppModal from './AppModal.vue';
 import ConfirmModal from './ConfirmModal.vue';
+import StatusBadge from './StatusBadge.vue';
 import { useConfirmModal } from '../composables/useConfirmModal';
 import { formatMonthDayTime } from '../utils/format';
 import { extractSwitchValue, revertSwitch } from '../utils/switch';
@@ -29,6 +30,24 @@ const {
   handleConfirm: handleConfirmDelete,
   handleCancel: handleCancelDelete,
 } = useConfirmModal();
+
+/** 列表健康度徽章：304 未变更 / 沿用缓存 / 拉取失败 */
+type HealthBadge = { status: 'active' | 'inactive' | 'warning' | 'error'; text: string; title: string };
+
+function healthBadge(l: FilterList): HealthBadge | null {
+  switch (l.lastStatus) {
+    case 'ok':
+      return { status: 'active', text: '已同步', title: '本次拉取获取到新内容并已生效' };
+    case 'unchanged':
+      return { status: 'inactive', text: '未变更', title: '服务端返回 304，本地副本仍然有效' };
+    case 'cached':
+      return { status: 'warning', text: '沿用缓存', title: l.lastError || '拉取失败，继续使用上次缓存内容' };
+    case 'failed':
+      return { status: 'error', text: '更新失败', title: l.lastError || '拉取失败且无可用缓存' };
+    default:
+      return null;
+  }
+}
 
 function notify(message: string, isError: boolean) {
   if (isError) {
@@ -184,11 +203,19 @@ onMounted(loadLists);
             <div class="app-card-sub p-2.5 font-mono text-[11px] text-text-muted truncate select-all" :title="l.url">
               {{ l.url }}
             </div>
+            <p v-if="l.lastError" class="mt-2 text-[11px] text-status-warning leading-relaxed break-all">
+              {{ l.lastError }}
+            </p>
           </div>
         </div>
 
         <div class="flex items-center justify-between pt-2.5 border-t border-surface-border-sub text-[11px] text-text-muted">
-          <span>最后更新: {{ l.lastUpdated ? formatMonthDayTime(l.lastUpdated) : '未更新' }}</span>
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="truncate">最后更新: {{ l.lastUpdated ? formatMonthDayTime(l.lastUpdated) : '未更新' }}</span>
+            <span v-if="healthBadge(l)" :title="healthBadge(l)!.title" class="shrink-0">
+              <StatusBadge :status="healthBadge(l)!.status" :text="healthBadge(l)!.text" size="sm" />
+            </span>
+          </div>
           <div class="flex items-center gap-1.5">
             <button type="button" @click="refreshList(l.id)" class="app-btn-icon" title="立即更新此规则库">
               <M3Icon name="refresh" :size="14" />

@@ -1,5 +1,17 @@
 /** 谛听 (DITING) 核心与全模块类型定义 */
 
+// 下列类型定义在子文件中，此处仅引入供 StatusResponse 等复合类型引用；
+// 具体定义与拆分缘由见 ./types.network 与 ./types.dns。
+import type {
+  HostsConfig,
+  RebindConfig,
+  AccessControlConfig,
+  RateLimitConfig,
+  DNS64Config,
+  ECSConfig,
+} from './types.network';
+import type { SafeSearchConfig } from './types.dns';
+
 export interface ApiResponse<T = any> {
   success: boolean;
   message?: string;
@@ -97,6 +109,10 @@ export interface FilterStats {
   allowedQueries: number;
   blockRate: number;
   scheduleActive: boolean;
+  /** 定时暂停状态 */
+  paused?: boolean;
+  pausedRemainingSec?: number;
+  pausedUntilMs?: number;
 }
 
 export interface StatusResponse {
@@ -167,6 +183,10 @@ export interface CacheDomainStat {
 
 /** 查询历史与统计中心类型（定义见 ./types.querylog） */
 export * from './types.querylog';
+/** 强制安全搜索与定时暂停类型（定义见 ./types.dns） */
+export * from './types.dns';
+/** 网络/访问控制/协议隐私类型（定义见 ./types.network） */
+export * from './types.network';
 export interface AdapterInfo {
   id: string;
   name: string;
@@ -224,6 +244,12 @@ export interface FilterList {
   rulesCount: number;
   lastUpdated: number;
   checksum?: string;
+  /** 增量更新协商凭证（ETag / Last-Modified） */
+  etag?: string;
+  lastModified?: string;
+  /** 最近一次拉取状态 */
+  lastStatus?: 'ok' | 'unchanged' | 'cached' | 'failed' | string;
+  lastError?: string;
 }
 
 export type BlockMode = 'null_ip' | 'nxdomain' | 'refused' | string;
@@ -239,6 +265,10 @@ export interface FilterConfig {
   dataDir?: string;
   scheduleEnabled: boolean;
   schedules: BlockingSchedule[];
+  /** 响应侧别名链深度复检（深链拦截），默认关闭 */
+  filterResponse?: boolean;
+  /** 仅白名单模式：未命中放行规则一律阻断，默认关闭 */
+  allowlistOnly?: boolean;
 }
 
 /** 单条分时拦截（时间计划） */
@@ -278,7 +308,7 @@ export interface CheckHostResult {
 }
 
 export interface WebSocketEvent {
-  type: 'query' | 'metrics' | 'takeover' | 'dns' | 'alert' | 'upstream' | 'background';
+  type: 'query' | 'metrics' | 'takeover' | 'dns' | 'alert' | 'upstream' | 'background' | 'filter';
   timestamp: number;
   data: any;
 }
@@ -319,18 +349,6 @@ export interface CoreServiceStatus {
   isElevated: boolean;
   canInstall: boolean;
   message?: string;
-}
-
-export interface LANStatusResponse {
-  allowLAN: boolean;
-  listenAddresses: string[];
-  lanAddresses: string[];
-  firewallAllowed: boolean;
-}
-
-export interface ConfigureLANRequest {
-  allowLAN: boolean;
-  configureFirewall?: boolean;
 }
 
 export interface AuthStatusResponse {
@@ -433,122 +451,3 @@ export interface ConfigureClientAliasRequest {
   ip: string;
   name: string;
 }
-
-export interface AccessControlConfig {
-  allowedClients: string[];
-  blockedClients: string[];
-}
-
-export interface ConfigureAccessRequest {
-  allowedClients: string[];
-  blockedClients: string[];
-}
-
-export interface RateLimitConfig {
-  enabled: boolean;
-  rate: number;
-  burst: number;
-  ipv4Prefix: number;
-  ipv6Prefix: number;
-  exemptIPs: string[];
-}
-
-export interface ConfigureRateLimitRequest {
-  enabled: boolean;
-  rate: number;
-  burst: number;
-  ipv4Prefix: number;
-  ipv6Prefix: number;
-  exemptIPs: string[];
-}
-
-/** 客户端分组：一组 IP/CIDR 绑定专属规则集与拦截方式 */
-export interface ClientGroup {
-  id: string;
-  name: string;
-  enabled: boolean;
-  /** IP 或 CIDR（支持 IPv4/IPv6） */
-  clients: string[];
-  /** 该组启用的订阅列表 ID；空数组表示继承全部 */
-  ruleListIds?: string[];
-  /** 组级拦截方式覆盖；空表示继承全局 */
-  blockMode?: string;
-}
-
-/** 分组可绑定的订阅列表选项 */
-export interface ClientGroupRuleListOption {
-  id: string;
-  name: string;
-  enabled: boolean;
-}
-
-export interface ClientGroupConfigResponse {
-  enabled: boolean;
-  groups: ClientGroup[];
-  ruleLists: ClientGroupRuleListOption[];
-}
-
-export interface ConfigureClientGroupsRequest {
-  enabled?: boolean;
-  groups?: ClientGroup[];
-}
-
-export interface DNS64Config {
-  enabled: boolean;
-  prefixes: string[];
-}
-
-export interface ConfigureDNS64Request {
-  enabled: boolean;
-  prefixes: string[];
-}
-
-export interface ConfigureBlockUnqualifiedRequest {
-  blockUnqualified: boolean;
-}
-
-export interface ConfigurePrivacyRequest {
-  enableEDE?: boolean;
-  blockPrivatePTR?: boolean;
-  blockIPv6?: boolean;
-  blockECH?: boolean;
-  ednsPadding?: number;
-}
-
-export interface ECSConfig {
-  enabled: boolean;
-  stripECS: boolean;
-  customSubnet: string;
-}
-
-export interface ConfigureECSRequest {
-  enabled?: boolean;
-  stripECS?: boolean;
-  customSubnet?: string;
-}
-
-export interface HostsConfig {
-  enabled: boolean;
-  useSystemHost: boolean;
-  customFiles: string[];
-  ttl: number;
-}
-
-export interface RebindConfig {
-  enabled: boolean;
-  allowedDomains: string[];
-}
-
-export interface ConfigureRebindRequest {
-  enabled?: boolean;
-  allowedDomains?: string[];
-}
-
-export interface ConfigureHostsRequest {
-  enabled?: boolean;
-  useSystemHost?: boolean;
-  customFiles?: string[];
-  ttl?: number;
-}
-
-

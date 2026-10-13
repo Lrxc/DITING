@@ -35,3 +35,10 @@ export function formatUptime(seconds: number): string {
   if (mins > 0) return `${mins}分 ${s}秒`;
   return `${s}秒`;
 }
+
+/** 倒计时文案：超过一天折算为天，其余与 formatUptime 同款（带空格更易读） */
+export function formatDuration(seconds: number): string {
+  const sec = Math.max(0, Math.floor(seconds || 0));
+  if (sec >= 86400) return `${Math.ceil(sec / 86400)} 天`;
+  return formatUptime(sec).replace(/([时分])/g, '$1 ');
+}

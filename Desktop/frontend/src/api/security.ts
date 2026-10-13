@@ -7,12 +7,27 @@ import type {
   ConfigureECSRequest,
   ConfigureRebindRequest,
   ConfigureHostsRequest,
+  SafeSearchConfig,
+  ConfigureSafeSearchRequest,
 } from './types';
 import type { HttpTransport } from './http';
 
 /** 安全防护、访问控制、速率限制与协议隐私 API */
 export class SecurityApi {
   constructor(private http: HttpTransport) {}
+
+  /** 读取强制安全搜索配置 */
+  public getSafeSearch(): Promise<SafeSearchConfig> {
+    return this.http.request<SafeSearchConfig>('/api/v1/safesearch/config');
+  }
+
+  /** 配置强制安全搜索（总开关 / 服务商黑名单 / TTL） */
+  public async configureSafeSearch(req: ConfigureSafeSearchRequest): Promise<void> {
+    await this.http.request<void>('/api/v1/safesearch/config', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    });
+  }
 
   /** 配置客户端访问控制黑白名单 */
   public async configureAccess(req: ConfigureAccessRequest): Promise<void> {

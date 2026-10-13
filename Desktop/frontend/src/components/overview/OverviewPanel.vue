@@ -14,6 +14,7 @@ import ToastBanner from '../ToastBanner.vue';
 import OverviewQuickCards from './OverviewQuickCards.vue';
 import { revertSwitch, extractSwitchValue } from '../../utils/switch';
 import { usePoller } from '../../composables/usePoller';
+import { useToast } from '../../composables/useToast';
 import { formatUptime } from '../../utils/format';
 
 const emit = defineEmits<{
@@ -24,7 +25,9 @@ const status = ref<StatusResponse | null>(null);
 const loading = ref(false);
 const togglingDNS = ref(false);
 const togglingTakeover = ref(false);
+const pauseBusy = ref(false);
 const errorMessage = ref('');
+const { toast: actionToast, show: showToast, dismiss: dismissToast } = useToast();
 const portConflict = ref<PortCheckResult | null>(null);
 const showConflictModal = ref(false);
 const recheckError = ref('');
@@ -257,6 +260,24 @@ async function handleToggleTakeover(e: Event) {
   }
 }
 
+/** 总览页快捷暂停/恢复拦截：默认暂停 30 分钟，与规则页保持一致的交互结果。 */
+async function handlePause(paused: boolean) {
+  try {
+    pauseBusy.value = true;
+    await ipc.setFilterPause({ paused, durationSec: paused ? 30 * 60 : undefined });
+    const ps = await ipc.getFilterPause();
+    if (ps) {
+      const sec = ps.remainingSeconds || 0;
+      showToast(paused ? `拦截已暂停（${formatUptime(sec)}后自动恢复）` : '拦截已恢复');
+    }
+    await fetchStatus();
+  } catch (err: any) {
+    showToast(err?.message || '操作拦截暂停状态失败', true);
+  } finally {
+    pauseBusy.value = false;
+  }
+}
+
 usePoller(fetchStatus, 5000);
 
 onMounted(() => {
@@ -268,6 +289,8 @@ onMounted(() => {
       }
       pushMetricData(m.qps || 0, m.avgLatencyMs || 0);
     } else if (event.type === 'dns' || event.type === 'takeover' || event.type === 'upstream') {
+      fetchStatus();
+    } else if (event.type === 'filter') {
       fetchStatus();
     }
   });
@@ -305,6 +328,15 @@ onUnmounted(() => {
         </button>
       </template>
     </ToastBanner>
+
+    <!-- 快捷操作反馈（暂停/恢复拦截等） -->
+    <ToastBanner
+      v-if="!errorMessage && actionToast"
+      :message="actionToast.message"
+      :type="actionToast.isError ? 'error' : 'success'"
+      dismissible
+      @dismiss="dismissToast"
+    />
 
     <!-- 两列响应式卡片网格 (宽屏两列，窄屏自动切换单列) -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
@@ -423,7 +455,9 @@ onUnmounted(() => {
         :allowLAN="allowLAN"
         :primaryLanIP="primaryLanIP"
         :takeoverActive="takeoverActive"
+        :pauseBusy="pauseBusy"
         @navigate="emit('navigate', $event)"
+        @pause="handlePause"
       />
 
       <!-- 7. 查询速率趋势波形图卡片 -->
