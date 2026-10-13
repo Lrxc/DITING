@@ -54,6 +54,7 @@ import com.haoze.diting.ui.DomainActionDialog
 import com.haoze.diting.ui.RequestLogItem
 import com.haoze.diting.ui.RequestLogViewModel
 import com.haoze.diting.ui.RuntimeDnsSettingsRefresher
+import com.haoze.diting.ui.components.AppIconImage
 import com.haoze.diting.ui.components.RuleTagChip
 import com.haoze.diting.ui.components.SettingsCardMargin
 import com.haoze.diting.ui.components.SettingsItemSpacing
@@ -348,12 +349,19 @@ private fun ExpressRequestLogCard(item: RequestLogItem, onClick: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                item.title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.weight(1f)
-            )
+            Row(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AppIconImage(packageName = item.packageName, size = 24.dp)
+                Text(
+                    item.title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.weight(1f)
+                )
+            }
             RuleTagChip(
                 text = localizedText(item.status.label),
                 containerColor = color.copy(alpha = .12f),

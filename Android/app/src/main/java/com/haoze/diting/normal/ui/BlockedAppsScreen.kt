@@ -75,6 +75,7 @@ fun BlockedAppsScreen(onBack: () -> Unit) {
         isDirty = selectedPackages != initialPackages || enabled != initialEnabled,
         onSave = { saveBlockedApps() },
         onBack = onBack,
+        onReload = appListAccess.reload,
         headerContent = {
             SettingsSurfaceGroup(
                 content = listOf {

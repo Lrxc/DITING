@@ -31,6 +31,9 @@ import com.haoze.diting.ui.components.AppAlertDialog
 import com.haoze.diting.ui.components.AppDialogButton
 import com.haoze.diting.ui.components.SettingsCornerShape
 import com.haoze.diting.ui.localizedText
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 internal fun AppTrafficDetailDialog(
@@ -111,48 +114,53 @@ internal fun AppTrafficDetailDialog(
                     }
                 }
 
-                if (detail.dailyRecords.isNotEmpty()) {
+                Text(
+                    text = localizedText("拦截记录"),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                if (detail.blockedRecords.isEmpty()) {
                     Text(
-                        text = localizedText("历史日消耗记录"),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
+                        text = localizedText("所选时段内暂无拦截记录"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onSurfaceVariant
                     )
+                } else {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(160.dp)
+                            .height(200.dp)
                     ) {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            items(detail.dailyRecords) { record ->
+                            items(detail.blockedRecords) { record ->
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        text = record.date,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = colors.onSurfaceVariant
-                                    )
-                                    Column(
-                                        horizontalAlignment = Alignment.End,
-                                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                                    ) {
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = formatBytes(record.txBytes + record.rxBytes),
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = colors.onSurface
+                                            text = record.target,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = colors.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                         Text(
-                                            text = "↓ " + formatBytes(record.rxBytes) + "  ↑ " + formatBytes(record.txBytes),
+                                            text = formatBlockedRecordTime(record.timestamp),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = colors.onSurfaceVariant.copy(alpha = 0.8f)
                                         )
                                     }
+                                    Text(
+                                        text = record.source,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (record.source == "HTTPS") colors.error else colors.primary
+                                    )
                                 }
                             }
                         }
@@ -202,3 +210,10 @@ private fun DetailMetricRow(
         }
     }
 }
+
+private val blockedRecordTimeFormatter = ThreadLocal.withInitial {
+    SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault())
+}
+
+private fun formatBlockedRecordTime(timestamp: Long): String =
+    blockedRecordTimeFormatter.get()?.format(Date(timestamp)).orEmpty()

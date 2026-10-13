@@ -68,6 +68,7 @@ fun ExcludedAppsScreen(onBack: () -> Unit) {
         showSelectionActions = true,
         isDirty = selectedPackages != initialPackages,
         onSave = { saveExcludedApps() },
-        onBack = onBack
+        onBack = onBack,
+        onReload = appListAccess.reload
     )
 }

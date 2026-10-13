@@ -43,7 +43,8 @@ data class DashboardRequestLogItem(
     val name: String,
     val meta: String,
     val status: String,
-    val resultLabel: String
+    val resultLabel: String,
+    val packageName: String? = null
 )
 
 data class DashboardCacheEntryItem(
@@ -319,7 +320,8 @@ class ModernLogDashboardViewModel @JvmOverloads constructor(
                     LogResult.BLOCKED.value -> "blocked"
                     else -> "error"
                 },
-                resultLabel = if (isConn) "旁路" else resultLabel(log.result)
+                resultLabel = if (isConn) "旁路" else resultLabel(log.result),
+                packageName = log.packageName
             )
         } + httpLogs.map { log ->
             val status = normalizeHttpOutcome(log.outcome)
@@ -339,7 +341,8 @@ class ModernLogDashboardViewModel @JvmOverloads constructor(
                     "blocked" -> "过滤"
                     "bypassed" -> "旁路"
                     else -> "失败"
-                }
+                },
+                packageName = log.packageName
             )
         }
         return rows.sortedByDescending { it.timestamp }.take(RECENT_LOG_LIMIT)

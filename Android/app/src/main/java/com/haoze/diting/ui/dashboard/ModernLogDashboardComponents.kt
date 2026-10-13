@@ -44,6 +44,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.haoze.diting.ui.DashboardCacheEntryItem
 import com.haoze.diting.ui.DashboardDailyStats
 import com.haoze.diting.ui.DashboardRequestLogItem
+import com.haoze.diting.ui.components.AppIconImage
 import com.haoze.diting.ui.components.SettingsCornerShape
 import com.haoze.diting.ui.localizedText
 import com.haoze.diting.core.traffic.TrafficStatsManager
@@ -361,7 +362,8 @@ fun RequestLogRow(item: DashboardRequestLogItem, compactTag: Boolean = false) {
             "${formatClockTime(item.timestamp)} · ${item.source} · ${item.meta}"
         }),
         tag = localizedText(item.resultLabel),
-        tagColor = tagColor
+        tagColor = tagColor,
+        packageName = item.packageName
     )
 }
 
@@ -380,7 +382,8 @@ fun DashboardListRow(
     title: String,
     subtitle: String,
     tag: String,
-    tagColor: Color
+    tagColor: Color,
+    packageName: String? = null
 ) {
     Row(
         modifier = Modifier
@@ -389,6 +392,7 @@ fun DashboardListRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        AppIconImage(packageName = packageName, size = 24.dp)
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,

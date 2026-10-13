@@ -61,7 +61,9 @@ import com.haoze.diting.ui.components.SettingsItem
 import com.haoze.diting.ui.components.SettingsActionButton
 import com.haoze.diting.ui.components.SettingsSurfaceGroup
 import com.google.accompanist.drawablepainter.rememberDrawablePainter
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
@@ -215,6 +217,23 @@ internal suspend fun loadInstalledApps(context: Context): List<InstalledApp> = w
     }
 }
 
+/** Extra attempts made when the loader returns an empty list while the permission probe passes. */
+private const val EMPTY_APP_LIST_MAX_RETRIES = 2
+private const val EMPTY_APP_LIST_RETRY_DELAY_MS = 400L
+
+/**
+ * Runs [loader], turning failures into an empty list. Cancellation is rethrown so leaving the
+ * screen still cancels the in-flight query instead of swallowing it as an empty result.
+ */
+private suspend fun <T> loadAppsSafely(loader: suspend () -> List<T>): List<T> =
+    try {
+        loader()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        emptyList()
+    }
+
 @Composable
 internal fun InstalledAppCheckboxItem(
     app: InstalledApp,
@@ -318,7 +337,9 @@ internal data class AppListAccessState<T>(
     val showDisclosure: Boolean,
     val allowAccess: () -> Unit,
     val dismissDisclosure: () -> Unit,
-    val retry: () -> Unit
+    val retry: () -> Unit,
+    /** Re-queries the app list without touching permission or disclosure state. */
+    val reload: () -> Unit
 )
 
 @Composable
@@ -368,19 +389,35 @@ internal fun <T> rememberAppListAccessState(loader: suspend () -> List<T>): AppL
     LaunchedEffect(loadGeneration, showDisclosure) {
         if (showDisclosure) return@LaunchedEffect
 
+        // isGranted caches its probe result for a short window, and that cache can hold a
+        // negative result left behind by an earlier transient failure. Probing again here
+        // keeps a stale negative from pinning this screen to "unavailable" (or to a spinner).
+        AppListPermissionHelper.invalidateCache()
         if (!AppListPermissionHelper.isGranted(context)) {
             if (AppListPermissionHelper.isDisclosureAccepted(context)) {
                 unavailable = true
                 apps = emptyList()
+            } else {
+                // Never leave apps == null on this path: that renders a spinner forever.
+                showDisclosure = true
             }
             return@LaunchedEffect
         }
 
         unavailable = false
-        val loaded = try {
-            loader()
-        } catch (_: Exception) {
-            emptyList()
+        apps = null
+        var loaded = loadAppsSafely(loader)
+        // PackageManager can hand back an incomplete or empty list while the system is busy
+        // (for example right after boot). Back off and retry before showing an empty state.
+        var retry = 0
+        while (
+            loaded.isEmpty() &&
+            retry < EMPTY_APP_LIST_MAX_RETRIES &&
+            AppListPermissionHelper.isGranted(context)
+        ) {
+            delay(EMPTY_APP_LIST_RETRY_DELAY_MS * (retry + 1))
+            loaded = loadAppsSafely(loader)
+            retry++
         }
         if (loaded.isNotEmpty()) {
             apps = loaded
@@ -457,7 +494,8 @@ internal fun <T> rememberAppListAccessState(loader: suspend () -> List<T>): AppL
                     fallbackToSettings = runtimeRequestAttempted
                 )
             }
-        }
+        },
+        reload = { requestLoad() }
     )
 }
 

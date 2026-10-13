@@ -37,6 +37,33 @@ interface HttpRequestLogDao {
         blockedOutcome: String
     ): List<SubscriptionInterceptionStatRow>
 
+    @Query("""
+        SELECT packageName AS packageName, COUNT(*) AS hits
+        FROM http_request_log
+        WHERE timestamp >= :since
+            AND outcome = :blockedOutcome
+        GROUP BY packageName
+    """)
+    suspend fun blockedCountByPackage(
+        since: Long,
+        blockedOutcome: String
+    ): List<PackageBlockedStatRow>
+
+    @Query("""
+        SELECT * FROM http_request_log
+        WHERE packageName = :packageName
+            AND outcome = :blockedOutcome
+            AND timestamp >= :since
+        ORDER BY timestamp DESC
+        LIMIT :limit
+    """)
+    suspend fun blockedLogsByPackage(
+        packageName: String,
+        since: Long,
+        blockedOutcome: String,
+        limit: Int
+    ): List<HttpRequestLogEntity>
+
     @Query("DELETE FROM http_request_log WHERE timestamp < :before")
     suspend fun deleteBefore(before: Long)
 

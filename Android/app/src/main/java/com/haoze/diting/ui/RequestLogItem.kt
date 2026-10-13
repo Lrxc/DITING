@@ -18,6 +18,7 @@ data class RequestLogItem(
     val subtitle: String,
     val detail: String?,
     val domain: String?,
+    val packageName: String? = null,
     val cached: Boolean = false
 )
 
@@ -58,6 +59,7 @@ fun dnsRequestItem(log: DnsLogEntity): RequestLogItem {
             subtitle = "${formatRequestTime(log.timestamp)} · $tag$appInfo",
             detail = log.message,
             domain = null,
+            packageName = log.packageName,
             cached = false
         )
     } else {
@@ -75,6 +77,7 @@ fun dnsRequestItem(log: DnsLogEntity): RequestLogItem {
             subtitle = "${formatRequestTime(log.timestamp)} · DNS · ${dnsRequestType(log.queryType)}${if (log.cached) " · 命中缓存" else ""}$appInfo",
             detail = log.message,
             domain = log.queryName,
+            packageName = log.packageName,
             cached = log.cached
         )
     }
@@ -127,7 +130,8 @@ fun httpRequestItem(log: HttpRequestLogEntity): RequestLogItem {
         title = log.authority ?: "未取得 authority",
         subtitle = "${formatRequestTime(log.timestamp)} · ${log.protocol} · ${log.packageName}",
         detail = detail,
-        domain = log.authority
+        domain = log.authority,
+        packageName = log.packageName
     )
 }
 

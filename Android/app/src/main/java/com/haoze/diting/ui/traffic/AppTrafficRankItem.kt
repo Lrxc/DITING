@@ -35,15 +35,28 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import com.haoze.diting.ui.components.SettingsCornerShape
+import com.haoze.diting.ui.dashboard.formatCount
+import com.haoze.diting.ui.localizedText
 
 @Composable
 internal fun AppTrafficRankItem(
     item: AppTrafficUiItem,
+    sortMode: TrafficSortMode,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
     val colors = MaterialTheme.colorScheme
     val animatedProgress by animateFloatAsState(targetValue = item.percentage, label = "progress")
+
+    // The headline value follows the active sort mode so it matches what the bar and order show.
+    val headlineText = when (sortMode) {
+        TrafficSortMode.TOTAL_TRAFFIC -> formatBytes(item.totalBytes)
+        TrafficSortMode.DOWNLOAD -> formatBytes(item.rxBytes)
+        TrafficSortMode.UPLOAD -> formatBytes(item.txBytes)
+        TrafficSortMode.REALTIME_SPEED -> formatSpeed(item.currentTotalSpeedBps)
+        TrafficSortMode.BLOCKED -> localizedText("拦截 " + formatCount(item.blockedCount) + " 次")
+    }
+    val headlineColor = if (sortMode == TrafficSortMode.BLOCKED) colors.error else colors.onSurface
 
     val appIcon = remember(item.packageName) {
         runCatching { context.packageManager.getApplicationIcon(item.packageName) }.getOrNull()
@@ -114,10 +127,10 @@ internal fun AppTrafficRankItem(
 
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = formatBytes(item.totalBytes),
+                        text = headlineText,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
-                        color = colors.onSurface
+                        color = headlineColor
                     )
                     if (item.currentTotalSpeedBps > 0) {
                         Text(
@@ -142,7 +155,8 @@ internal fun AppTrafficRankItem(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = "↓ " + formatBytes(item.rxBytes) + "   ↑ " + formatBytes(item.txBytes),

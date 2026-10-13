@@ -4,6 +4,8 @@ package com.haoze.diting.ui.localization
  * Cross-module dynamic template substitution and formatting helpers.
  */
 internal fun translateDynamicPattern(text: String): String? = when {
+    text.startsWith("拦截 ") && text.endsWith(" 次") ->
+        "Blocked " + text.removePrefix("拦截 ").removeSuffix(" 次") + " times"
     text.contains(" 次；第 N+1 次开始升级") -> text.replace(" 次；第 N+1 次开始升级", " attempts; escalation starts at N+1")
     text.contains(" 秒；首次升级起固定计时") -> text.replace(" 秒；首次升级起固定计时", " seconds; timing starts at the first escalation")
     text.startsWith("已选 ") && text.endsWith(" 个应用，其余直接转发") -> text.replace("已选 ", "Inspecting ").replace(" 个应用，其余直接转发", " selected apps; others forwarded directly")

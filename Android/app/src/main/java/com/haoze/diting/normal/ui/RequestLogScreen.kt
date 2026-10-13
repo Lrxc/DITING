@@ -39,6 +39,7 @@ import com.haoze.diting.ui.agent.AgentAnalysisSheet
 import com.haoze.diting.ui.agent.AnalysisTarget
 import com.haoze.diting.ui.components.AppAlertDialog
 import com.haoze.diting.ui.components.AppDialogButton
+import com.haoze.diting.ui.components.AppIconImage
 import com.haoze.diting.ui.components.RuleFilterChipRow
 import com.haoze.diting.ui.components.RuleTagChip
 import com.haoze.diting.ui.components.SettingsItemSpacing
@@ -373,7 +374,14 @@ private fun RequestLogCard(item: RequestLogItem, onLongClick: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(item.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+            Row(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AppIconImage(packageName = item.packageName, size = 24.dp)
+                Text(item.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+            }
             RuleTagChip(
                 text = localizedText(item.status.label),
                 containerColor = color.copy(alpha = .12f),

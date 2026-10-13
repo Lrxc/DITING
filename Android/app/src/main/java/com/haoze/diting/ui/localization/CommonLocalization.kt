@@ -190,6 +190,7 @@ internal fun translateCommonExact(text: String): String? = when (text) {
     "测试查询耗时" -> "Test query latency"
     "DNS 提供商健康情况" -> "DNS provider health"
     "刷新" -> "Refresh"
+    "重新加载" -> "Reload"
     "未参与" -> "Not participating"
     "打开最近请求" -> "Open recent requests"
     "最近请求" -> "Recent requests"

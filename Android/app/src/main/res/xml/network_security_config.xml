@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    允许明文 HTTP 流量。
+
+    规则订阅源由用户自行填写，部分自建或内网穿透地址只提供 http://，而 targetSdk 28 起
+    Android 默认禁止明文流量，会导致订阅下载直接失败（CLEARTEXT communication ... not
+    permitted by network security policy）。此处放开明文，仅影响本应用 Java/OkHttp 网络栈；
+    Go 隧道内的抓包流量不受该策略约束。
+
+    未声明 trust-anchors，保持平台默认信任锚（系统 CA），不改变既有的证书校验行为。
+    如需收紧，可改为把 cleartextTrafficPermitted="false"，再对特定域名用 domain-config 放行。
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

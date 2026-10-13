@@ -45,6 +45,34 @@ interface DnsLogDao {
         since: Long,
         blockedResult: String
     ): List<SubscriptionInterceptionStatRow>
+
+    @Query("""
+        SELECT packageName AS packageName, COUNT(*) AS hits
+        FROM dns_log
+        WHERE timestamp >= :since
+            AND result = :blockedResult
+            AND packageName IS NOT NULL
+        GROUP BY packageName
+    """)
+    suspend fun blockedCountByPackage(
+        since: Long,
+        blockedResult: String
+    ): List<PackageBlockedStatRow>
+
+    @Query("""
+        SELECT * FROM dns_log
+        WHERE packageName = :packageName
+            AND result = :blockedResult
+            AND timestamp >= :since
+        ORDER BY timestamp DESC
+        LIMIT :limit
+    """)
+    suspend fun blockedLogsByPackage(
+        packageName: String,
+        since: Long,
+        blockedResult: String,
+        limit: Int
+    ): List<DnsLogEntity>
 }
 
 data class DailyStatRow(
@@ -55,5 +83,10 @@ data class DailyStatRow(
 
 data class SubscriptionInterceptionStatRow(
     val subscriptionId: Long,
+    val hits: Int
+)
+
+data class PackageBlockedStatRow(
+    val packageName: String,
     val hits: Int
 )

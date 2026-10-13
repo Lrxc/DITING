@@ -195,6 +195,7 @@ fun AppTrafficStatsScreen(
                     ) { item ->
                         AppTrafficRankItem(
                             item = item,
+                            sortMode = uiState.selectedSortMode,
                             onClick = { viewModel.selectAppDetail(item.packageName) }
                         )
                     }
