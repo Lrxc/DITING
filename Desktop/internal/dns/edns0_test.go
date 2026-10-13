@@ -1,6 +1,7 @@
 package dns
 
 import (
+	"net"
 	"testing"
 
 	"github.com/miekg/dns"
@@ -202,3 +203,83 @@ func TestStripECH(t *testing.T) {
 		t.Fatal("expected false on second strip")
 	}
 }
+
+func TestStripIPv6Hints(t *testing.T) {
+	// 1. 空报文处理
+	if StripIPv6Hints(nil) {
+		t.Fatal("expected false for nil msg")
+	}
+
+	msg := new(dns.Msg)
+	msg.SetQuestion("example.com.", dns.TypeHTTPS)
+
+	// 2. 无 HTTPS/SVCB 记录
+	if StripIPv6Hints(msg) {
+		t.Fatal("expected false when no HTTPS/SVCB records present")
+	}
+
+	// 3. 构造包含 ipv4hint 与 ipv6hint 的 HTTPS 记录
+	httpsRR := &dns.HTTPS{
+		SVCB: dns.SVCB{
+			Hdr:      dns.RR_Header{Name: "example.com.", Rrtype: dns.TypeHTTPS, Class: dns.ClassINET, Ttl: 300},
+			Priority: 1,
+			Target:   ".",
+			Value: []dns.SVCBKeyValue{
+				&dns.SVCBAlpn{Alpn: []string{"h2", "h3"}},
+				&dns.SVCBIPv4Hint{Hint: []net.IP{net.ParseIP("1.1.1.1")}},
+				&dns.SVCBIPv6Hint{Hint: []net.IP{net.ParseIP("2606:4700::1111")}},
+			},
+		},
+	}
+	msg.Answer = append(msg.Answer, httpsRR)
+
+	if !StripIPv6Hints(msg) {
+		t.Fatal("expected true when stripping ipv6hint from HTTPS RR")
+	}
+
+	hasIPv6Hint := false
+	hasIPv4Hint := false
+	for _, kv := range httpsRR.Value {
+		if kv.Key() == dns.SVCB_IPV6HINT {
+			hasIPv6Hint = true
+		}
+		if kv.Key() == dns.SVCB_IPV4HINT {
+			hasIPv4Hint = true
+		}
+	}
+	if hasIPv6Hint {
+		t.Fatal("ipv6hint was not stripped")
+	}
+	if !hasIPv4Hint {
+		t.Fatal("ipv4hint was erroneously stripped")
+	}
+
+	// 4. 第二次剥离应返回 false（幂等性）
+	if StripIPv6Hints(msg) {
+		t.Fatal("expected false on second strip")
+	}
+}
+
+func TestPadMessage_BoundaryAndLarge(t *testing.T) {
+	msg := new(dns.Msg)
+	msg.SetQuestion("huge.example.com.", dns.TypeA)
+
+	// 填充超大 TXT 记录逼近 65535 字节
+	chunk := make([]string, 250)
+	for i := range chunk {
+		chunk[i] = "abcdefghijklmnopqrstuvwxyz0123456789"
+	}
+	for i := 0; i < 7; i++ {
+		msg.Extra = append(msg.Extra, &dns.TXT{
+			Hdr: dns.RR_Header{Name: "huge.example.com.", Rrtype: dns.TypeTXT, Class: dns.ClassINET, Ttl: 300},
+			Txt: chunk,
+		})
+	}
+
+	// 验证超大报文下 PadMessage 不会导致 panic 或破坏结构
+	_ = PadMessage(msg, 128)
+	if opt := msg.IsEdns0(); opt == nil {
+		t.Fatal("expected OPT record to be present")
+	}
+}
+

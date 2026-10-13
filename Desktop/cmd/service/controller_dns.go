@@ -160,7 +160,7 @@ func (p *program) StartDNS(ctx context.Context) error {
 	ecsMw := ditingdns.NewECSMiddleware(p.ecsMgr)
 	cacheMw := ditingdns.NewCacheMiddleware(p.cache, p.resolver)
 	forwardMw := ditingdns.NewForwardMiddleware(p.resolver)
-	pipeline := ditingdns.NewPipeline(metricsMw, edeMw, echMw, clientMw, accessMw, rateLimitMw, sudnMw, ipv6Mw, hostsMw, rewriteMw, privatePTRMw, unqualifiedMw, filterMw, rebindMw, dns64Mw, ecsMw, cacheMw, forwardMw)
+	pipeline := ditingdns.NewPipeline(metricsMw, edeMw, echMw, clientMw, accessMw, rateLimitMw, sudnMw, hostsMw, rewriteMw, ipv6Mw, privatePTRMw, unqualifiedMw, filterMw, rebindMw, dns64Mw, ecsMw, cacheMw, forwardMw)
 	udpAddrs, tcpAddrs := p.cfg.DNS.EffectiveListenAddresses()
 	serverCfg := ditingdns.ServerConfig{
 		UDPAddresses: udpAddrs,

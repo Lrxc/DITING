@@ -169,4 +169,78 @@ func TestPrivatePTR_WithClientResolver(t *testing.T) {
 	if dctx2.Resp == nil || dctx2.Resp.Rcode != dns.RcodeNameError {
 		t.Fatalf("expected NXDOMAIN for unmapped private PTR, got %v", dctx2.Resp)
 	}
+
+	// 3. IPv6 客户端别名命中与反向解析验证
+	crIPv6 := core.NewClientResolver(core.ClientConfig{
+		Enabled: true,
+		Aliases: []core.ClientAlias{
+			{IP: "fd00::1", Name: "my-ipv6-server.lan"},
+		},
+	})
+	mwIPv6 := NewPrivatePTRMiddleware(func() bool { return true }, crIPv6)
+	ptrIPv6, errRev := dns.ReverseAddr("fd00::1")
+	if errRev != nil {
+		t.Fatalf("reverse addr failed: %v", errRev)
+	}
+	reqIPv6 := new(dns.Msg)
+	reqIPv6.SetQuestion(ptrIPv6, dns.TypePTR)
+	dctxIPv6 := NewDNSContext(context.Background(), reqIPv6, &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5353}, "udp")
+
+	err3 := mwIPv6(dctxIPv6, func() error {
+		t.Fatal("next() should not be called when IPv6 clientResolver matches")
+		return nil
+	})
+	if err3 != nil {
+		t.Fatalf("unexpected error: %v", err3)
+	}
+	if dctxIPv6.Resp == nil || dctxIPv6.Resp.Rcode != dns.RcodeSuccess {
+		t.Fatalf("expected NOERROR for mapped IPv6 PTR, got %v", dctxIPv6.Resp)
+	}
+	if len(dctxIPv6.Resp.Answer) != 1 {
+		t.Fatalf("expected 1 answer for IPv6 PTR, got %d", len(dctxIPv6.Resp.Answer))
+	}
+	ansIPv6, ok := dctxIPv6.Resp.Answer[0].(*dns.PTR)
+	if !ok || ansIPv6.Ptr != "my-ipv6-server.lan." {
+		t.Fatalf("expected PTR my-ipv6-server.lan., got %v", dctxIPv6.Resp.Answer[0])
+	}
+}
+
+func TestParsePTRIP(t *testing.T) {
+	testCases := []struct {
+		name     string
+		ptrName  string
+		expected string // 期望的 IP 字符串，若为 "" 则期望返回 nil
+	}{
+		{"IPv4 valid", "1.2.168.192.in-addr.arpa.", "192.168.2.1"},
+		{"IPv4 loopback", "1.0.0.127.in-addr.arpa", "127.0.0.1"},
+		{"IPv4 overflow octet", "999.1.168.192.in-addr.arpa.", ""},
+		{"IPv4 too few labels", "1.168.192.in-addr.arpa.", ""},
+		{"IPv4 invalid char", "abc.1.168.192.in-addr.arpa.", ""},
+		{"IPv6 loopback ::1", "1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa.", "::1"},
+		{"IPv6 ULA fd00::1", "1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.d.f.ip6.arpa.", "fd00::1"},
+		{"IPv6 link-local fe80::2", "2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.e.f.ip6.arpa.", "fe80::2"},
+		{"IPv6 standard RFC 3596 example", "b.a.9.8.7.6.5.0.4.0.0.0.3.0.0.0.2.0.0.0.1.0.0.0.0.0.0.0.1.2.3.4.ip6.arpa.", "4321:0:1:2:3:4:567:89ab"},
+		{"IPv6 invalid length", "1.2.3.ip6.arpa.", ""},
+		{"IPv6 invalid char", "g.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.d.f.ip6.arpa.", ""},
+		{"Not a PTR name", "example.com.", ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			res := ParsePTRIP(tc.ptrName)
+			if tc.expected == "" {
+				if res != nil {
+					t.Fatalf("expected nil for %s, got %s", tc.ptrName, res.String())
+				}
+			} else {
+				if res == nil {
+					t.Fatalf("expected %s for %s, got nil", tc.expected, tc.ptrName)
+				}
+				expectedIP := net.ParseIP(tc.expected)
+				if !res.Equal(expectedIP) {
+					t.Fatalf("expected %s (%v), got %s (%v)", tc.expected, expectedIP, res.String(), res)
+				}
+			}
+		})
+	}
 }

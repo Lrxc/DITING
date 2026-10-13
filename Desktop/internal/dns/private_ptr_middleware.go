@@ -80,16 +80,16 @@ func IsPrivateReverseZone(domain string) bool {
 	return false
 }
 
-// ParsePTRIP 将类似 "1.1.168.192.in-addr.arpa." 还原解析为 net.IP
+// ParsePTRIP 将类似 "1.1.168.192.in-addr.arpa." 或 IPv6 nibble 格式还原解析为 net.IP
 func ParsePTRIP(ptrName string) net.IP {
 	clean := strings.ToLower(strings.Trim(ptrName, "."))
 	if strings.HasSuffix(clean, ".in-addr.arpa") {
 		labels := strings.Split(strings.TrimSuffix(clean, ".in-addr.arpa"), ".")
 		if len(labels) == 4 {
-			b0, err0 := strconv.Atoi(labels[3])
-			b1, err1 := strconv.Atoi(labels[2])
-			b2, err2 := strconv.Atoi(labels[1])
-			b3, err3 := strconv.Atoi(labels[0])
+			b0, err0 := strconv.ParseUint(labels[3], 10, 8)
+			b1, err1 := strconv.ParseUint(labels[2], 10, 8)
+			b2, err2 := strconv.ParseUint(labels[1], 10, 8)
+			b3, err3 := strconv.ParseUint(labels[0], 10, 8)
 			if err0 == nil && err1 == nil && err2 == nil && err3 == nil {
 				return net.IPv4(byte(b0), byte(b1), byte(b2), byte(b3))
 			}
@@ -99,14 +99,14 @@ func ParsePTRIP(ptrName string) net.IP {
 		if len(nibbles) == 32 {
 			var ipBytes [16]byte
 			for i := 0; i < 16; i++ {
-				// 低 nibble 在前，高 nibble 在后
-				lowIdx := 31 - (i*2 + 1)
-				highIdx := 31 - (i * 2)
-				val, err := strconv.ParseUint(nibbles[lowIdx]+nibbles[highIdx], 16, 8)
-				if err != nil {
+				// RFC 3596: ip6.arpa 中的 nibbles 以逆序排列。
+				// 对应字节 i (0~15) 的高 4 位位于索引 31-i*2，低 4 位位于索引 31-i*2-1
+				msNibble, err1 := strconv.ParseUint(nibbles[31-i*2], 16, 8)
+				lsNibble, err2 := strconv.ParseUint(nibbles[31-i*2-1], 16, 8)
+				if err1 != nil || err2 != nil || msNibble > 0x0f || lsNibble > 0x0f {
 					return nil
 				}
-				ipBytes[i] = byte(val)
+				ipBytes[i] = byte(msNibble<<4 | lsNibble)
 			}
 			return net.IP(ipBytes[:])
 		}

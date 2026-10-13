@@ -3,6 +3,7 @@ package dns
 import (
 	"context"
 	"net"
+	"strings"
 	"testing"
 
 	"github.com/haoze-evolluling/diting/desktop/internal/core"
@@ -343,5 +344,114 @@ func TestPipeline_PrivacyAndProtocolEnhancements(t *testing.T) {
 		t.Fatal("expected ech_stripped=true")
 	}
 }
+
+func TestPipeline_HostsRewriteWithIPv6Block(t *testing.T) {
+	// 验证流水线正确编排：Hosts 与 Rewrite 优先于 BlockIPv6 权威返回内网已知 IPv6 记录，未匹配的外网上游查询才被 BlockIPv6 拦截 NODATA
+	hr, _ := core.NewHostsResolver(core.HostsConfig{Enabled: true})
+	hr.LoadReader(strings.NewReader("::1 mylocal.lan\n"))
+
+	re := core.NewRewriteEngine(core.RewriteConfig{
+		Enabled: true,
+		Rules: []core.RewriteRule{
+			{Domain: "rewrite.lan", IPs: []string{"2001:db8::99"}},
+		},
+	})
+
+	mockRes := &pipelineMockResolver{
+		answers: map[string][]dns.RR{
+			"external.com.": {
+				&dns.A{Hdr: dns.RR_Header{Name: "external.com.", Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 300}, A: net.ParseIP("93.184.216.34")},
+				&dns.HTTPS{
+					SVCB: dns.SVCB{
+						Hdr:      dns.RR_Header{Name: "external.com.", Rrtype: dns.TypeHTTPS, Class: dns.ClassINET, Ttl: 300},
+						Priority: 1,
+						Target:   ".",
+						Value: []dns.SVCBKeyValue{
+							&dns.SVCBAlpn{Alpn: []string{"h2"}},
+							&dns.SVCBIPv4Hint{Hint: []net.IP{net.ParseIP("93.184.216.34")}},
+							&dns.SVCBIPv6Hint{Hint: []net.IP{net.ParseIP("2606:2800:220:1:248:1893:25c8:1946")}},
+							&dns.SVCBECHConfig{ECH: []byte{0x01, 0x02}},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	echMw := NewECHMiddleware(func() bool { return true })
+	hostsMw := NewHostsMiddleware(hr)
+	rewriteMw := NewRewriteMiddleware(re)
+	ipv6Mw := NewIPv6Middleware(func() bool { return true })
+	forwardMw := NewForwardMiddleware(mockRes)
+
+	// 正确的流水线序列：hostsMw, rewriteMw 先于 ipv6Mw
+	pipeline := NewPipeline(echMw, hostsMw, rewriteMw, ipv6Mw, forwardMw)
+
+	// 1. Hosts 中的 IPv6 查询不应被 BlockIPv6 拦截，权威返回 ::1
+	req1 := new(dns.Msg)
+	req1.SetQuestion("mylocal.lan.", dns.TypeAAAA)
+	ctx1 := NewDNSContext(context.Background(), req1, &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5353}, "udp")
+	if err := pipeline.Execute(ctx1); err != nil {
+		t.Fatalf("pipeline execute error: %v", err)
+	}
+	if ctx1.Resp == nil || len(ctx1.Resp.Answer) != 1 {
+		t.Fatalf("expected Hosts to answer mylocal.lan AAAA, got %v", ctx1.Resp)
+	}
+	if aaaa, ok := ctx1.Resp.Answer[0].(*dns.AAAA); !ok || !aaaa.AAAA.Equal(net.ParseIP("::1")) {
+		t.Fatalf("expected ::1 from hosts, got %v", ctx1.Resp.Answer[0])
+	}
+
+	// 2. Rewrite 中的 IPv6 查询权威返回重写结果
+	req2 := new(dns.Msg)
+	req2.SetQuestion("rewrite.lan.", dns.TypeAAAA)
+	ctx2 := NewDNSContext(context.Background(), req2, &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5353}, "udp")
+	if err := pipeline.Execute(ctx2); err != nil {
+		t.Fatalf("pipeline execute error: %v", err)
+	}
+	if ctx2.Resp == nil || len(ctx2.Resp.Answer) != 1 {
+		t.Fatalf("expected Rewrite to answer rewrite.lan AAAA, got %v", ctx2.Resp)
+	}
+	if aaaa, ok := ctx2.Resp.Answer[0].(*dns.AAAA); !ok || !aaaa.AAAA.Equal(net.ParseIP("2001:db8::99")) {
+		t.Fatalf("expected 2001:db8::99 from rewrite, got %v", ctx2.Resp.Answer[0])
+	}
+
+	// 3. 未被 Hosts/Rewrite 覆盖的外部 AAAA 查询被 BlockIPv6 拦截并返回 NODATA
+	req3 := new(dns.Msg)
+	req3.SetQuestion("external.com.", dns.TypeAAAA)
+	ctx3 := NewDNSContext(context.Background(), req3, &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5353}, "udp")
+	if err := pipeline.Execute(ctx3); err != nil {
+		t.Fatalf("pipeline execute error: %v", err)
+	}
+	if ctx3.Resp == nil || ctx3.Resp.Rcode != dns.RcodeSuccess || len(ctx3.Resp.Answer) != 0 {
+		t.Fatalf("expected NODATA for external.com AAAA, got %v", ctx3.Resp)
+	}
+
+	// 4. 外部 HTTPS 查询：上游响应同时剥离 ECH (echMw) 与 ipv6hint (ipv6Mw)
+	req4 := new(dns.Msg)
+	req4.SetQuestion("external.com.", dns.TypeHTTPS)
+	ctx4 := NewDNSContext(context.Background(), req4, &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5353}, "udp")
+	if err := pipeline.Execute(ctx4); err != nil {
+		t.Fatalf("pipeline execute error: %v", err)
+	}
+	if ctx4.Resp == nil || len(ctx4.Resp.Answer) != 1 {
+		t.Fatalf("expected HTTPS answer, got %v", ctx4.Resp)
+	}
+	httpsRR := ctx4.Resp.Answer[0].(*dns.HTTPS)
+	for _, kv := range httpsRR.Value {
+		if kv.Key() == dns.SVCB_ECHCONFIG {
+			t.Fatal("expected ECH to be stripped")
+		}
+		if kv.Key() == dns.SVCB_IPV6HINT {
+			t.Fatal("expected ipv6hint to be stripped by ipv6Mw")
+		}
+	}
+	if strippedECH, _ := ctx4.Get("ech_stripped"); strippedECH != true {
+		t.Fatal("expected ech_stripped=true")
+	}
+	if strippedIPv6, _ := ctx4.Get("ipv6_hints_stripped"); strippedIPv6 != true {
+		t.Fatal("expected ipv6_hints_stripped=true")
+	}
+}
+
 
 

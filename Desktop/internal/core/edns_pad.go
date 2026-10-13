@@ -84,6 +84,11 @@ func PadMessage(msg *dns.Msg, blockSize int) bool {
 		padLen = blockSize - rem
 	}
 
+	// 报文填充后不得超过 DNS 报文最大上限 65535 字节
+	if curLen+4+padLen > 65535 {
+		return false
+	}
+
 	padding := make([]byte, padLen)
 	padOpt := &dns.EDNS0_PADDING{Padding: padding}
 	optRecord.Option = append(optRecord.Option, padOpt)
@@ -106,6 +111,49 @@ func StripECH(msg *dns.Msg) bool {
 				continue
 			}
 			if _, ok := kv.(*dns.SVCBECHConfig); ok {
+				changed = true
+				continue
+			}
+			newVals = append(newVals, kv)
+		}
+		return newVals, changed
+	}
+
+	for _, section := range []*[]dns.RR{&msg.Answer, &msg.Extra, &msg.Ns} {
+		for _, rr := range *section {
+			switch v := rr.(type) {
+			case *dns.HTTPS:
+				if newVals, changed := stripFromValues(v.Value); changed {
+					v.Value = newVals
+					modified = true
+				}
+			case *dns.SVCB:
+				if newVals, changed := stripFromValues(v.Value); changed {
+					v.Value = newVals
+					modified = true
+				}
+			}
+		}
+	}
+	return modified
+}
+
+// StripIPv6Hints 剥离报文 Answer/Extra/Ns 中所有 HTTPS/SVCB 记录的 IPv6 提示参数 (ipv6hint)
+// 借鉴自 AdGuard Home (removeIPv6Hints)，配合 BlockIPv6 杜绝客户端利用 RFC 9460 HTTPS ipv6hint 绕过 AAAA 过滤
+func StripIPv6Hints(msg *dns.Msg) bool {
+	if msg == nil {
+		return false
+	}
+	modified := false
+	stripFromValues := func(values []dns.SVCBKeyValue) ([]dns.SVCBKeyValue, bool) {
+		newVals := make([]dns.SVCBKeyValue, 0, len(values))
+		changed := false
+		for _, kv := range values {
+			if kv.Key() == dns.SVCB_IPV6HINT {
+				changed = true
+				continue
+			}
+			if _, ok := kv.(*dns.SVCBIPv6Hint); ok {
 				changed = true
 				continue
 			}
