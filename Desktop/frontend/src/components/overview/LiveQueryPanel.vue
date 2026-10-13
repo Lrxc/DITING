@@ -31,7 +31,11 @@ const filteredLogs = computed(() => {
     }
     if (searchFilter.value) {
       const q = searchFilter.value.toLowerCase();
-      if (!item.domain.toLowerCase().includes(q) && !(item.clientIP || '').toLowerCase().includes(q)) {
+      if (
+        !item.domain.toLowerCase().includes(q) &&
+        !(item.clientIP || '').toLowerCase().includes(q) &&
+        !(item.clientName || '').toLowerCase().includes(q)
+      ) {
         return false;
       }
     }
@@ -326,18 +330,25 @@ onUnmounted(() => {
                 </span>
               </div>
 
-              <!-- 次行：客户端 IP 与精确时间戳 -->
+              <!-- 次行：客户端 IP、友好主机名与精确时间戳 -->
               <div class="flex items-center justify-between text-[11px] font-mono text-text-muted pt-1 border-t border-surface-border-sub/40">
-                <div class="flex items-center gap-1.5">
+                <div class="flex items-center gap-1.5 truncate max-w-[70%]">
                   <span
                     v-if="item.clientIP && item.clientIP !== '127.0.0.1' && item.clientIP !== '::1'"
-                    class="px-1 py-0.2 rounded text-[9px] border border-accent-seal/40 text-accent-seal"
+                    class="px-1 py-0.2 rounded text-[9px] border border-accent-seal/40 text-accent-seal shrink-0"
                   >
                     局域网
                   </span>
-                  <span>{{ item.clientIP || '127.0.0.1' }}</span>
+                  <span
+                    v-if="item.clientName"
+                    class="font-sans font-semibold text-text-main truncate"
+                    :title="item.clientName"
+                  >
+                    {{ item.clientName }}
+                  </span>
+                  <span class="text-text-muted shrink-0">({{ item.clientIP || '127.0.0.1' }})</span>
                 </div>
-                <span>{{ formatClockTimeMs(item.timestamp) }}</span>
+                <span class="shrink-0">{{ formatClockTimeMs(item.timestamp) }}</span>
               </div>
             </div>
           </div>

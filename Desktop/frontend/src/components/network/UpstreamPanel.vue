@@ -7,6 +7,7 @@ import ToastBanner from '../ToastBanner.vue';
 import AppCard from '../ui/AppCard.vue';
 import M3Icon from '../M3Icon.vue';
 import BootstrapConfigCard from '../BootstrapConfigCard.vue';
+import ConditionalRoutesCard from './ConditionalRoutesCard.vue';
 import UpstreamEditModal from './UpstreamEditModal.vue';
 import ConfirmModal from '../ConfirmModal.vue';
 import { useConfirmModal } from '../../composables/useConfirmModal';
@@ -15,6 +16,7 @@ const status = ref<StatusResponse | null>(null);
 const currentMode = ref('primary_backup');
 const providers = ref<ProviderConfig[]>([]);
 const upstreams = ref<UpstreamInfo[]>([]);
+const conditionalRoutes = ref<Record<string, string>>({});
 const bootstrapConfig = ref<BootstrapConfig>({
   enabled: true,
   servers: [
@@ -76,6 +78,12 @@ async function loadData(forceSyncProviders = false) {
         servers: res.dns.bootstrap.servers || [],
       };
     }
+
+    if (res.dns.conditionalRoutes) {
+      conditionalRoutes.value = { ...res.dns.conditionalRoutes };
+    } else {
+      conditionalRoutes.value = {};
+    }
   } catch (err: any) {
     errorMessage.value = err.message || '获取 DNS 配置失败';
   } finally {
@@ -93,6 +101,11 @@ async function handleBootstrapSave(updated: BootstrapConfig) {
   await saveConfig();
 }
 
+async function handleConditionalRoutesSave(updated: Record<string, string>) {
+  conditionalRoutes.value = updated;
+  await saveConfig();
+}
+
 async function saveConfig() {
   saving.value = true;
   errorMessage.value = '';
@@ -102,6 +115,7 @@ async function saveConfig() {
       mode: currentMode.value.toUpperCase(),
       providers: providers.value,
       bootstrap: bootstrapConfig.value,
+      conditionalRoutes: conditionalRoutes.value,
     });
     successMessage.value = 'DNS 服务器配置已更新并即时生效！';
     await loadData();
@@ -402,6 +416,14 @@ onMounted(() => {
         </AppCard>
       </div>
     </div>
+
+    <!-- 3. 条件分流路由 (Split DNS) 独立模块 -->
+    <ConditionalRoutesCard
+      :routes="conditionalRoutes"
+      :saving="saving"
+      @update:routes="(r) => (conditionalRoutes = r)"
+      @save="handleConditionalRoutesSave"
+    />
 
     <!-- 新增 / 编辑节点弹窗 -->
     <UpstreamEditModal

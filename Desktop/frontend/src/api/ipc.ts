@@ -6,6 +6,8 @@ import { CacheApi } from './cache';
 import { FilterApi } from './filter';
 import { NetworkApi } from './network';
 import { WebAuthApi } from './web';
+import { SecurityApi } from './security';
+import { RewriteApi } from './rewrite';
 import { nativeBridge } from './native';
 import { isWebMode } from '../utils/env';
 
@@ -22,6 +24,8 @@ class IPCService {
   private filter = new FilterApi(this.http);
   private network = new NetworkApi(this.http);
   private webAuth = new WebAuthApi(this.http, this.events);
+  private security = new SecurityApi(this.http);
+  private rewrite = new RewriteApi(this.http);
 
   // --- 环境与连接 ---
   public isWebMode = () => isWebMode();
@@ -82,6 +86,22 @@ class IPCService {
   public getCustomRules = () => this.filter.getCustomRules();
   public setCustomRules = (rules: string[]) => this.filter.setCustomRules(rules);
   public checkHost = (domain: string, qtype: string | number = 'A') => this.filter.checkHost(domain, qtype);
+
+  // --- 自定义重写与客户端管理 ---
+  public getRewriteRules = () => this.rewrite.getRewriteRules();
+  public addRewriteRule = (rule: Parameters<RewriteApi['addRewriteRule']>[0]) => this.rewrite.addRewriteRule(rule);
+  public deleteRewriteRule = (domain: string) => this.rewrite.deleteRewriteRule(domain);
+  public configureRewrite = (req: Parameters<RewriteApi['configureRewrite']>[0]) => this.rewrite.configureRewrite(req);
+  public getClients = () => this.rewrite.getClients();
+  public configureClientAlias = (req: Parameters<RewriteApi['configureClientAlias']>[0]) => this.rewrite.configureClientAlias(req);
+
+  // --- 安全访问、速率限制与协议隐私 ---
+  public configureAccess = (req: Parameters<SecurityApi['configureAccess']>[0]) => this.security.configureAccess(req);
+  public configureRateLimit = (req: Parameters<SecurityApi['configureRateLimit']>[0]) => this.security.configureRateLimit(req);
+  public configureDNS64 = (req: Parameters<SecurityApi['configureDNS64']>[0]) => this.security.configureDNS64(req);
+  public configureBlockUnqualified = (req: Parameters<SecurityApi['configureBlockUnqualified']>[0]) => this.security.configureBlockUnqualified(req);
+  public configurePrivacy = (req: Parameters<SecurityApi['configurePrivacy']>[0]) => this.security.configurePrivacy(req);
+  public configureECS = (req: Parameters<SecurityApi['configureECS']>[0]) => this.security.configureECS(req);
 
   // --- 局域网 DNS ---
   public getLANStatus = () => this.network.getLANStatus();

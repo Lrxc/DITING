@@ -42,6 +42,12 @@ export interface DNSStatus {
   mode: string;
   upstreams: UpstreamInfo[];
   bootstrap?: BootstrapConfig;
+  conditionalRoutes?: Record<string, string>;
+  blockUnqualified?: boolean;
+  blockPrivatePTR?: boolean;
+  blockIPv6?: boolean;
+  blockECH?: boolean;
+  ednsPadding?: number;
 }
 
 export interface AdapterState {
@@ -99,6 +105,14 @@ export interface StatusResponse {
   metrics: MetricsStatus;
   cache?: CacheStats;
   filter?: FilterStats;
+  hosts?: HostsConfig;
+  rebind?: RebindConfig;
+  access?: AccessControlConfig;
+  rateLimit?: RateLimitConfig;
+  dns64?: DNS64Config;
+  rewrite?: RewriteConfig;
+  ecs?: ECSConfig;
+  clients?: ClientInfo[];
 }
 
 export type CacheMode = 'follow_dns_ttl' | 'limit_max_ttl' | 'fixed_ttl' | string;
@@ -183,6 +197,7 @@ export interface QueryEventData {
   domain: string;
   qtype: string;
   clientIP: string;
+  clientName?: string;
   durationMs: number;
   success: boolean;
   rcode?: string;
@@ -242,6 +257,7 @@ export interface UpstreamConfigureRequest {
   mode: string;
   providers: ProviderConfig[];
   bootstrap?: BootstrapConfig;
+  conditionalRoutes?: Record<string, string>;
 }
 
 export interface TestUpstreamRequest {
@@ -342,4 +358,115 @@ export interface SetLoginBackgroundRequest {
   blur: number;
   adminPassword?: string;
 }
+
+export interface RewriteRule {
+  domain: string;
+  ips?: string[];
+  cname?: string;
+  txt?: string[];
+  ttl?: number;
+}
+
+export interface RewriteConfig {
+  enabled: boolean;
+  ttl: number;
+  rules: RewriteRule[];
+}
+
+export interface ConfigureRewriteRequest {
+  enabled?: boolean;
+  ttl?: number;
+  rules?: RewriteRule[];
+}
+
+export interface ClientAlias {
+  ip: string;
+  name: string;
+}
+
+export interface ClientInfo {
+  ip: string;
+  name: string;
+  queryCount: number;
+  lastSeen: number;
+}
+
+export interface ConfigureClientAliasRequest {
+  ip: string;
+  name: string;
+}
+
+export interface AccessControlConfig {
+  allowedClients: string[];
+  blockedClients: string[];
+}
+
+export interface ConfigureAccessRequest {
+  allowedClients: string[];
+  blockedClients: string[];
+}
+
+export interface RateLimitConfig {
+  enabled: boolean;
+  rate: number;
+  burst: number;
+  ipv4Prefix: number;
+  ipv6Prefix: number;
+  exemptIPs: string[];
+}
+
+export interface ConfigureRateLimitRequest {
+  enabled: boolean;
+  rate: number;
+  burst: number;
+  ipv4Prefix: number;
+  ipv6Prefix: number;
+  exemptIPs: string[];
+}
+
+export interface DNS64Config {
+  enabled: boolean;
+  prefixes: string[];
+}
+
+export interface ConfigureDNS64Request {
+  enabled: boolean;
+  prefixes: string[];
+}
+
+export interface ConfigureBlockUnqualifiedRequest {
+  blockUnqualified: boolean;
+}
+
+export interface ConfigurePrivacyRequest {
+  blockPrivatePTR?: boolean;
+  blockIPv6?: boolean;
+  blockECH?: boolean;
+  ednsPadding?: number;
+}
+
+export interface ECSConfig {
+  enabled: boolean;
+  stripECS: boolean;
+  customSubnet: string;
+}
+
+export interface ConfigureECSRequest {
+  enabled?: boolean;
+  stripECS?: boolean;
+  customSubnet?: string;
+}
+
+export interface HostsConfig {
+  enabled: boolean;
+  useSystemHost: boolean;
+  customFiles: string[];
+  ttl: number;
+}
+
+export interface RebindConfig {
+  enabled: boolean;
+  allowedDomains: string[];
+}
+
 

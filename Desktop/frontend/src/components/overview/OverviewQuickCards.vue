@@ -161,5 +161,79 @@ const emit = defineEmits<{
         </CardTile>
       </div>
     </AppCard>
+
+    <!-- 5. DNS 重写与伪装摘要 -->
+    <AppCard
+      title="DNS 重写与伪装"
+      subtitle="自定义域名解析映射"
+      icon="tune"
+      iconBoxClass="w-7 h-7"
+      :iconSize="16"
+    >
+      <template #actions>
+        <button
+          type="button"
+          @click="emit('navigate', 'rules')"
+          class="app-btn-secondary app-btn-compact"
+        >
+          <M3Icon name="open_in_new" :size="13" />
+          <span>管理重写</span>
+        </button>
+      </template>
+
+      <div class="grid grid-cols-2 gap-2.5">
+        <CardTile label="重写引擎状态">
+          <div
+            class="text-[13px] font-semibold truncate"
+            :class="status?.rewrite?.enabled ? 'text-status-success' : 'text-text-muted'"
+          >
+            {{ status?.rewrite?.enabled ? '已开启应答' : '未开启' }}
+          </div>
+        </CardTile>
+
+        <CardTile label="重写规则总数">
+          <div class="text-[13px] font-mono text-text-main truncate font-bold">
+            {{ status?.rewrite?.rules?.length || 0 }} 条规则
+          </div>
+        </CardTile>
+      </div>
+    </AppCard>
+
+    <!-- 6. 局域网设备与限流管控摘要 -->
+    <AppCard
+      title="设备管控与安全"
+      subtitle="局域网终端与访问控制"
+      icon="devices"
+      iconBoxClass="w-7 h-7"
+      :iconSize="16"
+    >
+      <template #actions>
+        <button
+          type="button"
+          @click="emit('navigate', 'network')"
+          class="app-btn-secondary app-btn-compact"
+        >
+          <M3Icon name="open_in_new" :size="13" />
+          <span>设备管理</span>
+        </button>
+      </template>
+
+      <div class="grid grid-cols-2 gap-2.5">
+        <CardTile label="已识别活跃终端">
+          <div class="text-[13px] font-mono text-text-main font-bold truncate">
+            {{ status?.clients?.length || 0 }} 台设备
+          </div>
+        </CardTile>
+
+        <CardTile label="请求速率限制">
+          <div
+            class="text-[13px] font-semibold truncate"
+            :class="status?.rateLimit?.enabled ? 'text-status-success' : 'text-text-muted'"
+          >
+            {{ status?.rateLimit?.enabled ? '防 DoS 开启' : '未开启限流' }}
+          </div>
+        </CardTile>
+      </div>
+    </AppCard>
   </div>
 </template>

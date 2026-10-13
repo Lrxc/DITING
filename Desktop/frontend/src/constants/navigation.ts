@@ -26,8 +26,13 @@ const LEGACY_TAB_MAP: Record<string, NavTab> = {
   logs: 'overview',
   adapters: 'network',
   upstream: 'network',
+  lan: 'network',
+  clients: 'network',
+  dns64: 'network',
   cache: 'accel',
   rules: 'rules',
+  rewrite: 'rules',
+  privacy: 'rules',
   settings: 'system',
 };
 
@@ -56,6 +61,8 @@ export const SUB_TABS: Record<NavTab, readonly SubTabDef[]> = {
     { id: 'adapters', label: '网卡接管' },
     { id: 'upstream', label: '上游解析' },
     { id: 'lan', label: '局域网 DNS' },
+    { id: 'clients', label: '设备管理' },
+    { id: 'dns64', label: 'IPv6 / DNS64' },
   ],
   accel: [
     { id: 'cache', label: '缓存加速' },
@@ -65,6 +72,8 @@ export const SUB_TABS: Record<NavTab, readonly SubTabDef[]> = {
     { id: 'custom', label: '自定义规则' },
     { id: 'test', label: '规则检测' },
     { id: 'config', label: '拦截方式' },
+    { id: 'rewrite', label: 'DNS 重写' },
+    { id: 'privacy', label: '安全隐私' },
   ],
   system: [
     { id: 'settings', label: '系统设置' },
