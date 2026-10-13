@@ -36,6 +36,7 @@ func TestRuleEngineMatchInactiveSchedulePasses(t *testing.T) {
 
 	// 强制当前时间为窗口外（12:00）
 	now := time.Date(2026, 10, 12, 12, 0, 0, 0, time.Local)
+	engine.SetClock(func() time.Time { return now })
 	if got := engine.IsBlockingActiveAt(now); got {
 		t.Fatalf("12:00 不应处于极窄窗口内")
 	}
@@ -65,6 +66,9 @@ func TestRuleEngineMatchActiveScheduleBlocks(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+
+	// 固定时钟到窗口内，避免真实时间落在 23:59 边界导致断言偶发失败
+	engine.SetClock(func() time.Time { return time.Date(2026, 10, 12, 12, 0, 0, 0, time.Local) })
 
 	before := engine.GetStats().BlockedQueries
 	res := engine.Match("tracker.example", 1)
