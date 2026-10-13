@@ -106,6 +106,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/v1/dns/hosts/configure", s.withAuth(s.handleHostsConfigure))
 	mux.HandleFunc("/api/v1/dns/rewrite/rules", s.withAuth(s.handleRewriteRules))
 	mux.HandleFunc("/api/v1/dns/rewrite/configure", s.withAuth(s.handleRewriteConfigure))
+	mux.HandleFunc("/api/v1/safesearch/config", s.withAuth(s.handleSafeSearch))
 	mux.HandleFunc("/api/v1/clients", s.withAuth(s.handleClients))
 	mux.HandleFunc("/api/v1/clients/alias", s.withAuth(s.handleClientAlias))
 	mux.HandleFunc("/api/v1/clients/groups", s.withAuth(s.handleClientGroups))

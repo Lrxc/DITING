@@ -13,10 +13,10 @@ import (
 
 // DNSConfig 本地 DNS 监听服务配置
 type DNSConfig struct {
-	UDPAddresses []string      `json:"udpAddresses"`
-	TCPAddresses []string      `json:"tcpAddresses"`
-	ReadTimeout  time.Duration `json:"readTimeout"`
-	WriteTimeout time.Duration `json:"writeTimeout"`
+	UDPAddresses     []string      `json:"udpAddresses"`
+	TCPAddresses     []string      `json:"tcpAddresses"`
+	ReadTimeout      time.Duration `json:"readTimeout"`
+	WriteTimeout     time.Duration `json:"writeTimeout"`
 	AllowLAN         bool          `json:"allowLAN"`         // 是否启用局域网 DNS 服务器功能（监听 0.0.0.0 与所有局域网地址）
 	EnableEDE        bool          `json:"enableEDE"`        // 是否启用 RFC 8914 Extended DNS Errors 选项
 	BlockUnqualified bool          `json:"blockUnqualified"` // 是否阻止无点单标签不完整域名外泄至公网解析
@@ -173,22 +173,23 @@ func (c *WebConfig) UnmarshalJSON(data []byte) error {
 
 // Config 谛听 Windows 端完整核心配置
 type Config struct {
-	DNS      DNSConfig           `json:"dns"`
-	Upstream core.ResolverConfig `json:"upstream"`
-	IPC      IPCConfig           `json:"ipc"`
-	Takeover TakeoverConfig      `json:"takeover"`
-	Cache    core.CacheConfig    `json:"cache"`
-	Filter    core.FilterConfig        `json:"filter"`
-	Hosts     core.HostsConfig         `json:"hosts"`
-	Rebind    core.RebindConfig        `json:"rebind"`
-	Access    core.AccessControlConfig `json:"access"`
-	RateLimit core.RateLimitConfig     `json:"rateLimit"`
-	DNS64     core.DNS64Config         `json:"dns64"`
-	Rewrite   core.RewriteConfig       `json:"rewrite"`
-	Client    core.ClientConfig        `json:"client"`
-	ECS       core.ECSConfig           `json:"ecs"`
-	QueryLog  querylog.QueryLogConfig  `json:"querylog"`
-	Web       WebConfig                `json:"web"`
+	DNS        DNSConfig                `json:"dns"`
+	Upstream   core.ResolverConfig      `json:"upstream"`
+	IPC        IPCConfig                `json:"ipc"`
+	Takeover   TakeoverConfig           `json:"takeover"`
+	Cache      core.CacheConfig         `json:"cache"`
+	Filter     core.FilterConfig        `json:"filter"`
+	Hosts      core.HostsConfig         `json:"hosts"`
+	Rebind     core.RebindConfig        `json:"rebind"`
+	Access     core.AccessControlConfig `json:"access"`
+	RateLimit  core.RateLimitConfig     `json:"rateLimit"`
+	DNS64      core.DNS64Config         `json:"dns64"`
+	Rewrite    core.RewriteConfig       `json:"rewrite"`
+	SafeSearch core.SafeSearchConfig    `json:"safeSearch"`
+	Client     core.ClientConfig        `json:"client"`
+	ECS        core.ECSConfig           `json:"ecs"`
+	QueryLog   querylog.QueryLogConfig  `json:"querylog"`
+	Web        WebConfig                `json:"web"`
 }
 
 // DefaultConfig 生成默认系统配置
@@ -230,17 +231,18 @@ func DefaultConfig() *Config {
 			AutoTakeoverOnStart: false,
 			StateFilePath:       "",
 		},
-		Cache:     core.DefaultCacheConfig(),
-		Filter:    core.DefaultFilterConfig(),
-		Hosts:     core.DefaultHostsConfig(),
-		Rebind:    core.DefaultRebindConfig(),
-		Access:    core.DefaultAccessControlConfig(),
-		RateLimit: core.DefaultRateLimitConfig(),
-		DNS64:     core.DefaultDNS64Config(),
-		Rewrite:   core.DefaultRewriteConfig(),
-		Client:    core.DefaultClientConfig(),
-		ECS:       core.DefaultECSConfig(),
-		QueryLog:  querylog.DefaultQueryLogConfig(),
+		Cache:      core.DefaultCacheConfig(),
+		Filter:     core.DefaultFilterConfig(),
+		Hosts:      core.DefaultHostsConfig(),
+		Rebind:     core.DefaultRebindConfig(),
+		Access:     core.DefaultAccessControlConfig(),
+		RateLimit:  core.DefaultRateLimitConfig(),
+		DNS64:      core.DefaultDNS64Config(),
+		Rewrite:    core.DefaultRewriteConfig(),
+		SafeSearch: core.DefaultSafeSearchConfig(),
+		Client:     core.DefaultClientConfig(),
+		ECS:        core.DefaultECSConfig(),
+		QueryLog:   querylog.DefaultQueryLogConfig(),
 		Web: WebConfig{
 			Enabled:        true,
 			ListenPort:     15353,

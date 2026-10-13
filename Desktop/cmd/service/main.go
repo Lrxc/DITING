@@ -46,6 +46,7 @@ type program struct {
 	rateLimiter    *core.RateLimiter
 	dns64Synth     *core.DNS64Synthesizer
 	rewriteEngine  *core.RewriteEngine
+	safeSearchEng  *core.SafeSearchEngine
 	clientResolver *core.ClientResolver
 	ecsMgr         *ditingdns.ECSManager
 	takeoverMgr    platform.DNSManager
@@ -160,6 +161,7 @@ func (p *program) run() error {
 	}
 	p.dns64Synth = dns64Synth
 	p.rewriteEngine = core.NewRewriteEngine(cfg.Rewrite)
+	p.safeSearchEng = core.NewSafeSearchEngine(cfg.SafeSearch)
 	p.clientResolver = core.NewClientResolver(cfg.Client, p.hostsResolver, p.rewriteEngine)
 	p.ecsMgr = ditingdns.NewECSManager(cfg.ECS)
 

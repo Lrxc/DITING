@@ -72,6 +72,8 @@ type ServiceController interface {
 	AddRewriteRule(ctx context.Context, rule core.RewriteRule) error
 	DeleteRewriteRule(ctx context.Context, domain string) error
 	ConfigureRewrite(ctx context.Context, req ConfigureRewriteRequest) error
+	GetSafeSearch(ctx context.Context) (*SafeSearchConfigResponse, error)
+	ConfigureSafeSearch(ctx context.Context, req ConfigureSafeSearchRequest) error
 	GetClients(ctx context.Context) ([]core.ClientInfo, error)
 	ConfigureClientAlias(ctx context.Context, req ConfigureClientAliasRequest) error
 	ConfigureECS(ctx context.Context, req ConfigureECSRequest) error

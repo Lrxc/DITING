@@ -77,6 +77,7 @@ type StatusResponse struct {
 	RateLimit     core.RateLimitConfig     `json:"rateLimit"`
 	DNS64         core.DNS64Config         `json:"dns64"`
 	Rewrite       core.RewriteConfig       `json:"rewrite"`
+	SafeSearch    core.SafeSearchConfig    `json:"safeSearch"`
 	ECS           core.ECSConfig           `json:"ecs"`
 	Clients       []core.ClientInfo        `json:"clients,omitempty"`
 }
@@ -305,6 +306,20 @@ type ConfigureECSRequest struct {
 	Enabled      *bool   `json:"enabled,omitempty"`
 	StripECS     *bool   `json:"stripECS,omitempty"`
 	CustomSubnet *string `json:"customSubnet,omitempty"`
+}
+
+// ConfigureSafeSearchRequest 强制安全搜索配置请求
+type ConfigureSafeSearchRequest struct {
+	Enabled  *bool     `json:"enabled,omitempty"`
+	Disabled *[]string `json:"disabled,omitempty"`
+	TTL      *uint32   `json:"ttl,omitempty"`
+}
+
+// SafeSearchConfigResponse 强制安全搜索配置响应（含当前有效配置）
+type SafeSearchConfigResponse struct {
+	Enabled  bool     `json:"enabled"`
+	Disabled []string `json:"disabled"`
+	TTL      uint32   `json:"ttl"`
 }
 
 // ConfigureClientAliasRequest 客户端友好主机名别名配置请求

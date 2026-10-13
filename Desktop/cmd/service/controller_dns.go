@@ -188,6 +188,7 @@ func (p *program) StartDNS(ctx context.Context) error {
 	})
 	hostsMw := ditingdns.NewHostsMiddleware(p.hostsResolver)
 	rewriteMw := ditingdns.NewRewriteMiddleware(p.rewriteEngine)
+	safeSearchMw := ditingdns.NewSafeSearchMiddleware(p.safeSearchEng)
 	privatePTRMw := ditingdns.NewPrivatePTRMiddleware(func() bool {
 		p.mu.Lock()
 		defer p.mu.Unlock()
@@ -211,7 +212,7 @@ func (p *program) StartDNS(ctx context.Context) error {
 	forwardMw := ditingdns.NewForwardMiddleware(p.resolver)
 	// 响应侧复检位于 rebindMw 之后、dns64Mw 之前：
 	// 既包裹缓存（缓存命中也复检），又在 DNS64 合成之后获得最终应答，且被 rebindMw 的已阻断判定短路。
-	pipeline := ditingdns.NewPipeline(metricsMw, edeMw, echMw, clientMw, accessMw, rateLimitMw, sudnMw, hostsMw, rewriteMw, ipv6Mw, privatePTRMw, unqualifiedMw, filterMw, rebindMw, filterResponseMw, dns64Mw, ecsMw, cacheMw, forwardMw)
+	pipeline := ditingdns.NewPipeline(metricsMw, edeMw, echMw, clientMw, accessMw, rateLimitMw, sudnMw, hostsMw, rewriteMw, safeSearchMw, ipv6Mw, privatePTRMw, unqualifiedMw, filterMw, rebindMw, filterResponseMw, dns64Mw, ecsMw, cacheMw, forwardMw)
 	udpAddrs, tcpAddrs := p.cfg.DNS.EffectiveListenAddresses()
 	serverCfg := ditingdns.ServerConfig{
 		UDPAddresses: udpAddrs,
@@ -384,17 +385,18 @@ func (p *program) GetStatus(ctx context.Context) (*ipc.StatusResponse, error) {
 			Active:   p.takeoverMgr.IsTakeoverActive(),
 			Adapters: takenAdapters,
 		},
-		Metrics:   p.metrics.Snapshot(),
-		Cache:     p.getCacheStatsSnapshot(),
-		Filter:    p.getFilterStatsSnapshot(),
-		Hosts:     p.cfg.Hosts,
-		Rebind:    p.cfg.Rebind,
-		Access:    p.cfg.Access,
-		RateLimit: p.cfg.RateLimit,
-		DNS64:     p.cfg.DNS64,
-		Rewrite:   p.cfg.Rewrite,
-		ECS:       p.cfg.ECS,
-		Clients:   p.getClientsSnapshot(),
+		Metrics:    p.metrics.Snapshot(),
+		Cache:      p.getCacheStatsSnapshot(),
+		Filter:     p.getFilterStatsSnapshot(),
+		Hosts:      p.cfg.Hosts,
+		Rebind:     p.cfg.Rebind,
+		Access:     p.cfg.Access,
+		RateLimit:  p.cfg.RateLimit,
+		DNS64:      p.cfg.DNS64,
+		Rewrite:    p.cfg.Rewrite,
+		SafeSearch: p.cfg.SafeSearch,
+		ECS:        p.cfg.ECS,
+		Clients:    p.getClientsSnapshot(),
 	}, nil
 }
 

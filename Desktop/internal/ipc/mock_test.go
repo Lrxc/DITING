@@ -33,6 +33,8 @@ type mockController struct {
 	bgConfig             *LoginBackgroundResponse
 	bgImageData          []byte
 	authInitialized      bool
+	safeSearch           *SafeSearchConfigResponse
+	safeSearchErr        error
 }
 
 func (m *mockController) StartDNS(ctx context.Context) error {

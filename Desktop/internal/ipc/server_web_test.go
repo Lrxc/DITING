@@ -151,6 +151,38 @@ func (m *mockController) ConfigureRewrite(ctx context.Context, req ConfigureRewr
 	return nil
 }
 
+func (m *mockController) GetSafeSearch(ctx context.Context) (*SafeSearchConfigResponse, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.safeSearch == nil {
+		return &SafeSearchConfigResponse{Disabled: []string{}, TTL: 300}, nil
+	}
+	cpy := *m.safeSearch
+	cpy.Disabled = append([]string{}, m.safeSearch.Disabled...)
+	return &cpy, nil
+}
+
+func (m *mockController) ConfigureSafeSearch(ctx context.Context, req ConfigureSafeSearchRequest) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.safeSearchErr != nil {
+		return m.safeSearchErr
+	}
+	if m.safeSearch == nil {
+		m.safeSearch = &SafeSearchConfigResponse{Disabled: []string{}, TTL: 300}
+	}
+	if req.Enabled != nil {
+		m.safeSearch.Enabled = *req.Enabled
+	}
+	if req.Disabled != nil {
+		m.safeSearch.Disabled = normalizeSafeSearchDisabled(*req.Disabled)
+	}
+	if req.TTL != nil && *req.TTL > 0 {
+		m.safeSearch.TTL = *req.TTL
+	}
+	return nil
+}
+
 func (m *mockController) GetClients(ctx context.Context) ([]core.ClientInfo, error) {
 	return []core.ClientInfo{}, nil
 }
