@@ -2,7 +2,9 @@
 import { ref, watch } from 'vue';
 import type { ProviderConfig } from '../../api/types';
 import { DNS_PRESET_PROVIDERS, type DnsProtocolType } from '../../constants/dnsPresets';
+import { validateDoHUrl } from '../../utils/validators';
 import AppModal from '../AppModal.vue';
+import InlineAlert from '../ui/InlineAlert.vue';
 import M3Icon from '../M3Icon.vue';
 
 const props = defineProps<{
@@ -106,13 +108,9 @@ function handleSave() {
   }
 
   if (formProtocol.value === 'DOH') {
-    const url = formUrl.value.trim();
-    if (!url) {
-      formError.value = 'DoH 协议必须填写加密解析地址 (URL，如 https://...)';
-      return;
-    }
-    if (!url.startsWith('https://') && !url.startsWith('http://')) {
-      formError.value = 'DoH 加密解析地址必须以 https:// 开头';
+    const check = validateDoHUrl(formUrl.value);
+    if (!check.valid) {
+      formError.value = check.error || 'DoH 地址格式无效';
       return;
     }
   }
@@ -183,10 +181,7 @@ function handleSave() {
         </div>
       </div>
 
-      <div v-if="formError" class="p-2.5 rounded-md bg-status-error-bg text-status-error text-xs flex items-center gap-1.5 border border-status-error/20">
-        <M3Icon name="error" :size="16" />
-        <span>{{ formError }}</span>
-      </div>
+      <InlineAlert v-if="formError" :message="formError" type="error" />
 
       <md-outlined-text-field
         label="服务器名称 / 标识"

@@ -2,8 +2,9 @@
 import { ref, watch } from 'vue';
 import type { BootstrapServer } from '../../api/types';
 import { BOOTSTRAP_PRESETS } from '../../constants/dnsPresets';
+import { validateIPAddress } from '../../utils/validators';
 import AppModal from '../AppModal.vue';
-import M3Icon from '../M3Icon.vue';
+import InlineAlert from '../ui/InlineAlert.vue';
 
 const props = defineProps<{
   open: boolean;
@@ -27,50 +28,6 @@ function applyPreset(p: { name: string; ip: string }) {
   if (!formId.value.trim() || formId.value.startsWith('bootstrap-')) {
     formId.value = p.name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-');
   }
-}
-
-function validateIPAddress(input: string): boolean {
-  const trimmed = input.trim();
-  if (!trimmed) return false;
-
-  let host = trimmed;
-  let portStr = '';
-  if (trimmed.startsWith('[')) {
-    const endBracket = trimmed.indexOf(']');
-    if (endBracket === -1) return false;
-    host = trimmed.substring(1, endBracket);
-    const rest = trimmed.substring(endBracket + 1);
-    if (rest.startsWith(':')) {
-      portStr = rest.substring(1);
-    } else if (rest.length > 0) {
-      return false;
-    }
-  } else if (trimmed.includes(':') && trimmed.indexOf(':') === trimmed.lastIndexOf(':')) {
-    const parts = trimmed.split(':');
-    host = parts[0];
-    portStr = parts[1];
-  }
-
-  if (portStr) {
-    if (!/^\d+$/.test(portStr)) return false;
-    const p = parseInt(portStr, 10);
-    if (p <= 0 || p > 65535) return false;
-  }
-
-  const ipv4Parts = host.split('.');
-  if (ipv4Parts.length === 4) {
-    return ipv4Parts.every((part) => {
-      if (!/^\d+$/.test(part)) return false;
-      const num = parseInt(part, 10);
-      return num >= 0 && num <= 255 && (part === '0' || !part.startsWith('0'));
-    });
-  }
-
-  if (host.includes(':')) {
-    return /^[0-9a-fA-F:]+$/.test(host);
-  }
-
-  return false;
 }
 
 watch(
@@ -158,10 +115,7 @@ function handleSave() {
         required
       ></md-outlined-text-field>
 
-      <div v-if="formError" class="p-2.5 rounded-md bg-status-error-bg text-status-error text-xs flex items-center gap-1.5 border border-status-error/20">
-        <M3Icon name="error" :size="16" />
-        <span>{{ formError }}</span>
-      </div>
+      <InlineAlert v-if="formError" :message="formError" type="error" />
     </form>
 
     <template #actions>

@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
 import PageHeader from '../components/ui/PageHeader.vue';
 import SegmentedTabs from '../components/ui/SegmentedTabs.vue';
 import OverviewPanel from '../components/overview/OverviewPanel.vue';
 import LiveQueryPanel from '../components/overview/LiveQueryPanel.vue';
 import { SUB_TABS, type NavTab } from '../constants/navigation';
+import { useSubTab } from '../composables/useSubTab';
 
 const props = defineProps<{ sub?: string }>();
 const emit = defineEmits<{
@@ -12,16 +12,7 @@ const emit = defineEmits<{
 }>();
 
 const segments = SUB_TABS.overview ?? [];
-const active = ref(
-  props.sub && segments.some((s) => s.id === props.sub) ? props.sub : (segments[0]?.id ?? 'status')
-);
-
-watch(
-  () => props.sub,
-  (v) => {
-    if (v && segments.some((s) => s.id === v)) active.value = v;
-  }
-);
+const active = useSubTab(segments, () => props.sub, 'status');
 </script>
 
 <template>

@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import type { CacheDomainStat } from '../../api/types';
 import { formatClockTime } from '../../utils/format';
-import M3Icon from '../M3Icon.vue';
+import AppCard from '../ui/AppCard.vue';
 
 const props = defineProps<{
   topDomains: CacheDomainStat[];
@@ -15,64 +15,59 @@ const maxTopHits = computed(() => {
 </script>
 
 <template>
-  <div class="app-card p-5 flex flex-col justify-between gap-4">
-    <div>
-      <div class="flex items-center justify-between gap-3 pb-3 border-b border-surface-border-sub">
+  <AppCard
+    title="高频访问网址排行"
+    subtitle="本地缓存命中次数最高的前 10 个域名"
+    icon="analytics"
+    iconBoxClass="w-7 h-7"
+    :iconSize="16"
+  >
+    <template #actions>
+      <span class="text-[11px] font-mono text-text-muted">Top 10</span>
+    </template>
+
+    <div v-if="topDomains.length === 0" class="py-12 text-center text-xs text-text-muted">
+      暂无高频网址访问记录
+    </div>
+
+    <div v-else class="space-y-2 mt-3 text-xs">
+      <div
+        v-for="(item, idx) in topDomains"
+        :key="item.domain + item.qtype"
+        class="app-card-sub p-2.5 flex items-center justify-between gap-3 hover:border-surface-border transition-colors"
+      >
+        <!-- 排名与域名 -->
         <div class="flex items-center gap-2.5 min-w-0">
-          <div class="w-7 h-7 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
-            <M3Icon name="analytics" :size="16" class="text-text-main" />
-          </div>
-          <div>
-            <h3 class="section-title text-[14px]">高频访问网址排行</h3>
-            <span class="text-[11px] text-text-muted">本地缓存命中次数最高的前 10 个域名</span>
-          </div>
+          <span
+            class="w-5 h-5 rounded-md flex items-center justify-center font-bold font-mono text-[10px] shrink-0"
+            :class="idx < 3 ? 'bg-brand-primary text-surface-card dark:text-[#1a1a1c]' : 'bg-surface-hover text-text-sub'"
+          >
+            {{ idx + 1 }}
+          </span>
+          <span class="font-mono font-medium text-text-main truncate text-[12px]" :title="item.domain">
+            {{ item.domain }}
+          </span>
+          <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-surface-card border border-surface-border-sub text-text-muted shrink-0">
+            {{ item.qtype }}
+          </span>
         </div>
-        <span class="text-[11px] font-mono text-text-muted">Top 10</span>
-      </div>
 
-      <div v-if="topDomains.length === 0" class="py-12 text-center text-xs text-text-muted">
-        暂无高频网址访问记录
-      </div>
-
-      <div v-else class="space-y-2 mt-3 text-xs">
-        <div
-          v-for="(item, idx) in topDomains"
-          :key="item.domain + item.qtype"
-          class="app-card-sub p-2.5 flex items-center justify-between gap-3 hover:border-surface-border transition-colors"
-        >
-          <!-- 排名与域名 -->
-          <div class="flex items-center gap-2.5 min-w-0">
-            <span
-              class="w-5 h-5 rounded-md flex items-center justify-center font-bold font-mono text-[10px] shrink-0"
-              :class="idx < 3 ? 'bg-brand-primary text-surface-card dark:text-[#1a1a1c]' : 'bg-surface-hover text-text-sub'"
-            >
-              {{ idx + 1 }}
-            </span>
-            <span class="font-mono font-medium text-text-main truncate text-[12px]" :title="item.domain">
-              {{ item.domain }}
-            </span>
-            <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-surface-card border border-surface-border-sub text-text-muted shrink-0">
-              {{ item.qtype }}
-            </span>
+        <!-- 频次柱状进度与命中数 -->
+        <div class="flex items-center gap-2.5 shrink-0">
+          <div class="w-16 md:w-24 bg-surface-card border border-surface-border-sub rounded-full h-1.5 overflow-hidden hidden sm:block">
+            <div
+              class="bg-accent-seal h-full rounded-full"
+              :style="{ width: `${(item.hitCount / maxTopHits) * 100}%` }"
+            ></div>
           </div>
-
-          <!-- 频次柱状进度与命中数 -->
-          <div class="flex items-center gap-2.5 shrink-0">
-            <div class="w-16 md:w-24 bg-surface-card border border-surface-border-sub rounded-full h-1.5 overflow-hidden hidden sm:block">
-              <div
-                class="bg-accent-seal h-full rounded-full"
-                :style="{ width: `${(item.hitCount / maxTopHits) * 100}%` }"
-              ></div>
-            </div>
-            <span class="font-mono font-bold text-text-main text-[12px] min-w-8 text-right">
-              {{ item.hitCount }} 次
-            </span>
-            <span class="text-[10px] font-mono text-text-muted min-w-12 text-right">
-              {{ item.lastHitAt > 0 ? formatClockTime(item.lastHitAt) : '近期' }}
-            </span>
-          </div>
+          <span class="font-mono font-bold text-text-main text-[12px] min-w-8 text-right">
+            {{ item.hitCount }} 次
+          </span>
+          <span class="text-[10px] font-mono text-text-muted min-w-12 text-right">
+            {{ item.lastHitAt > 0 ? formatClockTime(item.lastHitAt) : '近期' }}
+          </span>
         </div>
       </div>
     </div>
-  </div>
+  </AppCard>
 </template>

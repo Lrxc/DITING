@@ -3,6 +3,8 @@ import { ref, onMounted } from 'vue';
 import { ipc } from '../../api/ipc';
 import type { StatusResponse, ProviderConfig, UpstreamInfo, BootstrapConfig } from '../../api/types';
 import StatusBadge from '../StatusBadge.vue';
+import ToastBanner from '../ToastBanner.vue';
+import AppCard from '../ui/AppCard.vue';
 import M3Icon from '../M3Icon.vue';
 import BootstrapConfigCard from '../BootstrapConfigCard.vue';
 import UpstreamEditModal from './UpstreamEditModal.vue';
@@ -185,82 +187,72 @@ onMounted(() => {
 <template>
   <div class="space-y-6 select-none pb-12">
     <!-- 消息横幅 -->
-    <div v-if="successMessage" class="flex items-center justify-between rounded-md bg-status-success-bg border-l-2 border-status-success px-4 py-3 text-[13px] text-status-success">
-      <div class="flex items-center gap-2">
-        <M3Icon name="check_circle" :size="18" />
-        <span>{{ successMessage }}</span>
-      </div>
-      <button @click="successMessage = ''" class="app-btn-secondary app-btn-compact">
-        知道了
-      </button>
-    </div>
+    <ToastBanner
+      v-if="successMessage"
+      :message="successMessage"
+      type="success"
+      dismissible
+      @dismiss="successMessage = ''"
+    />
 
-    <div v-if="errorMessage" class="flex items-center justify-between rounded-md bg-status-error-bg border-l-2 border-accent-seal px-4 py-3 text-[13px] text-status-error">
-      <div class="flex items-center gap-2">
-        <M3Icon name="error" :size="18" />
-        <span>{{ errorMessage }}</span>
-      </div>
-      <button @click="errorMessage = ''" class="app-btn-secondary app-btn-compact">
-        关闭
-      </button>
-    </div>
+    <ToastBanner
+      v-if="errorMessage"
+      :message="errorMessage"
+      type="error"
+      dismissible
+      @dismiss="errorMessage = ''"
+    />
 
     <!-- 顶层卡片双列响应式网格：调度策略 (左) 与 Bootstrap 引导 (右) 并排对齐 -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
       <!-- 1. 上游调度策略卡片 -->
-      <div class="app-card p-5 flex flex-col justify-between gap-4">
-        <div>
-          <div class="flex items-center justify-between gap-3 pb-3 border-b border-surface-border-sub">
-            <div class="flex items-center gap-2.5 min-w-0">
-              <div class="w-8 h-8 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
-                <M3Icon name="tune" :size="18" class="text-text-main" />
-              </div>
-              <div>
-                <h4 class="section-title text-[14px]">上游调度策略</h4>
-                <span class="text-[11px] text-text-muted">选择多服务器协同工作与容灾模式</span>
-              </div>
-            </div>
+      <AppCard
+        title="上游调度策略"
+        subtitle="选择多服务器协同工作与容灾模式"
+        icon="tune"
+      >
+        <template #actions>
+          <span class="text-[11px] font-mono text-text-muted">
+            4 种模式
+          </span>
+        </template>
 
-            <span class="text-[11px] font-mono text-text-muted">
-              4 种模式
-            </span>
-          </div>
-
-          <!-- 4 种调度模式网格 (内部 2x2) -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-3.5">
-            <div
-              v-for="mode in schedulingModes"
-              :key="mode.id"
-              class="flex items-start gap-2.5 p-2.5 rounded-md border transition-all duration-150 cursor-pointer"
-              :class="[
-                currentMode === mode.id
-                  ? 'border-brand-primary bg-brand-container/40 dark:bg-brand-container/20'
-                  : 'border-surface-border bg-surface-card-sub hover:bg-surface-hover',
-              ]"
-              @click="handleModeChange(mode.id)"
-            >
-              <md-radio
-                :checked="currentMode === mode.id"
-                :value="mode.id"
-                name="scheduling-mode"
-                class="mt-0.5 scale-90"
-              />
-              <div class="space-y-0.5 min-w-0">
-                <span class="text-[12px] font-bold text-text-main block truncate">
-                  {{ mode.name }}
-                </span>
-                <p class="text-[10px] text-text-sub leading-tight line-clamp-2">
-                  {{ mode.desc }}
-                </p>
-              </div>
+        <!-- 4 种调度模式网格 (内部 2x2) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-3.5">
+          <div
+            v-for="mode in schedulingModes"
+            :key="mode.id"
+            class="flex items-start gap-2.5 p-2.5 rounded-md border transition-all duration-150 cursor-pointer"
+            :class="[
+              currentMode === mode.id
+                ? 'border-brand-primary bg-brand-container/40 dark:bg-brand-container/20'
+                : 'border-surface-border bg-surface-card-sub hover:bg-surface-hover',
+            ]"
+            @click="handleModeChange(mode.id)"
+          >
+            <md-radio
+              :checked="currentMode === mode.id"
+              :value="mode.id"
+              name="scheduling-mode"
+              class="mt-0.5 scale-90"
+            />
+            <div class="space-y-0.5 min-w-0">
+              <span class="text-[12px] font-bold text-text-main block truncate">
+                {{ mode.name }}
+              </span>
+              <p class="text-[10px] text-text-sub leading-tight line-clamp-2">
+                {{ mode.desc }}
+              </p>
             </div>
           </div>
         </div>
 
-        <div class="text-[11px] text-text-muted pt-2 border-t border-surface-border-sub">
-          当前策略: <span class="font-semibold text-text-main">{{ schedulingModes.find(m => m.id === currentMode)?.name }}</span>
-        </div>
-      </div>
+        <template #footer>
+          <div class="text-[11px] text-text-muted">
+            当前策略: <span class="font-semibold text-text-main">{{ schedulingModes.find(m => m.id === currentMode)?.name }}</span>
+          </div>
+        </template>
+      </AppCard>
 
       <!-- 2. Bootstrap DNS 引导解析卡片 (并排右侧) -->
       <BootstrapConfigCard
@@ -320,107 +312,94 @@ onMounted(() => {
 
       <!-- 宽屏两列网格，窄屏单列 -->
       <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
-        <div
+        <AppCard
           v-for="(node, idx) in upstreams"
           :key="node.id"
-          class="app-card p-5 flex flex-col justify-between gap-4"
+          :title="node.id"
+          :subtitle="'权重: ' + (node.weight || 1)"
+          icon="dns"
         >
-          <div>
-            <!-- 头部：ID、协议标识、状态与测速结果 -->
-            <div class="flex items-center justify-between gap-3 pb-3 border-b border-surface-border-sub">
-              <div class="flex items-center gap-2.5 min-w-0">
-                <div class="w-8 h-8 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
-                  <M3Icon name="dns" :size="18" class="text-text-main" />
-                </div>
-                <div class="min-w-0">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <span class="text-[14px] font-bold text-text-main font-mono truncate">
-                      {{ node.id }}
-                    </span>
-                    <span
-                      class="px-2 py-0.5 rounded-full text-[10px] font-semibold font-mono border"
-                      :class="[
-                        node.protocol === 'DOH'
-                          ? 'border-accent-seal/50 text-accent-seal'
-                          : node.protocol === 'DOT'
-                            ? 'border-accent-seal/40 text-text-main'
-                            : 'border-surface-border text-text-sub'
-                      ]"
-                    >
-                      {{ node.protocol === 'DOH' ? '加密 DoH' : node.protocol === 'DOT' ? '加密 DoT' : 'UDP 53' }}
-                    </span>
-                    <StatusBadge
-                      :status="node.active ? 'active' : 'inactive'"
-                      :text="node.active ? '运行中' : '已暂停'"
-                      size="sm"
-                    />
-                  </div>
-                  <p class="text-[11px] font-mono text-text-muted truncate mt-0.5">
-                    权重: {{ node.weight || 1 }}
-                  </p>
-                </div>
-              </div>
+          <template #badge>
+            <span
+              class="px-2 py-0.5 rounded-full text-[10px] font-semibold font-mono border"
+              :class="[
+                node.protocol === 'DOH'
+                  ? 'border-accent-seal/50 text-accent-seal'
+                  : node.protocol === 'DOT'
+                    ? 'border-accent-seal/40 text-text-main'
+                    : 'border-surface-border text-text-sub'
+              ]"
+            >
+              {{ node.protocol === 'DOH' ? '加密 DoH' : node.protocol === 'DOT' ? '加密 DoT' : 'UDP 53' }}
+            </span>
+            <StatusBadge
+              :status="node.active ? 'active' : 'inactive'"
+              :text="node.active ? '运行中' : '已暂停'"
+              size="sm"
+            />
+          </template>
 
-              <!-- 延迟指示药丸 -->
-              <div v-if="probeResults[node.id] !== undefined" class="shrink-0">
-                <span class="h-7 px-2.5 rounded-md bg-status-success-bg text-status-success border border-status-success/30 font-mono text-[11px] font-bold inline-flex items-center">
-                  {{ probeResults[node.id].toFixed(1) }} ms
-                </span>
-              </div>
+          <template #actions>
+            <div v-if="probeResults[node.id] !== undefined" class="shrink-0">
+              <span class="h-7 px-2.5 rounded-md bg-status-success-bg text-status-success border border-status-success/30 font-mono text-[11px] font-bold inline-flex items-center">
+                {{ probeResults[node.id].toFixed(1) }} ms
+              </span>
             </div>
+          </template>
 
-            <!-- 服务器信息磁贴 -->
-            <div class="space-y-2 mt-3 text-xs">
-              <div class="app-card-sub p-2.5">
-                <span class="text-[11px] text-text-muted block">服务器连接地址</span>
-                <span class="font-mono text-text-main font-medium text-[12px] block truncate select-all">
-                  {{ node.server }}
-                </span>
-              </div>
-              <div v-if="node.url" class="app-card-sub p-2.5">
-                <span class="text-[11px] text-text-muted block">加密查询 URL (DoH)</span>
-                <span class="font-mono text-text-sub text-[11px] block truncate select-all" :title="node.url">
-                  {{ node.url }}
-                </span>
-              </div>
+          <!-- 服务器信息磁贴 -->
+          <div class="space-y-2 mt-3 text-xs">
+            <div class="app-card-sub p-2.5">
+              <span class="text-[11px] text-text-muted block">服务器连接地址</span>
+              <span class="font-mono text-text-main font-medium text-[12px] block truncate select-all">
+                {{ node.server }}
+              </span>
+            </div>
+            <div v-if="node.url" class="app-card-sub p-2.5">
+              <span class="text-[11px] text-text-muted block">加密查询 URL (DoH)</span>
+              <span class="font-mono text-text-sub text-[11px] block truncate select-all" :title="node.url">
+                {{ node.url }}
+              </span>
             </div>
           </div>
 
           <!-- 底部操作按钮栏 -->
-          <div class="flex items-center justify-between pt-2 border-t border-surface-border-sub">
-            <button
-              type="button"
-              class="app-btn-secondary app-btn-compact"
-              @click="handleTestNode({ id: node.id, protocol: node.protocol, server: node.server, url: node.url })"
-              :disabled="probingId === node.id"
-            >
-              <M3Icon v-if="probingId === node.id" name="refresh" class="animate-spin" :size="13" />
-              <M3Icon v-else name="bolt" :size="13" />
-              <span>测试延迟</span>
-            </button>
-
-            <div class="flex items-center gap-1.5">
+          <template #footer>
+            <div class="flex items-center justify-between">
               <button
                 type="button"
-                @click="openEditDialog(idx)"
-                class="app-btn-icon"
-                title="编辑服务器"
+                class="app-btn-secondary app-btn-compact"
+                @click="handleTestNode({ id: node.id, protocol: node.protocol, server: node.server, url: node.url })"
+                :disabled="probingId === node.id"
               >
-                <M3Icon name="settings" :size="15" />
+                <M3Icon v-if="probingId === node.id" name="refresh" class="animate-spin" :size="13" />
+                <M3Icon v-else name="bolt" :size="13" />
+                <span>测试延迟</span>
               </button>
 
-              <button
-                type="button"
-                @click="handleDeleteNode(idx)"
-                :disabled="upstreams.length <= 1"
-                class="app-btn-icon app-btn-icon-danger"
-                title="删除服务器"
-              >
-                <M3Icon name="delete" :size="15" />
-              </button>
+              <div class="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  @click="openEditDialog(idx)"
+                  class="app-btn-icon"
+                  title="编辑服务器"
+                >
+                  <M3Icon name="settings" :size="15" />
+                </button>
+
+                <button
+                  type="button"
+                  @click="handleDeleteNode(idx)"
+                  :disabled="upstreams.length <= 1"
+                  class="app-btn-icon app-btn-icon-danger"
+                  title="删除服务器"
+                >
+                  <M3Icon name="delete" :size="15" />
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
+          </template>
+        </AppCard>
       </div>
     </div>
 

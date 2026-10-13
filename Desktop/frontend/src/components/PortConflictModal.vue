@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import type { PortCheckResult } from '../api/types';
 import AppModal from './AppModal.vue';
+import InlineAlert from './ui/InlineAlert.vue';
 import M3Icon from './M3Icon.vue';
 import { useCopyFeedback } from '../composables/useCopyFeedback';
 
@@ -159,10 +160,7 @@ function handleClose() {
       </div>
 
       <!-- 重新检测或操作报错提示 -->
-      <div v-if="recheckError" class="p-2.5 rounded-md bg-status-error-bg border border-status-error/20 text-xs text-status-error flex items-center gap-1.5">
-        <M3Icon name="error" :size="14" />
-        <span>{{ recheckError }}</span>
-      </div>
+      <InlineAlert v-if="recheckError" :message="recheckError" type="error" />
     </div>
 
     <template #actions>

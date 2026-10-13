@@ -1,25 +1,16 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
 import PageHeader from '../components/ui/PageHeader.vue';
 import SegmentedTabs from '../components/ui/SegmentedTabs.vue';
 import AdaptersPanel from '../components/network/AdaptersPanel.vue';
 import UpstreamPanel from '../components/network/UpstreamPanel.vue';
 import LanDnsCard from '../components/LanDnsCard.vue';
 import { SUB_TABS } from '../constants/navigation';
+import { useSubTab } from '../composables/useSubTab';
 
 const props = defineProps<{ sub?: string }>();
 
 const segments = SUB_TABS.network ?? [];
-const active = ref(
-  props.sub && segments.some((s) => s.id === props.sub) ? props.sub : (segments[0]?.id ?? 'adapters')
-);
-
-watch(
-  () => props.sub,
-  (v) => {
-    if (v && segments.some((s) => s.id === v)) active.value = v;
-  }
-);
+const active = useSubTab(segments, () => props.sub, 'adapters');
 </script>
 
 <template>

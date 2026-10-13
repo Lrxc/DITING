@@ -3,9 +3,10 @@ import { ref, computed, onMounted } from 'vue';
 import { ipc } from '../../api/ipc';
 import type { CacheStats, CacheConfig, CacheEntryItem, CacheDomainStat } from '../../api/types';
 import StatusBadge from '../StatusBadge.vue';
-import Panel from '../ui/Panel.vue';
 import M3Icon from '../M3Icon.vue';
-import AppModal from '../AppModal.vue';
+import AppCard from '../ui/AppCard.vue';
+import CardTile from '../ui/CardTile.vue';
+import ConfirmModal from '../ConfirmModal.vue';
 import ToastBanner from '../ToastBanner.vue';
 import CacheTopDomains from './CacheTopDomains.vue';
 import CacheConfigCard from './CacheConfigCard.vue';
@@ -56,14 +57,6 @@ const hitRatioPercent = computed(() => {
   const ratio = (stats.value.hitRatio || 0) * 100;
   return `${ratio.toFixed(1)}%`;
 });
-
-const cacheStats = computed(() => [
-  { label: '总命中数', value: stats.value.totalHits.toLocaleString() },
-  { label: '实时联网解析', value: stats.value.totalMisses.toLocaleString() },
-  { label: '弱网应急保障', value: stats.value.staleHits.toLocaleString() },
-  { label: '无效网址拦截', value: stats.value.negativeHits.toLocaleString() },
-  { label: '已存记录 / 上限', value: `${stats.value.entryCount} / ${stats.value.maxEntries}` },
-]);
 
 async function loadData() {
   loading.value = true;
@@ -176,148 +169,130 @@ usePoller(pollMetrics, 4000);
     <!-- 顶层两列响应式卡片网格 (宽屏两列，窄屏单列) -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
       <!-- 1. 智能加速引擎与命中率总控卡片 -->
-      <div class="app-card p-5 flex flex-col justify-between gap-4">
-        <div>
-          <div class="flex items-center justify-between gap-3 pb-3 border-b border-surface-border-sub">
-            <div class="flex items-center gap-2.5 min-w-0">
-              <div class="w-8 h-8 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
-                <M3Icon name="cache" :size="18" class="text-text-main" />
-              </div>
-              <div class="min-w-0">
-                <div class="flex items-center gap-2 flex-wrap">
-                  <h3 class="section-title text-[14px]">智能解析加速引擎</h3>
-                  <StatusBadge
-                    :status="stats.enabled ? 'active' : 'inactive'"
-                    :text="stats.enabled ? '加速生效中' : '加速已停用'"
-                    size="sm"
-                  />
-                </div>
-                <span class="text-[11px] text-text-muted">分片缓存与高频域名优先响应</span>
-              </div>
-            </div>
+      <AppCard
+        title="智能解析加速引擎"
+        subtitle="分片缓存与高频域名优先响应"
+        icon="cache"
+      >
+        <template #badge>
+          <StatusBadge
+            :status="stats.enabled ? 'active' : 'inactive'"
+            :text="stats.enabled ? '加速生效中' : '加速已停用'"
+            size="sm"
+          />
+        </template>
 
-            <!-- 加速总开关 -->
-            <div class="flex items-center gap-2 shrink-0">
-              <span class="text-[11px] font-semibold text-text-sub hidden sm:inline">
-                {{ stats.enabled ? '加速开启' : '已关闭' }}
-              </span>
-              <md-switch
-                :selected="stats.enabled"
-                @change="handleToggleCache"
-              />
-            </div>
-          </div>
+        <template #actions>
+          <span class="text-[11px] font-semibold text-text-sub hidden sm:inline">
+            {{ stats.enabled ? '加速开启' : '已关闭' }}
+          </span>
+          <md-switch
+            :selected="stats.enabled"
+            @change="handleToggleCache"
+          />
+        </template>
 
-          <!-- 命中率视觉焦点区块 -->
-          <div class="mt-4 p-4 rounded-md bg-surface-card-sub border border-surface-border-sub">
-            <div class="flex items-baseline justify-between mb-2">
-              <span class="text-[12px] font-semibold text-text-muted">缓存命中率</span>
-              <span class="font-mono text-[28px] font-bold leading-none text-text-main tabular-nums">
-                {{ hitRatioPercent }}
-              </span>
-            </div>
-            <div class="w-full bg-surface-card rounded-full h-2 overflow-hidden border border-surface-border-sub">
-              <div
-                class="bg-accent-seal h-full rounded-full transition-all duration-300"
-                :style="{ width: `${Math.min((stats.hitRatio || 0) * 100, 100)}%` }"
-              />
-            </div>
-          </div>
-
-          <p class="text-[12px] text-text-sub leading-relaxed mt-3">
-            自动缓存已访问过的网址解析结果，下次访问直接瞬间返回；在断网或网络卡顿时自动启用应急保障。
-          </p>
-        </div>
-
-        <!-- 底部操作按钮 -->
-        <div class="flex items-center justify-between pt-2 border-t border-surface-border-sub">
-          <button
-            type="button"
-            @click="loadData"
-            :disabled="loading"
-            class="app-btn-secondary app-btn-compact"
-          >
-            <M3Icon name="refresh" :size="13" :class="loading ? 'animate-spin' : ''" />
-            <span>刷新数据</span>
-          </button>
-
-          <button
-            type="button"
-            @click="isClearDialogOpen = true"
-            :disabled="loading || stats.entryCount === 0"
-            class="app-btn-danger app-btn-compact"
-          >
-            <M3Icon name="delete" :size="13" />
-            <span>一键清空缓存</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- 2. 核心加速遥测指标卡片 -->
-      <div class="app-card p-5 flex flex-col justify-between gap-4">
-        <div>
-          <div class="flex items-center justify-between gap-3 pb-3 border-b border-surface-border-sub">
-            <div class="flex items-center gap-2.5 min-w-0">
-              <div class="w-8 h-8 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
-                <M3Icon name="analytics" :size="18" class="text-text-main" />
-              </div>
-              <div>
-                <h3 class="section-title text-[14px]">缓存遥测指标</h3>
-                <span class="text-[11px] text-text-muted">多维度解析效率与命中统揽</span>
-              </div>
-            </div>
-
-            <span class="text-[11px] font-mono text-text-muted">
-              容量: {{ stats.entryCount }} / {{ stats.maxEntries }}
+        <!-- 命中率视觉焦点区块 -->
+        <div class="mt-4 p-4 rounded-md bg-surface-card-sub border border-surface-border-sub">
+          <div class="flex items-baseline justify-between mb-2">
+            <span class="text-[12px] font-semibold text-text-muted">缓存命中率</span>
+            <span class="font-mono text-[28px] font-bold leading-none text-text-main tabular-nums">
+              {{ hitRatioPercent }}
             </span>
           </div>
-
-          <!-- 4 宫格遥测指标 -->
-          <div class="grid grid-cols-2 gap-3 mt-3">
-            <div class="app-card-sub p-3 space-y-1">
-              <span class="text-[11px] text-text-muted block">总命中数</span>
-              <span class="font-mono text-[18px] font-bold text-text-main block tabular-nums">
-                {{ stats.totalHits.toLocaleString() }}
-              </span>
-            </div>
-
-            <div class="app-card-sub p-3 space-y-1">
-              <span class="text-[11px] text-text-muted block">实时联网解析</span>
-              <span class="font-mono text-[18px] font-bold text-text-main block tabular-nums">
-                {{ stats.totalMisses.toLocaleString() }}
-              </span>
-            </div>
-
-            <div class="app-card-sub p-3 space-y-1">
-              <span class="text-[11px] text-text-muted block">弱网应急保障</span>
-              <span class="font-mono text-[18px] font-bold text-status-warning block tabular-nums">
-                {{ stats.staleHits.toLocaleString() }}
-              </span>
-            </div>
-
-            <div class="app-card-sub p-3 space-y-1">
-              <span class="text-[11px] text-text-muted block">无效网址拦截</span>
-              <span class="font-mono text-[18px] font-bold text-accent-seal block tabular-nums">
-                {{ stats.negativeHits.toLocaleString() }}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 缓存记录使用容量比例条 -->
-        <div class="pt-2 border-t border-surface-border-sub space-y-1.5">
-          <div class="flex items-center justify-between text-[11px] text-text-muted">
-            <span>存储容量占用</span>
-            <span class="font-mono">{{ ((stats.entryCount / Math.max(stats.maxEntries, 1)) * 100).toFixed(1) }}%</span>
-          </div>
-          <div class="w-full bg-surface-card-sub rounded-full h-1.5 overflow-hidden">
+          <div class="w-full bg-surface-card rounded-full h-2 overflow-hidden border border-surface-border-sub">
             <div
-              class="bg-brand-primary h-full rounded-full transition-all duration-300"
-              :style="{ width: `${Math.min((stats.entryCount / Math.max(stats.maxEntries, 1)) * 100, 100)}%` }"
+              class="bg-accent-seal h-full rounded-full transition-all duration-300"
+              :style="{ width: `${Math.min((stats.hitRatio || 0) * 100, 100)}%` }"
             />
           </div>
         </div>
-      </div>
+
+        <p class="text-[12px] text-text-sub leading-relaxed mt-3">
+          自动缓存已访问过的网址解析结果，下次访问直接瞬间返回；在断网或网络卡顿时自动启用应急保障。
+        </p>
+
+        <!-- 底部操作按钮 -->
+        <template #footer>
+          <div class="flex items-center justify-between">
+            <button
+              type="button"
+              @click="loadData"
+              :disabled="loading"
+              class="app-btn-secondary app-btn-compact"
+            >
+              <M3Icon name="refresh" :size="13" :class="loading ? 'animate-spin' : ''" />
+              <span>刷新数据</span>
+            </button>
+
+            <button
+              type="button"
+              @click="isClearDialogOpen = true"
+              :disabled="loading || stats.entryCount === 0"
+              class="app-btn-danger app-btn-compact"
+            >
+              <M3Icon name="delete" :size="13" />
+              <span>一键清空缓存</span>
+            </button>
+          </div>
+        </template>
+      </AppCard>
+
+      <!-- 2. 核心加速遥测指标卡片 -->
+      <AppCard
+        title="缓存遥测指标"
+        subtitle="多维度解析效率与命中统揽"
+        icon="analytics"
+      >
+        <template #actions>
+          <span class="text-[11px] font-mono text-text-muted">
+            容量: {{ stats.entryCount }} / {{ stats.maxEntries }}
+          </span>
+        </template>
+
+        <!-- 4 宫格遥测指标 -->
+        <div class="grid grid-cols-2 gap-3 mt-3">
+          <CardTile
+            label="总命中数"
+            :value="stats.totalHits.toLocaleString()"
+            valueClass="text-[18px] font-bold text-text-main font-mono"
+          />
+
+          <CardTile
+            label="实时联网解析"
+            :value="stats.totalMisses.toLocaleString()"
+            valueClass="text-[18px] font-bold text-text-main font-mono"
+          />
+
+          <CardTile
+            label="弱网应急保障"
+            :value="stats.staleHits.toLocaleString()"
+            valueClass="text-[18px] font-bold text-status-warning font-mono"
+          />
+
+          <CardTile
+            label="无效网址拦截"
+            :value="stats.negativeHits.toLocaleString()"
+            valueClass="text-[18px] font-bold text-accent-seal font-mono"
+          />
+        </div>
+
+        <!-- 缓存记录使用容量比例条 -->
+        <template #footer>
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between text-[11px] text-text-muted">
+              <span>存储容量占用</span>
+              <span class="font-mono">{{ ((stats.entryCount / Math.max(stats.maxEntries, 1)) * 100).toFixed(1) }}%</span>
+            </div>
+            <div class="w-full bg-surface-card-sub rounded-full h-1.5 overflow-hidden">
+              <div
+                class="bg-brand-primary h-full rounded-full transition-all duration-300"
+                :style="{ width: `${Math.min((stats.entryCount / Math.max(stats.maxEntries, 1)) * 100, 100)}%` }"
+              />
+            </div>
+          </div>
+        </template>
+      </AppCard>
 
       <!-- 3. 高频访问网址排行 -->
       <CacheTopDomains :topDomains="topDomains" />
@@ -335,41 +310,15 @@ usePoller(pollMetrics, 4000);
     </div>
 
     <!-- 一键清空确认弹窗 -->
-    <AppModal
+    <ConfirmModal
       :open="isClearDialogOpen"
-      @close="isClearDialogOpen = false"
-      type="alert"
-    >
-      <template #headline>
-        <div class="flex items-center gap-2 text-status-error font-bold">
-          <M3Icon name="delete" :size="22" />
-          <span>确定清空所有加速缓存？</span>
-        </div>
-      </template>
-
-      <div class="space-y-2 pt-1 text-xs text-text-sub leading-relaxed">
-        <p>
-          此操作将清空当前全部已缓存的网址记录（共 {{ stats.entryCount }} 条）。清空后后续访问网址将重新通过网络解析。
-        </p>
-      </div>
-
-      <template #actions>
-        <button
-          type="button"
-          @click="isClearDialogOpen = false"
-          class="app-btn-secondary"
-        >
-          取消
-        </button>
-        <button
-          type="button"
-          :disabled="clearing"
-          @click="handleConfirmClear"
-          class="app-btn-danger"
-        >
-          确认清空
-        </button>
-      </template>
-    </AppModal>
+      title="确定清空所有加速缓存？"
+      :message="`此操作将清空当前全部已缓存的网址记录（共 ${stats.entryCount} 条）。清空后后续访问网址将重新通过网络解析。`"
+      danger
+      confirmText="确认清空"
+      :loading="clearing"
+      @confirm="handleConfirmClear"
+      @cancel="isClearDialogOpen = false"
+    />
   </div>
 </template>

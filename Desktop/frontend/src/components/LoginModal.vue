@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { ref, watch, onUnmounted } from 'vue';
-import { ipc } from '../api/ipc';
+import { watch } from 'vue';
+import { useAuthForm, type AuthMode } from '../composables/useAuthForm';
 import M3Icon from './M3Icon.vue';
 import AppModal from './AppModal.vue';
+import InlineAlert from './ui/InlineAlert.vue';
 
 const props = withDefaults(
   defineProps<{
     open: boolean;
-    mode?: 'login' | 'setup' | 'change_password';
+    mode?: AuthMode;
     forceModal?: boolean;
   }>(),
   {
@@ -22,28 +23,29 @@ const emit = defineEmits<{
   (e: 'success'): void;
 }>();
 
-const currentMode = ref<'login' | 'setup' | 'change_password'>(props.mode);
-const username = ref('admin');
-const password = ref('');
-const confirmPassword = ref('');
-const oldPassword = ref('');
-const loading = ref(false);
-const errorMsg = ref('');
-const successMsg = ref('');
-const lockoutSeconds = ref(0);
-let lockoutTimer: ReturnType<typeof setInterval> | null = null;
+const {
+  currentMode,
+  username,
+  password,
+  confirmPassword,
+  oldPassword,
+  loading,
+  errorMsg,
+  successMsg,
+  lockoutSeconds,
+  checkAuthStatus,
+  resetForm,
+  submitSetup,
+  submitLogin,
+  submitChangePassword,
+} = useAuthForm(props.mode);
 
 watch(
   () => props.open,
   (val) => {
     if (val) {
-      currentMode.value = props.mode;
-      password.value = '';
-      confirmPassword.value = '';
-      oldPassword.value = '';
-      errorMsg.value = '';
-      successMsg.value = '';
-      checkInitialAuth();
+      resetForm();
+      checkAuthStatus(props.mode);
     }
   }
 );
@@ -51,150 +53,26 @@ watch(
 watch(
   () => props.mode,
   (val) => {
-    currentMode.value = val;
+    if (val) currentMode.value = val;
   }
 );
 
-async function checkInitialAuth() {
-  try {
-    const status = await ipc.getAuthStatus();
-    if (!status.initialized) {
-      currentMode.value = 'setup';
-    } else if (props.mode) {
-      currentMode.value = props.mode;
-    }
-    if (status.username) {
-      username.value = status.username;
-    }
-    if (status.locked && status.lockoutRemainingSec > 0) {
-      startLockoutCountdown(status.lockoutRemainingSec);
-    }
-  } catch {}
-}
-
-function startLockoutCountdown(seconds: number) {
-  lockoutSeconds.value = seconds;
-  if (lockoutTimer) clearInterval(lockoutTimer);
-  lockoutTimer = setInterval(() => {
-    lockoutSeconds.value--;
-    if (lockoutSeconds.value <= 0) {
-      if (lockoutTimer) clearInterval(lockoutTimer);
-      lockoutTimer = null;
-      errorMsg.value = '';
-    }
-  }, 1000);
-}
-
-onUnmounted(() => {
-  if (lockoutTimer) clearInterval(lockoutTimer);
-});
-
 async function handleSubmit() {
-  errorMsg.value = '';
-  successMsg.value = '';
-
+  let ok = false;
   if (currentMode.value === 'setup') {
-    if (!username.value.trim()) {
-      errorMsg.value = '管理员用户名不能为空';
-      return;
-    }
-    if (password.value.length < 4) {
-      errorMsg.value = '密码长度至少为 4 位字符';
-      return;
-    }
-    if (password.value !== confirmPassword.value) {
-      errorMsg.value = '两次输入的密码不一致';
-      return;
-    }
-
-    loading.value = true;
-    try {
-      await ipc.setupAuth({
-        username: username.value.trim(),
-        password: password.value,
-      });
-      await ipc.login({
-        username: username.value.trim(),
-        password: password.value,
-      });
-      successMsg.value = '管理员账号初始化成功并已自动登录！';
-      setTimeout(() => {
-        emit('success');
-        emit('close');
-      }, 1000);
-    } catch (err: any) {
-      errorMsg.value = err.message || '初始化管理员账号失败';
-    } finally {
-      loading.value = false;
-    }
-    return;
+    ok = await submitSetup();
+  } else if (currentMode.value === 'login') {
+    ok = await submitLogin();
+  } else if (currentMode.value === 'change_password') {
+    ok = await submitChangePassword();
   }
 
-  if (currentMode.value === 'login') {
-    if (!username.value.trim()) {
-      errorMsg.value = '请输入用户名';
-      return;
-    }
-    if (!password.value) {
-      errorMsg.value = '请输入密码';
-      return;
-    }
-
-    loading.value = true;
-    try {
-      await ipc.login({
-        username: username.value.trim(),
-        password: password.value,
-      });
-      successMsg.value = '登录成功，正在进入控制台...';
-      setTimeout(() => {
-        emit('success');
-        emit('close');
-      }, 800);
-    } catch (err: any) {
-      const msg = err.message || '登录失败，请检查账号密码';
-      if (msg.includes('未初始化')) {
-        currentMode.value = 'setup';
-        errorMsg.value = '检测到管理员账号尚未初始化，请在此处设置初始密码以完成配置';
-      } else {
-        errorMsg.value = msg;
-        if (msg.includes('锁定')) {
-          startLockoutCountdown(300);
-        }
-      }
-    } finally {
-      loading.value = false;
-    }
-    return;
-  }
-
-  if (currentMode.value === 'change_password') {
-    if (password.value.length < 4) {
-      errorMsg.value = '新密码长度至少为 4 位字符';
-      return;
-    }
-    if (password.value !== confirmPassword.value) {
-      errorMsg.value = '两次输入的新密码不一致';
-      return;
-    }
-
-    loading.value = true;
-    try {
-      await ipc.changePassword({
-        username: username.value.trim(),
-        oldPassword: oldPassword.value,
-        newPassword: password.value,
-      });
-      successMsg.value = '管理员密码修改成功！请使用新密码重新登录。';
-      setTimeout(() => {
-        emit('success');
-        emit('close');
-      }, 1500);
-    } catch (err: any) {
-      errorMsg.value = err.message || '修改密码失败';
-    } finally {
-      loading.value = false;
-    }
+  if (ok) {
+    const delay = currentMode.value === 'change_password' ? 1500 : 800;
+    setTimeout(() => {
+      emit('success');
+      emit('close');
+    }, delay);
   }
 }
 
@@ -231,15 +109,8 @@ function handleClose() {
     </template>
 
     <div class="space-y-4 py-1">
-      <div v-if="errorMsg" class="p-3 rounded-md bg-status-error-bg border border-status-error/30 text-status-error text-xs flex items-center gap-2">
-        <M3Icon name="error" :size="16" class="shrink-0" />
-        <span>{{ errorMsg }}</span>
-      </div>
-
-      <div v-if="successMsg" class="p-3 rounded-md bg-status-success-bg border border-status-success/30 text-status-success text-xs flex items-center gap-2">
-        <M3Icon name="check_circle" :size="16" class="shrink-0" />
-        <span>{{ successMsg }}</span>
-      </div>
+      <InlineAlert v-if="errorMsg" :message="errorMsg" type="error" />
+      <InlineAlert v-if="successMsg" :message="successMsg" type="success" />
 
       <div v-if="lockoutSeconds > 0" class="p-3 rounded-md bg-status-warning-bg border border-status-warning/30 text-status-warning text-xs flex items-center gap-2">
         <M3Icon name="alarm" :size="16" class="shrink-0" />

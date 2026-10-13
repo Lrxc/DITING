@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { ipc } from '../api/ipc';
 import type { BootstrapConfig, BootstrapServer } from '../api/types';
 import M3Icon from './M3Icon.vue';
+import AppCard from './ui/AppCard.vue';
 import BootstrapEditModal from './network/BootstrapEditModal.vue';
 import ConfirmModal from './ConfirmModal.vue';
 import { useConfirmModal } from '../composables/useConfirmModal';
@@ -124,156 +125,145 @@ async function handleTestLatency(s: BootstrapServer) {
 </script>
 
 <template>
-  <div class="app-card p-5 flex flex-col justify-between gap-4 transition-all duration-200">
-    <div>
-      <!-- 标题与状态切换 -->
-      <div class="flex items-center justify-between gap-3 pb-3 border-b border-surface-border-sub">
-        <div class="flex items-center gap-2.5 min-w-0">
-          <div class="w-8 h-8 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
-            <M3Icon name="dns" :size="18" class="text-text-main" />
-          </div>
-          <div class="min-w-0">
-            <div class="flex items-center gap-2 flex-wrap">
-              <h3 class="section-title text-[14px]">
-                Bootstrap 引导解析
-              </h3>
-              <span
-                class="px-2 py-0.5 rounded-full text-[10px] font-semibold"
-                :class="config.enabled ? 'bg-status-success-bg text-status-success' : 'bg-surface-card-sub text-text-sub'"
-              >
-                {{ config.enabled ? '引导启用' : '已停用' }}
-              </span>
-            </div>
-            <span class="text-[11px] text-text-muted truncate block">DoT / DoH 加密握手前置域名解析</span>
-          </div>
-        </div>
+  <AppCard
+    title="Bootstrap 引导解析"
+    subtitle="DoT / DoH 加密握手前置域名解析"
+    icon="dns"
+  >
+    <template #badge>
+      <span
+        class="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+        :class="config.enabled ? 'bg-status-success-bg text-status-success' : 'bg-surface-card-sub text-text-sub'"
+      >
+        {{ config.enabled ? '引导启用' : '已停用' }}
+      </span>
+    </template>
 
-        <div class="flex items-center gap-2 shrink-0">
-          <md-switch
-            :selected="config.enabled"
-            @change="handleToggleEnabled"
-            :disabled="saving"
-            title="开启或关闭 Bootstrap DNS 引导解析"
-          />
-          <button
-            type="button"
-            @click="openAddDialog"
-            :disabled="saving"
-            class="app-btn-secondary app-btn-compact"
-          >
-            <M3Icon name="add" :size="14" />
-            <span>添加引导</span>
-          </button>
-        </div>
+    <template #actions>
+      <md-switch
+        :selected="config.enabled"
+        @change="handleToggleEnabled"
+        :disabled="saving"
+        title="开启或关闭 Bootstrap DNS 引导解析"
+      />
+      <button
+        type="button"
+        @click="openAddDialog"
+        :disabled="saving"
+        class="app-btn-secondary app-btn-compact"
+      >
+        <M3Icon name="add" :size="14" />
+        <span>添加引导</span>
+      </button>
+    </template>
+
+    <p class="text-[12px] text-text-sub leading-relaxed mt-3">
+      建立 DoT（TLS）和 DoH（HTTPS）加密连接前解析上游域名的前置服务器。优先使用纯 IP 地址。
+    </p>
+
+    <!-- 引导服务器列表 -->
+    <div class="mt-3.5 space-y-2.5">
+      <div
+        v-if="!config.servers || config.servers.length === 0"
+        class="text-center py-6 text-xs text-text-muted"
+      >
+        未配置 Bootstrap DNS 服务器，请点击右上角添加。
       </div>
 
-      <p class="text-[12px] text-text-sub leading-relaxed mt-3">
-        建立 DoT（TLS）和 DoH（HTTPS）加密连接前解析上游域名的前置服务器。优先使用纯 IP 地址。
-      </p>
-
-      <!-- 引导服务器列表 -->
-      <div class="mt-3.5 space-y-2.5">
-        <div
-          v-if="!config.servers || config.servers.length === 0"
-          class="text-center py-6 text-xs text-text-muted"
-        >
-          未配置 Bootstrap DNS 服务器，请点击右上角添加。
-        </div>
-
-        <div
-          v-for="(s, idx) in config.servers"
-          :key="s.id"
-          class="app-card-sub p-2.5 flex flex-col justify-between gap-2 hover:border-surface-border transition-colors"
-        >
-          <div class="flex items-center justify-between gap-2">
-            <div class="flex items-center gap-2 min-w-0">
-              <span class="text-[13px] font-bold text-text-main truncate">
-                {{ s.name || s.id }}
-              </span>
-              <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-card border border-surface-border text-text-main font-semibold shrink-0 select-all">
-                {{ s.address }}
-              </span>
-            </div>
-            <span class="text-[10px] font-mono text-text-muted shrink-0">
-              {{ s.id }}
+      <div
+        v-for="(s, idx) in config.servers"
+        :key="s.id"
+        class="app-card-sub p-2.5 flex flex-col justify-between gap-2 hover:border-surface-border transition-colors"
+      >
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="text-[13px] font-bold text-text-main truncate">
+              {{ s.name || s.id }}
+            </span>
+            <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-card border border-surface-border text-text-main font-semibold shrink-0 select-all">
+              {{ s.address }}
             </span>
           </div>
+          <span class="text-[10px] font-mono text-text-muted shrink-0">
+            {{ s.id }}
+          </span>
+        </div>
 
-          <div class="flex items-center justify-between pt-1.5 border-t border-surface-border-sub/60">
-            <!-- 延迟测试徽标 -->
-            <div>
-              <span
-                v-if="probeResults[s.id] !== undefined"
-                class="text-[10px] font-mono px-2 py-0.5 rounded-md font-semibold inline-flex items-center"
-                :class="probeResults[s.id] > 0 ? 'bg-status-success-bg text-status-success border border-status-success/30' : 'bg-status-error-bg text-status-error border border-status-error/30'"
-              >
-                {{ probeResults[s.id] > 0 ? `${probeResults[s.id].toFixed(1)} ms` : '超时' }}
-              </span>
-              <span v-else class="text-[10px] text-text-muted font-mono">未测速</span>
-            </div>
+        <div class="flex items-center justify-between pt-1.5 border-t border-surface-border-sub/60">
+          <!-- 延迟测试徽标 -->
+          <div>
+            <span
+              v-if="probeResults[s.id] !== undefined"
+              class="text-[10px] font-mono px-2 py-0.5 rounded-md font-semibold inline-flex items-center"
+              :class="probeResults[s.id] > 0 ? 'bg-status-success-bg text-status-success border border-status-success/30' : 'bg-status-error-bg text-status-error border border-status-error/30'"
+            >
+              {{ probeResults[s.id] > 0 ? `${probeResults[s.id].toFixed(1)} ms` : '超时' }}
+            </span>
+            <span v-else class="text-[10px] text-text-muted font-mono">未测速</span>
+          </div>
 
-            <div class="flex items-center gap-1.5">
-              <button
-                type="button"
-                class="app-btn-secondary app-btn-compact"
-                @click="handleTestLatency(s)"
-                :disabled="probingId === s.id"
-                title="测试此引导服务器延迟"
-              >
-                <M3Icon v-if="probingId === s.id" name="refresh" class="animate-spin" :size="12" />
-                <M3Icon v-else name="bolt" :size="12" />
-                <span>测速</span>
-              </button>
+          <div class="flex items-center gap-1.5">
+            <button
+              type="button"
+              class="app-btn-secondary app-btn-compact"
+              @click="handleTestLatency(s)"
+              :disabled="probingId === s.id"
+              title="测试此引导服务器延迟"
+            >
+              <M3Icon v-if="probingId === s.id" name="refresh" class="animate-spin" :size="12" />
+              <M3Icon v-else name="bolt" :size="12" />
+              <span>测速</span>
+            </button>
 
-              <button
-                type="button"
-                @click="openEditDialog(idx)"
-                class="app-btn-icon"
-                title="编辑引导 DNS"
-              >
-                <M3Icon name="settings" :size="14" />
-              </button>
+            <button
+              type="button"
+              @click="openEditDialog(idx)"
+              class="app-btn-icon"
+              title="编辑引导 DNS"
+            >
+              <M3Icon name="settings" :size="14" />
+            </button>
 
-              <button
-                type="button"
-                @click="handleDelete(idx)"
-                :disabled="config.servers.length <= 1"
-                class="app-btn-icon app-btn-icon-danger"
-                title="删除此引导 DNS"
-              >
-                <M3Icon name="delete" :size="14" />
-              </button>
-            </div>
+            <button
+              type="button"
+              @click="handleDelete(idx)"
+              :disabled="config.servers.length <= 1"
+              class="app-btn-icon app-btn-icon-danger"
+              title="删除此引导 DNS"
+            >
+              <M3Icon name="delete" :size="14" />
+            </button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 底部说明 -->
-    <div class="text-[11px] text-text-muted pt-2 border-t border-surface-border-sub">
-      提示：建议保留至少一个纯 IP 引导服务器，避免握手域名解析死锁。
-    </div>
+    <template #footer>
+      <div class="text-[11px] text-text-muted">
+        提示：建议保留至少一个纯 IP 引导服务器，避免握手域名解析死锁。
+      </div>
+    </template>
+  </AppCard>
 
-    <!-- 添加 / 编辑弹窗 -->
-    <BootstrapEditModal
-      :open="isDialogOpen"
-      :editingItem="editingItem"
-      :serverCount="config.servers?.length || 0"
-      @close="isDialogOpen = false"
-      @save="handleSaveServer"
-    />
+  <!-- 添加 / 编辑弹窗 -->
+  <BootstrapEditModal
+    :open="isDialogOpen"
+    :editingItem="editingItem"
+    :serverCount="config.servers?.length || 0"
+    @close="isDialogOpen = false"
+    @save="handleSaveServer"
+  />
 
-    <!-- 确认 / 告警弹窗 -->
-    <ConfirmModal
-      :open="isConfirmOpen"
-      :title="confirmOptions.title"
-      :message="confirmOptions.message"
-      :danger="confirmOptions.danger"
-      :confirmText="confirmOptions.confirmText"
-      :cancelText="confirmOptions.cancelText"
-      :showCancel="confirmOptions.showCancel"
-      @confirm="handleConfirmAction"
-      @cancel="handleCancelAction"
-    />
-  </div>
+  <!-- 确认 / 告警弹窗 -->
+  <ConfirmModal
+    :open="isConfirmOpen"
+    :title="confirmOptions.title"
+    :message="confirmOptions.message"
+    :danger="confirmOptions.danger"
+    :confirmText="confirmOptions.confirmText"
+    :cancelText="confirmOptions.cancelText"
+    :showCancel="confirmOptions.showCancel"
+    @confirm="handleConfirmAction"
+    @cancel="handleCancelAction"
+  />
 </template>

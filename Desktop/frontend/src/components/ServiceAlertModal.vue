@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import { ipc } from '../api/ipc';
-import type { CoreServiceStatus } from '../api/types';
+import { useServiceControl } from '../composables/useServiceControl';
 import M3Icon from './M3Icon.vue';
 import AppModal from './AppModal.vue';
+import InlineAlert from './ui/InlineAlert.vue';
 
 const props = defineProps<{
   open: boolean;
@@ -14,23 +15,17 @@ const emit = defineEmits<{
   (e: 'connected'): void;
 }>();
 
-const coreServiceStatus = ref<CoreServiceStatus | null>(null);
-const isStatusLoading = ref(false);
-const serviceOperating = ref(false);
-const serviceOpText = ref('');
-const serviceOpError = ref('');
-const isRetrying = ref(false);
+const {
+  status: coreServiceStatus,
+  loading: isStatusLoading,
+  operating: serviceOperating,
+  opMessage: serviceOpText,
+  opError: serviceOpError,
+  fetchStatus: loadCoreServiceStatus,
+  run,
+} = useServiceControl();
 
-async function loadCoreServiceStatus() {
-  isStatusLoading.value = true;
-  try {
-    coreServiceStatus.value = await ipc.getCoreServiceStatus();
-  } catch (err: any) {
-    console.warn('获取核心服务状态失败:', err);
-  } finally {
-    isStatusLoading.value = false;
-  }
-}
+const isRetrying = ref(false);
 
 async function retryConnect(): Promise<boolean> {
   if (isRetrying.value) return false;
@@ -51,92 +46,36 @@ async function retryConnect(): Promise<boolean> {
 }
 
 async function handleInstallService() {
-  if (serviceOperating.value) return;
-  serviceOperating.value = true;
-  serviceOpText.value = '正在请求系统授权并安装服务...';
-  serviceOpError.value = '';
-
-  try {
-    await ipc.installCoreService();
-    serviceOpText.value = '服务安装成功！正在刷新状态...';
-    await new Promise((r) => setTimeout(r, 800));
+  const ok = await run('install');
+  if (ok) {
     await loadCoreServiceStatus();
-  } catch (err: any) {
-    if (err.message?.includes('取消') || err.message?.includes('canceled') || err.message?.includes('1223')) {
-      serviceOpError.value = '管理员权限授权已取消。安装系统服务需要管理员特权。';
-    } else {
-      serviceOpError.value = err.message || '安装服务失败，请重试';
-    }
-  } finally {
-    serviceOperating.value = false;
   }
 }
 
 async function handleInstallAndStart() {
-  if (serviceOperating.value) return;
-  serviceOperating.value = true;
-  serviceOpText.value = '正在请求系统授权并安装服务...';
-  serviceOpError.value = '';
-
-  try {
-    await ipc.installAndStartCoreService();
-    serviceOpText.value = '安装完成，正在建立服务通信...';
-    await new Promise((r) => setTimeout(r, 1500));
+  const ok = await run('install_and_start');
+  if (ok) {
     const healthy = await retryConnect();
     if (!healthy) {
       await loadCoreServiceStatus();
     }
-  } catch (err: any) {
-    if (err.message?.includes('取消') || err.message?.includes('canceled') || err.message?.includes('1223')) {
-      serviceOpError.value = '管理员权限授权已取消。安装系统服务需要管理员特权。';
-    } else {
-      serviceOpError.value = err.message || '安装服务失败，请重试';
-    }
-  } finally {
-    serviceOperating.value = false;
   }
 }
 
 async function handleStartService() {
-  if (serviceOperating.value) return;
-  serviceOperating.value = true;
-  serviceOpText.value = '正在请求系统授权并启动服务...';
-  serviceOpError.value = '';
-
-  try {
-    await ipc.startCoreService();
-    serviceOpText.value = '启动完成，正在连接后台服务...';
-    await new Promise((r) => setTimeout(r, 1200));
+  const ok = await run('start');
+  if (ok) {
     const healthy = await retryConnect();
     if (!healthy) {
       await loadCoreServiceStatus();
     }
-  } catch (err: any) {
-    if (err.message?.includes('取消') || err.message?.includes('canceled') || err.message?.includes('1223')) {
-      serviceOpError.value = '管理员权限授权已取消。启动系统服务需要管理员特权。';
-    } else {
-      serviceOpError.value = err.message || '启动服务失败，请重试';
-    }
-  } finally {
-    serviceOperating.value = false;
   }
 }
 
 async function handleRestartService() {
-  if (serviceOperating.value) return;
-  serviceOperating.value = true;
-  serviceOpText.value = '正在重启后台核心服务...';
-  serviceOpError.value = '';
-
-  try {
-    await ipc.restartCoreService();
-    serviceOpText.value = '重启成功，正在重新连接...';
-    await new Promise((r) => setTimeout(r, 1500));
+  const ok = await run('restart');
+  if (ok) {
     await retryConnect();
-  } catch (err: any) {
-    serviceOpError.value = err.message || '重启服务失败';
-  } finally {
-    serviceOperating.value = false;
   }
 }
 
@@ -144,7 +83,6 @@ watch(
   () => props.open,
   (open) => {
     if (open) {
-      serviceOpError.value = '';
       loadCoreServiceStatus();
     }
   }
@@ -230,25 +168,19 @@ watch(
         <p>您可以点击“重新连接”尝试握手，或点击“重启服务”刷新服务状态。</p>
       </div>
 
-      <div
-        v-if="serviceOperating"
-        class="p-2.5 rounded-md bg-brand-container text-text-main border border-accent-seal/20 text-xs flex items-center gap-2"
-      >
-        <M3Icon name="refresh" :size="15" class="animate-spin" />
-        <span>{{ serviceOpText }}</span>
-      </div>
+      <InlineAlert v-if="serviceOperating" type="info">
+        <div class="flex items-center gap-2">
+          <M3Icon name="refresh" :size="15" class="animate-spin" />
+          <span>{{ serviceOpText || '正在处理核心服务操作...' }}</span>
+        </div>
+      </InlineAlert>
 
-      <div
-        v-if="serviceOpError"
-        class="p-2.5 rounded-md bg-status-error-bg text-status-error border border-status-error/30 text-xs flex items-center gap-2"
-      >
-        <M3Icon name="error" :size="15" />
-        <span>{{ serviceOpError }}</span>
-      </div>
+      <InlineAlert v-if="serviceOpError" :message="serviceOpError" type="error" />
     </div>
 
     <template #actions>
       <button
+        type="button"
         @click="emit('close')"
         :disabled="serviceOperating"
         class="app-btn-secondary"
@@ -258,6 +190,7 @@ watch(
 
       <template v-if="!coreServiceStatus || !coreServiceStatus.installed">
         <button
+          type="button"
           @click="handleInstallService"
           :disabled="serviceOperating || !coreServiceStatus?.canInstall"
           class="app-btn-secondary"
@@ -266,6 +199,7 @@ watch(
           <span>仅安装服务</span>
         </button>
         <button
+          type="button"
           @click="handleInstallAndStart"
           :disabled="serviceOperating || !coreServiceStatus?.canInstall"
           class="app-btn-primary"
@@ -277,6 +211,7 @@ watch(
 
       <template v-else-if="!coreServiceStatus.running">
         <button
+          type="button"
           @click="handleInstallService"
           :disabled="serviceOperating || !coreServiceStatus?.canInstall"
           class="app-btn-secondary"
@@ -285,6 +220,7 @@ watch(
           <span>重新安装服务</span>
         </button>
         <button
+          type="button"
           @click="handleStartService"
           :disabled="serviceOperating"
           class="app-btn-primary"
@@ -296,6 +232,7 @@ watch(
 
       <template v-else>
         <button
+          type="button"
           @click="handleRestartService"
           :disabled="serviceOperating"
           class="app-btn-secondary"
@@ -304,6 +241,7 @@ watch(
           <span>重启服务</span>
         </button>
         <button
+          type="button"
           @click="retryConnect"
           :disabled="isRetrying || serviceOperating"
           class="app-btn-primary"

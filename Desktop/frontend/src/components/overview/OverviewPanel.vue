@@ -4,9 +4,11 @@ import { ipc } from '../../api/ipc';
 import type { StatusResponse, WebSocketEvent, PortCheckResult } from '../../api/types';
 import type { NavTab } from '../../constants/navigation';
 import StatusBadge from '../StatusBadge.vue';
-import MetricStrip, { type StatEntry } from '../ui/MetricStrip.vue';
+import { type StatEntry } from '../ui/MetricStrip.vue';
 import MetricChart from '../MetricChart.vue';
 import M3Icon from '../M3Icon.vue';
+import AppCard from '../ui/AppCard.vue';
+import CardTile from '../ui/CardTile.vue';
 import PortConflictModal from '../PortConflictModal.vue';
 import ToastBanner from '../ToastBanner.vue';
 import OverviewQuickCards from './OverviewQuickCards.vue';
@@ -307,129 +309,112 @@ onUnmounted(() => {
     <!-- 两列响应式卡片网格 (宽屏两列，窄屏自动切换单列) -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
       <!-- 1. 运行控制中心卡片 -->
-      <div class="app-card p-5 flex flex-col justify-between gap-4">
-        <div>
-          <div class="flex items-center justify-between gap-3 pb-3.5 border-b border-surface-border-sub">
-            <div class="flex items-center gap-2.5 min-w-0">
-              <div class="w-7 h-7 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
-                <M3Icon name="router" :size="16" class="text-text-main" />
-              </div>
-              <div class="min-w-0">
-                <div class="flex items-center gap-2 flex-wrap">
-                  <h3 class="font-semibold text-text-main text-[14px]">运行控制中心</h3>
-                  <StatusBadge
-                    :status="dnsRunning ? 'active' : 'inactive'"
-                    :text="dnsRunning ? '运行中' : '已暂停'"
-                    :pulse="dnsRunning"
-                    size="sm"
-                  />
-                  <StatusBadge
-                    v-if="takeoverActive"
-                    status="active"
-                    text="保护生效"
-                    size="sm"
-                  />
+      <AppCard
+        title="运行控制中心"
+        subtitle="域名解析服务与网络保护总控"
+        icon="router"
+        iconBoxClass="w-7 h-7"
+        :iconSize="16"
+      >
+        <template #badge>
+          <StatusBadge
+            :status="dnsRunning ? 'active' : 'inactive'"
+            :text="dnsRunning ? '运行中' : '已暂停'"
+            :pulse="dnsRunning"
+            size="sm"
+          />
+          <StatusBadge
+            v-if="takeoverActive"
+            status="active"
+            text="保护生效"
+            size="sm"
+          />
+        </template>
+
+        <template #actions>
+          <span class="text-[12px] font-semibold text-text-main hidden sm:inline">
+            {{ dnsRunning ? '服务运行' : '服务停止' }}
+          </span>
+          <md-switch
+            :selected="dnsRunning"
+            :disabled="togglingDNS"
+            @change="handleToggleDNS"
+          />
+        </template>
+
+        <p class="text-[12px] text-text-sub leading-relaxed mt-3">
+          谛听在后台稳定运行，提供域名解析加速、广告与威胁拦截，并具备防断网自动恢复保障。
+        </p>
+
+        <!-- 内部并排子控制磁贴 -->
+        <template #footer>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <!-- DNS 监听服务 -->
+            <div class="app-card-sub p-3 flex flex-col justify-between gap-2">
+              <div>
+                <div class="text-[11px] text-text-muted">解析监听状态</div>
+                <div class="text-[13px] font-semibold text-text-main mt-0.5">
+                  {{ allowLAN ? '局域网模式' : '本地专用' }}
                 </div>
-                <span class="text-[11px] text-text-muted">域名解析服务与网络保护总控</span>
+              </div>
+              <div class="text-[11px] font-mono text-text-sub truncate" :title="allowLAN ? (primaryLanIP || '0.0.0.0') : '127.0.0.1:53'">
+                {{ allowLAN ? (primaryLanIP || '全网监听') : '127.0.0.1:53' }}
               </div>
             </div>
 
-            <!-- 主服务开关 -->
-            <div class="flex items-center gap-2 shrink-0">
-              <span class="text-[12px] font-semibold text-text-main hidden sm:inline">
-                {{ dnsRunning ? '服务运行' : '服务停止' }}
-              </span>
+            <!-- 网络接管开关 -->
+            <div class="app-card-sub p-3 flex items-center justify-between gap-2">
+              <div class="min-w-0">
+                <div class="text-[11px] text-text-muted">物理网卡保护</div>
+                <div class="text-[13px] font-semibold text-text-main mt-0.5 truncate">
+                  {{ takeoverActive ? `已保护 ${activeAdaptersCount} 个网卡` : '未接管网卡' }}
+                </div>
+              </div>
               <md-switch
-                :selected="dnsRunning"
-                :disabled="togglingDNS"
-                @change="handleToggleDNS"
+                :selected="takeoverActive"
+                :disabled="togglingTakeover || !dnsRunning"
+                @change="handleToggleTakeover"
+                class="shrink-0"
               />
             </div>
           </div>
-
-          <p class="text-[12px] text-text-sub leading-relaxed mt-3">
-            谛听在后台稳定运行，提供域名解析加速、广告与威胁拦截，并具备防断网自动恢复保障。
-          </p>
-        </div>
-
-        <!-- 内部并排子控制磁贴 -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-          <!-- DNS 监听服务 -->
-          <div class="app-card-sub p-3 flex flex-col justify-between gap-2">
-            <div>
-              <div class="text-[11px] text-text-muted">解析监听状态</div>
-              <div class="text-[13px] font-semibold text-text-main mt-0.5">
-                {{ allowLAN ? '局域网模式' : '本地专用' }}
-              </div>
-            </div>
-            <div class="text-[11px] font-mono text-text-sub truncate" :title="allowLAN ? (primaryLanIP || '0.0.0.0') : '127.0.0.1:53'">
-              {{ allowLAN ? (primaryLanIP || '全网监听') : '127.0.0.1:53' }}
-            </div>
-          </div>
-
-          <!-- 网络接管开关 -->
-          <div class="app-card-sub p-3 flex items-center justify-between gap-2">
-            <div class="min-w-0">
-              <div class="text-[11px] text-text-muted">物理网卡保护</div>
-              <div class="text-[13px] font-semibold text-text-main mt-0.5 truncate">
-                {{ takeoverActive ? `已保护 ${activeAdaptersCount} 个网卡` : '未接管网卡' }}
-              </div>
-            </div>
-            <md-switch
-              :selected="takeoverActive"
-              :disabled="togglingTakeover || !dnsRunning"
-              @change="handleToggleTakeover"
-              class="shrink-0"
-            />
-          </div>
-        </div>
-      </div>
+        </template>
+      </AppCard>
 
       <!-- 2. 核心运行监控指标卡片 -->
-      <div class="app-card p-5 flex flex-col justify-between gap-4">
-        <div class="flex items-center justify-between gap-3 pb-3.5 border-b border-surface-border-sub">
-          <div class="flex items-center gap-2.5 min-w-0">
-            <div class="w-7 h-7 rounded-md bg-surface-card-sub border border-surface-border-sub flex items-center justify-center shrink-0">
-              <M3Icon name="analytics" :size="16" class="text-text-main" />
-            </div>
-            <div class="min-w-0">
-              <h3 class="font-semibold text-text-main text-[14px]">实时遥测指标</h3>
-              <span class="text-[11px] text-text-muted">高精度网络解析与服务监控</span>
-            </div>
-          </div>
-
-          <div class="flex items-center gap-2 shrink-0">
-            <span class="text-[11px] text-text-muted font-mono hidden sm:inline">持续运行: {{ uptimeText }}</span>
-            <button
-              type="button"
-              @click="fetchStatus"
-              :disabled="loading"
-              class="app-btn-secondary app-btn-compact"
-              title="刷新实时状态"
-            >
-              <M3Icon name="refresh" :size="13" :class="loading ? 'animate-spin' : ''" />
-              <span>刷新</span>
-            </button>
-          </div>
-        </div>
+      <AppCard
+        title="实时遥测指标"
+        subtitle="高精度网络解析与服务监控"
+        icon="analytics"
+        iconBoxClass="w-7 h-7"
+        :iconSize="16"
+      >
+        <template #actions>
+          <span class="text-[11px] text-text-muted font-mono hidden sm:inline">持续运行: {{ uptimeText }}</span>
+          <button
+            type="button"
+            @click="fetchStatus"
+            :disabled="loading"
+            class="app-btn-secondary app-btn-compact"
+            title="刷新实时状态"
+          >
+            <M3Icon name="refresh" :size="13" :class="loading ? 'animate-spin' : ''" />
+            <span>刷新</span>
+          </button>
+        </template>
 
         <!-- 4 宫格核心指标 -->
-        <div class="grid grid-cols-2 gap-3">
-          <div
+        <div class="grid grid-cols-2 gap-3 mt-3">
+          <CardTile
             v-for="st in metricStats"
             :key="st.label"
-            class="app-card-sub p-3 space-y-1"
-          >
-            <div class="text-[11px] text-text-muted">{{ st.label }}</div>
-            <div class="flex items-baseline gap-1">
-              <span class="font-mono text-[20px] font-bold text-text-main leading-none tabular-nums">
-                {{ st.value }}
-              </span>
-              <span v-if="st.unit" class="text-[11px] text-text-muted">{{ st.unit }}</span>
-            </div>
-          </div>
+            :label="st.label"
+            :value="st.value"
+            :unit="st.unit"
+            valueClass="text-[20px] font-bold text-text-main leading-none font-mono"
+          />
         </div>
-      </div>
+      </AppCard>
 
       <!-- 3-6. 快捷功能与监控摘要卡片组 (4 张卡片，在两列网格中各占一格) -->
       <OverviewQuickCards
