@@ -44,7 +44,7 @@ const customRulesText = ref('');
 const pause = ref<FilterPauseResponse>({ paused: false, remainingSeconds: 0, pausedUntilMs: 0, blockingEnabled: true });
 const pauseBusy = ref(false);
 const pauseTarget = ref(30);
-/** 子页签由上层 RulesView 的分段控件驱动（hash 可直达） */
+/** 子页签由上层 ProtectView 的分段控件驱动（hash 可直达） */
 const activeTab = defineModel<string>('sub', { default: 'lists' });
 
 const ruleStats = computed<StatEntry[]>(() => [

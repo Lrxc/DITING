@@ -22,7 +22,7 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-  (e: 'navigate', tab: NavTab): void;
+  (e: 'navigate', tab: NavTab, sub?: string): void;
   (e: 'pause', paused: boolean): void;
 }>();
 
@@ -66,7 +66,7 @@ const pauseRemainingText = computed(() => {
       <template #actions>
         <button
           type="button"
-          @click="emit('navigate', 'network')"
+          @click="emit('navigate', 'resolve', 'upstream')"
           class="app-btn-secondary app-btn-compact"
         >
           <M3Icon name="settings" :size="13" />
@@ -103,7 +103,7 @@ const pauseRemainingText = computed(() => {
       <template #actions>
         <button
           type="button"
-          @click="emit('navigate', 'accel')"
+          @click="emit('navigate', 'resolve', 'cache')"
           class="app-btn-secondary app-btn-compact"
         >
           <M3Icon name="open_in_new" :size="13" />
@@ -146,7 +146,7 @@ const pauseRemainingText = computed(() => {
       <template #actions>
         <button
           type="button"
-          @click="emit('navigate', 'rules')"
+          @click="emit('navigate', 'protect')"
           class="app-btn-secondary app-btn-compact"
         >
           <M3Icon name="tune" :size="13" />
@@ -207,7 +207,7 @@ const pauseRemainingText = computed(() => {
       <template #actions>
         <button
           type="button"
-          @click="emit('navigate', 'network')"
+          @click="emit('navigate', 'devices')"
           class="app-btn-secondary app-btn-compact"
         >
           <M3Icon name="open_in_new" :size="13" />
@@ -244,7 +244,7 @@ const pauseRemainingText = computed(() => {
       <template #actions>
         <button
           type="button"
-          @click="emit('navigate', 'rules')"
+          @click="emit('navigate', 'resolve', 'rewrite')"
           class="app-btn-secondary app-btn-compact"
         >
           <M3Icon name="open_in_new" :size="13" />
@@ -281,7 +281,7 @@ const pauseRemainingText = computed(() => {
       <template #actions>
         <button
           type="button"
-          @click="emit('navigate', 'network')"
+          @click="emit('navigate', 'devices')"
           class="app-btn-secondary app-btn-compact"
         >
           <M3Icon name="open_in_new" :size="13" />

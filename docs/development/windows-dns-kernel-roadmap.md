@@ -205,7 +205,7 @@ Desktop/
 │   │   ├── assets/              # 本地静态资源 (内嵌 Material Symbols 离线图标与 Logo)
 │   │   ├── theme/               # M3 动态色彩体系 (Seed Color 算法与 CSS 变量 Tokens)
 │   │   ├── components/          # 基于 @material/web 封装的通用 M3 组件与卡片
-│   │   ├── views/               # 5 大核心业务视图 (Dashboard, Adapters, Upstream, Logs, Settings)
+│   │   ├── views/               # 5 大使用场景视图 (总览 / 解析 / 防护 / 设备 / 系统)
 │   │   ├── App.vue              # 根视图 (集成 M3 Navigation Rail 与路由/视图容器)
 │   │   ├── style.css            # 全局样式与 M3 Design Tokens 注入
 │   │   └── main.ts              # 应用入口 (Vue 初始化、M3 组件注册与自定义元素配置)
@@ -241,7 +241,7 @@ Desktop/
   - 搭建本地轻量 HTTP RESTful 控制接口（`127.0.0.1:15353` + Token 鉴权）及 WebSocket 实时指标推送流（`/api/v1/events`）。
 - **阶段四：Material Design 3 桌面端 UI 研发与全流程闭环 (Phase 4 - 已完成)**
   - 接入官方 `@material/web` 组件库与 MCU 动态色彩算法（Dynamic Color），实现多预设种子色与 Windows 系统强调色提取，支持深色/浅色平滑切换。
-  - 搭建标准桌面端 Navigation Rail 导航体系与五大核心业务视图（Dashboard、Adapters、Upstream、Logs、Settings），内嵌离线 Material Symbols 矢量图标。
+  - 搭建标准桌面端 Navigation Rail 导航体系与五大核心业务视图（Dashboard、Adapters、Upstream、Logs、Settings），内嵌离线 Material Symbols 矢量图标。（注：该五分类已于后续「按使用场景重构」中调整为 总览 / 解析 / 防护 / 设备 / 系统，旧路由保留重定向，详见 6.3 节。）
   - 完成特权服务 IPC 前后端打通与异常边界交互，支持一键接管/还原、单卡控制、上游动态热更与实时延迟探测。
 
 ---
@@ -350,7 +350,7 @@ Desktop/
 
 ### 6.4 阶段六验收与完成记录 (Phase 6 Completed)
 
-- **阶段目标**：移植并实现 AdGuard 语法解析器、倒序域标签 Trie 树、BloomFilter 纳秒级预检体系与阻断响应中间件 (`FilterMiddleware`)，支持 Null IP (0.0.0.0 / ::)、NXDOMAIN、REFUSED 多种阻断响应行为；前端全面落地遵循 Material Design 3 规范的规则管理中心 (`RulesView.vue`)，提供规则订阅源管理、自定义规则多行编辑器、实时域名检测工具、日志高亮与仅拦截过滤。
+- **阶段目标**：移植并实现 AdGuard 语法解析器、倒序域标签 Trie 树、BloomFilter 纳秒级预检体系与阻断响应中间件 (`FilterMiddleware`)，支持 Null IP (0.0.0.0 / ::)、NXDOMAIN、REFUSED 多种阻断响应行为；前端全面落地遵循 Material Design 3 规范的规则管理界面（现挂载于「防护」大类，`ProtectView.vue` + `components/rules/*`），提供规则订阅源管理、自定义规则多行编辑器、实时域名检测工具、日志高亮与仅拦截过滤。
 - **后端内核与中间件核心成果**：
   1. **AdGuard / Hosts 语法解析器 (`internal/core/rule_parser.go`, `rule_types.go`)**：
      - 全面解析 `||domain^` 域匹配与子域通配、`|domain|` 精确匹配、`*` 复杂通配符、`/pattern/` 正则表达式。
@@ -369,7 +369,7 @@ Desktop/
      - 在流水线中置于 `MetricsMiddleware -> FilterMiddleware -> CacheMiddleware -> ForwardMiddleware`，拦截命中时短路应答，杜绝缓存污染与上游回源。
      - 暴露 REST 控制接口：`GET /api/v1/filter/stats`、`GET/POST /api/v1/filter/config`、`GET/POST /api/v1/filter/lists/*`、`GET/POST /api/v1/filter/rules`、`POST /api/v1/filter/check`。
      - WebSocket 实时查询事件增加 `blocked`、`filterRule` 与 `filterReason` 拦截字段。
-- **前端 Material Design 3 规则管理中心 (`frontend/src/views/RulesView.vue`, `LogsView.vue`, `DashboardView.vue`)**：
+- **前端 Material Design 3 规则管理界面（现挂载于「防护」大类，`frontend/src/views/ProtectView.vue` 与 `frontend/src/components/rules/*`）**：
   1. **Navigation Rail 导航接入**：左侧导航轨新增“规则防护”盾牌图标目的地与页面路由。
   2. **核心总控卡片与指标看板**：全局防护主控 `<md-switch>`，拦截请求数、拦截率、生效规则总数与活跃规则源 4 大指标高光卡片。
   3. **订阅规则源列表**：支持添加/更新/删除订阅源，一键全量刷新拉取与 `<md-dialog>` 模态配置。
@@ -381,15 +381,34 @@ Desktop/
   - `Desktop/internal/dns/filter_middleware*.go`
   - `Desktop/internal/ipc/*filter*.go`
   - `Desktop/cmd/service/controller_filter*.go`
-  - `Desktop/frontend/src/views/RulesView.vue`
-  - `Desktop/frontend/src/views/LogsView.vue`
-  - `Desktop/frontend/src/views/DashboardView.vue`
+  - `Desktop/frontend/src/views/ProtectView.vue`
+  - `Desktop/frontend/src/views/OverviewView.vue`
+  - `Desktop/frontend/src/components/rules/*`
   - `Desktop/frontend/src/api/*`
   - `scripts/test_phase6_filter.py`
 - **验收标准与验证记录**：
   - Go 全量测试套件（含规则解析、Trie/Bloom、优先级调度、流水线短路与 IPC 接口）100% 通过。
   - 前端 `npm run build`（Vue 3 + TypeScript + Vite）零报错打包成功。
   - 所有代码源文件行数均严格保持在 600 行以内（通过 `scripts/check_large_files.py` 自动化检测）。
+
+---
+
+### 6.3 桌面端分类体系按使用场景重构 (Phase 4.x Completed)
+
+原按实现模块划分的五分类（总览 / 网络 / 加速 / 规则 / 系统）存在「加速·系统各自仅 1 个小类」「上游解析与缓存加速被拆散」「DNS 重写归属规则」等问题，已重构为按用户使用场景划分的五分类：
+
+| 大类 (id) | 场景定位 | 小类 |
+|---|---|---|
+| 总览 `overview` | 观测 | 状态总览 · 实时查询 · 查询历史 · 统计中心 |
+| 解析 `resolve` | 怎么解析 | 上游解析 · 缓存加速 · DNS 重写 · IPv6 / DNS64 |
+| 防护 `protect` | 拦什么 | 规则订阅 · 自定义规则 · 规则检测 · 拦截方式 · 高级拦截 · 时间计划 |
+| 设备 `devices` | 管谁 | 网卡接管 · 局域网 DNS · 设备管理 · 安全隐私 |
+| 系统 `system` | 配本体 | 外观主题 · 服务与连接 · 局域网控制台 · 诊断与修复 |
+
+- **唯一事实源**：`Desktop/frontend/src/constants/navigation.ts` 定义 `NavTab` / `NAV_ITEMS` / `SUB_TABS` 及兼容层 `resolveRoute()`。
+- **兼容性**：旧大类 id（`network` / `accel` / `rules` / `logs` / `dashboard`）与旧「大类/小类」组合（如 `#/network/upstream`、`#/rules/rewrite`、`#/system/settings`）均通过 `resolveRoute()` 自动重定向，历史书签与分享链接不失效。
+- **同步改造**：维护台截图工具 `maintenance/core/ui_capturer.py` 与 `maintenance/web/index.html` 的标签下拉同步更新为全量新 slug（顺带补全此前遗漏的小类）。
+- **分类区 UI 统一**：`SegmentedTabs.vue` 改为墨底激活 + 滑动朱砂指示条 + 左右方向键切换 + 窄屏隐藏滚动条；`NavItem.vue` 激活态朱砂竖条加宽并着色图标，过渡统一 140ms，符合「墨·朱」设计规范。
 
 ---
 

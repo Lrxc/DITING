@@ -28,24 +28,28 @@ const emit = defineEmits<{
     :aria-label="label"
     :aria-current="active ? 'page' : undefined"
     @click="emit('navigate', id)"
-    class="relative flex flex-col items-center justify-center gap-1 py-1.5 flex-1 transition-colors cursor-pointer"
+    class="relative flex flex-col items-center justify-center gap-1 py-1.5 flex-1 transition-colors duration-150 cursor-pointer rounded-md"
     :class="active ? 'text-text-main' : 'text-text-muted hover:text-text-sub'"
   >
-    <M3Icon :name="icon" :size="20" />
+    <M3Icon
+      :name="icon"
+      :size="20"
+      :class="active ? 'text-accent-seal' : ''"
+    />
     <span class="text-[10px] leading-none truncate max-w-full px-0.5">{{ label }}</span>
     <span
       v-if="active"
-      class="absolute top-0 left-1/2 -translate-x-1/2 w-5 h-0.5 rounded-full bg-accent-seal"
+      class="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-[3px] rounded-full bg-accent-seal"
     />
   </button>
 
-  <!-- 文本行态（宽侧栏）：左侧朱色竖条 + 底纹 -->
+  <!-- 文本行态（宽侧栏）：墨底激活 + 左侧朱砂竖条 -->
   <button
     v-else
     type="button"
     :aria-current="active ? 'page' : undefined"
     @click="emit('navigate', id)"
-    class="relative flex items-center gap-3 w-full pl-4 pr-3 py-2.5 text-[13.5px] transition-colors cursor-pointer"
+    class="relative flex items-center gap-3 w-full pl-4 pr-3 py-2.5 text-[13.5px] transition-colors duration-150 cursor-pointer"
     :class="
       active
         ? 'bg-surface-card-sub text-text-main font-semibold'
@@ -53,10 +57,14 @@ const emit = defineEmits<{
     "
   >
     <span
-      class="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[2px] rounded-r-full bg-accent-seal transition-opacity"
+      class="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-accent-seal transition-opacity duration-150"
       :class="active ? 'opacity-100' : 'opacity-0'"
     />
-    <M3Icon :name="icon" :size="18" />
+    <M3Icon
+      :name="icon"
+      :size="18"
+      :class="active ? 'text-accent-seal' : 'text-text-sub'"
+    />
     <span class="truncate">{{ label }}</span>
   </button>
 </template>

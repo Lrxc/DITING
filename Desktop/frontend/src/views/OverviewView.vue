@@ -11,7 +11,7 @@ import { useSubTab } from '../composables/useSubTab';
 
 const props = defineProps<{ sub?: string }>();
 const emit = defineEmits<{
-  (e: 'navigate', tab: NavTab): void;
+  (e: 'navigate', tab: NavTab, sub?: string): void;
 }>();
 
 const segments = SUB_TABS.overview ?? [];
@@ -28,7 +28,7 @@ const active = useSubTab(segments, () => props.sub, 'status');
 
     <OverviewPanel
       v-if="active === 'status'"
-      @navigate="emit('navigate', $event)"
+      @navigate="(tab, sub) => emit('navigate', tab, sub)"
     />
     <LiveQueryPanel v-else-if="active === 'queries'" />
     <div v-else-if="active === 'history'" class="space-y-5">

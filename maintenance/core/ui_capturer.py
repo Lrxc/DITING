@@ -91,20 +91,32 @@ def capture_screenshots(
         except Exception as e:
             _log("warn", f"启动临时 Vite 服务失败: {e}，请手动确保前端开发服务已运行。")
 
-    # 五大类信息架构；多段类别用 "大类/子页签" 表示
+    # 五大类信息架构（按使用场景划分：总览 / 解析 / 防护 / 设备 / 系统）
+    # 多段类别用 "大类/子页签" 表示
     all_tabs = [
         "login",
         "overview/status",
         "overview/queries",
-        "network/adapters",
-        "network/upstream",
-        "network/lan",
-        "accel/cache",
-        "rules/lists",
-        "rules/custom",
-        "rules/test",
-        "rules/config",
-        "system/settings",
+        "overview/history",
+        "overview/stats",
+        "resolve/upstream",
+        "resolve/cache",
+        "resolve/rewrite",
+        "resolve/dns64",
+        "protect/lists",
+        "protect/custom",
+        "protect/test",
+        "protect/config",
+        "protect/advanced",
+        "protect/schedule",
+        "devices/adapters",
+        "devices/lan",
+        "devices/clients",
+        "devices/privacy",
+        "system/appearance",
+        "system/service",
+        "system/lanweb",
+        "system/diagnostics",
     ]
     target_tabs = all_tabs + ["modal-alert"] if tab == "all" else [tab]
     target_themes = ["dark", "light"] if theme == "both" else [theme]
@@ -175,7 +187,7 @@ def capture_screenshots(
 
 def main():
     parser = argparse.ArgumentParser(description="谛听自动化界面截图工具")
-    parser.add_argument("-t", "--tab", choices=["all", "login", "overview/status", "overview/queries", "network/adapters", "network/upstream", "network/lan", "accel/cache", "rules/lists", "rules/custom", "rules/test", "rules/config", "system/settings", "modal-alert"], default="all")
+    parser.add_argument("-t", "--tab", choices=["all", "login", "overview/status", "overview/queries", "overview/history", "overview/stats", "resolve/upstream", "resolve/cache", "resolve/rewrite", "resolve/dns64", "protect/lists", "protect/custom", "protect/test", "protect/config", "protect/advanced", "protect/schedule", "devices/adapters", "devices/lan", "devices/clients", "devices/privacy", "system/appearance", "system/service", "system/lanweb", "system/diagnostics", "modal-alert"], default="all")
     parser.add_argument("-m", "--theme", choices=["both", "dark", "light"], default="both")
     parser.add_argument("-o", "--output", default=None)
     parser.add_argument("-W", "--width", type=int, default=1280)

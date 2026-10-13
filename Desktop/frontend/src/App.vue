@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { ipc } from './api/ipc';
 import { themeManager } from './theme/theme';
-import { NAV_ITEMS, normalizeTab, type NavTab } from './constants/navigation';
+import { NAV_ITEMS, SUB_TABS, resolveRoute, type NavTab } from './constants/navigation';
 import { isWebMode } from './utils/env';
 import M3Icon from './components/M3Icon.vue';
 import NavItem from './components/NavItem.vue';
@@ -11,9 +11,9 @@ import ServiceAlertModal from './components/ServiceAlertModal.vue';
 import LoginView from './views/LoginView.vue';
 import appLogo from './assets/images/logo-universal.png';
 import OverviewView from './views/OverviewView.vue';
-import NetworkView from './views/NetworkView.vue';
-import AccelView from './views/AccelView.vue';
-import RulesView from './views/RulesView.vue';
+import ResolveView from './views/ResolveView.vue';
+import ProtectView from './views/ProtectView.vue';
+import DevicesView from './views/DevicesView.vue';
 import SystemView from './views/SystemView.vue';
 
 const appVersion = __APP_VERSION__;
@@ -46,14 +46,15 @@ function parseRoute() {
     const hashParts = url.hash.replace(/^#\/?/, '').split('/');
     const hashTab = (hashParts[0] || '').split('?')[0];
     const rawTab = (url.searchParams.get('tab') || hashTab || '').toLowerCase();
-    const tab = normalizeTab(rawTab);
-    if (tab) {
-      currentTab.value = tab;
+    // 子页签：查询参数优先，其次 hash 第二段
+    const rawSub = url.searchParams.get('sub') || hashParts[1] || '';
+    const route = resolveRoute(rawTab, rawSub);
+    if (route) {
+      currentTab.value = route.tab;
+      currentSub.value = route.sub;
+    } else if (rawSub) {
+      currentSub.value = rawSub.toLowerCase();
     }
-    // 子页签：查询参数优先，其次 hash 第二段；旧 logs 标签落到实时查询
-    const subParam = url.searchParams.get('sub') || hashParts[1] || '';
-    currentSub.value =
-      !subParam && rawTab === 'logs' ? 'queries' : subParam.toLowerCase();
 
     const themeParam = url.searchParams.get('theme');
     if (themeParam === 'light' || themeParam === 'dark' || themeParam === 'system') {
@@ -65,11 +66,14 @@ function parseRoute() {
   } catch {}
 }
 
-function handleNavigate(tab: NavTab) {
+/** 切换大类；可选携带小类（跨类深链跳转，如总览快捷卡片直达「解析 / 上游解析」） */
+function handleNavigate(tab: NavTab, sub?: string) {
   currentTab.value = tab;
-  currentSub.value = '';
+  const nextSub =
+    sub && SUB_TABS[tab]?.some((s) => s.id === sub) ? sub : '';
+  currentSub.value = nextSub;
   try {
-    window.location.hash = '#' + tab;
+    window.location.hash = nextSub ? `#/${tab}/${nextSub}` : `#/${tab}`;
   } catch {}
 }
 
@@ -315,10 +319,10 @@ onUnmounted(() => {
           :sub="currentSub"
           @navigate="handleNavigate"
         />
-        <NetworkView v-else-if="currentTab === 'network'" :sub="currentSub" />
-        <AccelView v-else-if="currentTab === 'accel'" />
-        <RulesView v-else-if="currentTab === 'rules'" :sub="currentSub" />
-        <SystemView v-else-if="currentTab === 'system'" />
+        <ResolveView v-else-if="currentTab === 'resolve'" :sub="currentSub" />
+        <ProtectView v-else-if="currentTab === 'protect'" :sub="currentSub" />
+        <DevicesView v-else-if="currentTab === 'devices'" :sub="currentSub" />
+        <SystemView v-else-if="currentTab === 'system'" :sub="currentSub" />
       </div>
     </main>
 

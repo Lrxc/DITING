@@ -18,7 +18,7 @@ import { useToast } from '../../composables/useToast';
 import { formatUptime } from '../../utils/format';
 
 const emit = defineEmits<{
-  (e: 'navigate', tab: NavTab): void;
+  (e: 'navigate', tab: NavTab, sub?: string): void;
 }>();
 
 const status = ref<StatusResponse | null>(null);
@@ -456,7 +456,7 @@ onUnmounted(() => {
         :primaryLanIP="primaryLanIP"
         :takeoverActive="takeoverActive"
         :pauseBusy="pauseBusy"
-        @navigate="emit('navigate', $event)"
+        @navigate="(tab, sub) => emit('navigate', tab, sub)"
         @pause="handlePause"
       />
 
