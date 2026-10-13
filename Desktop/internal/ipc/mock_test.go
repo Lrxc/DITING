@@ -3,6 +3,7 @@ package ipc
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/haoze-evolluling/diting/desktop/internal/core"
 	"github.com/haoze-evolluling/diting/desktop/internal/platform"
@@ -23,6 +24,8 @@ type mockController struct {
 	filterConfig         *core.FilterConfig
 	scheduleConfig       *ScheduleConfigResponse
 	scheduleConfigureErr error
+	filterPause          *FilterPauseResponse
+	filterPauseErr       error
 	clientGroups         *ClientGroupConfigResponse
 	clientGroupsErr      error
 	queryLogConfig       *querylog.QueryLogConfig
@@ -303,8 +306,40 @@ func (m *mockController) ConfigureBlockingSchedule(ctx context.Context, req Conf
 	return nil
 }
 
-func (m *mockController) GetClientGroups(ctx context.Context) (*ClientGroupConfigResponse, error) {
+func (m *mockController) GetFilterPause(ctx context.Context) (*FilterPauseResponse, error) {
 	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.filterPauseErr != nil {
+		return nil, m.filterPauseErr
+	}
+	if m.filterPause != nil {
+		cpy := *m.filterPause
+		return &cpy, nil
+	}
+	return &FilterPauseResponse{Paused: false, BlockingEnabled: true}, nil
+}
+
+func (m *mockController) SetFilterPause(ctx context.Context, req FilterPauseRequest) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.filterPauseErr != nil {
+		return m.filterPauseErr
+	}
+	if m.filterPause == nil {
+		m.filterPause = &FilterPauseResponse{BlockingEnabled: true}
+	}
+	m.filterPause.Paused = req.Paused
+	if req.Paused {
+		m.filterPause.RemainingSeconds = req.DurationSec
+		m.filterPause.PausedUntilMs = time.Now().Add(time.Duration(req.DurationSec) * time.Second).UnixMilli()
+	} else {
+		m.filterPause.RemainingSeconds = 0
+		m.filterPause.PausedUntilMs = 0
+	}
+	return nil
+}
+
+func (m *mockController) GetClientGroups(ctx context.Context) (*ClientGroupConfigResponse, error) {	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.clientGroups != nil {
 		cpy := *m.clientGroups

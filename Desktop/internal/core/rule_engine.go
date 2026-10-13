@@ -30,6 +30,9 @@ type RuleEngine struct {
 
 	// now 时钟注入点，默认 time.Now；测试可借此固定"当前时刻"
 	now func() time.Time
+
+	// pausedUntil 定时暂停拦截的截止时刻（零值表示未暂停），纯运行时状态不持久化
+	pausedUntil time.Time
 }
 
 // NewRuleEngine 初始化规则引擎并自动加载构建规则索引
@@ -65,11 +68,17 @@ func NewRuleEngine(cfg FilterConfig) *RuleEngine {
 	return engine
 }
 
-// IsEnabled 查询规则过滤总开关
+// IsEnabled 查询规则过滤总开关。
+//
+// 定时暂停期内同样返回 false，从而经 filter_middleware 的既有早退路径整体放行，无需改动中间件。
 func (e *RuleEngine) IsEnabled() bool {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	return e.cfg.Enabled
+	if !e.cfg.Enabled {
+		return false
+	}
+	paused, _ := e.pauseStateUnlocked()
+	return !paused
 }
 
 // SetEnabled 设置规则过滤总开关
@@ -161,16 +170,37 @@ func (e *RuleEngine) GetStats() FilterStats {
 		scheduleActive = ActiveSchedule(e.cfg.Schedules, e.currentTime())
 	}
 
-	return FilterStats{
-		Enabled:        e.cfg.Enabled,
-		TotalRules:     totalRules,
-		ActiveLists:    activeLists,
-		TotalQueries:   total,
-		BlockedQueries: blocked,
-		AllowedQueries: allowed,
-		BlockRate:      rate,
-		ScheduleActive: scheduleActive,
+	// 定时暂停为运行时状态，同样内联判定以免重入加锁
+	paused, pausedUntil := e.pauseStateUnlocked()
+	var pausedRemaining int64
+	if paused {
+		pausedRemaining = int64(pausedUntil.Sub(e.currentTime()).Seconds())
+		if pausedRemaining < 0 {
+			pausedRemaining = 0
+		}
 	}
+
+	return FilterStats{
+		Enabled:            e.cfg.Enabled,
+		TotalRules:         totalRules,
+		ActiveLists:        activeLists,
+		TotalQueries:       total,
+		BlockedQueries:     blocked,
+		AllowedQueries:     allowed,
+		BlockRate:          rate,
+		ScheduleActive:     scheduleActive,
+		Paused:             paused,
+		PausedRemainingSec: pausedRemaining,
+		PausedUntilMs:      pausedUntilMs(paused, pausedUntil),
+	}
+}
+
+// pausedUntilMs 将暂停截止时刻转为 Unix 毫秒（未暂停返回 0）。
+func pausedUntilMs(paused bool, until time.Time) int64 {
+	if !paused || until.IsZero() {
+		return 0
+	}
+	return until.UnixMilli()
 }
 
 // Match 对域名进行过滤评估并记录遥测统计

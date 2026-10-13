@@ -144,6 +144,12 @@ type FilterStats struct {
 	BlockRate      float64 `json:"blockRate"`
 	// ScheduleActive 当前时刻拦截是否处于生效窗口（计划关闭时恒为 true）
 	ScheduleActive bool `json:"scheduleActive"`
+	// Paused 定时暂停拦截是否处于生效状态（纯运行时状态，重启即恢复）
+	Paused bool `json:"paused"`
+	// PausedRemainingSec 暂停剩余秒数（未暂停为 0）
+	PausedRemainingSec int64 `json:"pausedRemainingSec"`
+	// PausedUntilMs 预计恢复时刻 Unix 毫秒（未暂停为 0）
+	PausedUntilMs int64 `json:"pausedUntilMs"`
 }
 
 // CheckHostResult 域名过滤检测结果

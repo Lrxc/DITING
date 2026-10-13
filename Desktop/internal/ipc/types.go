@@ -350,6 +350,24 @@ type ConfigureScheduleRequest struct {
 	Schedules *[]core.BlockingSchedule `json:"schedules,omitempty"`
 }
 
+// FilterPauseRequest 定时暂停拦截请求
+type FilterPauseRequest struct {
+	// Paused 为 true 时按 DurationSec 暂停（0 表示暂停至手动恢复）；为 false 时立即恢复。
+	Paused      bool  `json:"paused"`
+	DurationSec int64 `json:"durationSec,omitempty"`
+}
+
+// FilterPauseResponse 定时暂停拦截状态响应
+type FilterPauseResponse struct {
+	Paused bool `json:"paused"`
+	// RemainingSeconds 暂停剩余秒数（未暂停为 0）
+	RemainingSeconds int64 `json:"remainingSeconds"`
+	// PausedUntilMs 预计恢复时刻 Unix 毫秒（未暂停为 0）
+	PausedUntilMs int64 `json:"pausedUntilMs"`
+	// BlockingEnabled 过滤总开关（与暂停态解耦，供前端区分「已关闭」与「已暂停」）
+	BlockingEnabled bool `json:"blockingEnabled"`
+}
+
 // ClientGroupConfigResponse 客户端分组配置与已解析规则集选项
 type ClientGroupConfigResponse struct {
 	Enabled bool               `json:"enabled"`
