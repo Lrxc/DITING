@@ -3,16 +3,22 @@ import M3Icon from '../M3Icon.vue';
 
 export type InlineAlertType = 'error' | 'warning' | 'info' | 'success';
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     message?: string;
     type?: InlineAlertType;
+    icon?: string;
+    iconClass?: string;
     iconSize?: number;
+    shake?: boolean;
   }>(),
   {
     message: '',
     type: 'error',
+    icon: '',
+    iconClass: '',
     iconSize: 15,
+    shake: false,
   }
 );
 
@@ -30,8 +36,9 @@ function typeStyles(type: InlineAlertType) {
   }
 }
 
-function typeIcon(type: InlineAlertType) {
-  switch (type) {
+function resolvedIcon(): string {
+  if (props.icon) return props.icon;
+  switch (props.type) {
     case 'warning':
       return 'warning';
     case 'info':
@@ -49,9 +56,17 @@ function typeIcon(type: InlineAlertType) {
   <div
     v-if="message || $slots.default"
     class="p-2.5 rounded-md text-xs flex items-center gap-1.5 border"
-    :class="typeStyles(type)"
+    :class="[
+      typeStyles(type),
+      shake ? 'animate-shake' : '',
+    ]"
   >
-    <M3Icon :name="typeIcon(type)" :size="iconSize" class="shrink-0" />
+    <M3Icon
+      :name="resolvedIcon()"
+      :size="iconSize"
+      class="shrink-0"
+      :class="iconClass"
+    />
     <span class="min-w-0 break-words flex-1 leading-relaxed">
       <slot>{{ message }}</slot>
     </span>

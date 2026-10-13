@@ -83,7 +83,7 @@ export function useAuthForm(initialMode: AuthMode = 'login') {
         username: username.value.trim(),
         password: password.value,
       });
-      successMsg.value = '管理员账号初始化成功并已自动登录！';
+      successMsg.value = '管理员密码设置成功！正在进入系统...';
       return true;
     } catch (err: any) {
       errorMsg.value = err.message || '初始化管理员账号失败';
@@ -110,11 +110,14 @@ export function useAuthForm(initialMode: AuthMode = 'login') {
         username: username.value.trim(),
         password: password.value,
       });
-      successMsg.value = '登录成功！';
+      successMsg.value = '管理员身份验证成功，正在进入控制台...';
       return true;
     } catch (err: any) {
       const msg = err.message || '';
-      if (msg.includes('锁定') || msg.includes('多次错误') || msg.includes('locked')) {
+      if (msg.includes('未初始化')) {
+        currentMode.value = 'setup';
+        errorMsg.value = '检测到管理员账号尚未初始化，请在此处设置初始密码以完成配置';
+      } else if (msg.includes('锁定') || msg.includes('多次错误') || msg.includes('locked')) {
         await checkAuthStatus();
         errorMsg.value = '密码错误次数过多，请稍候再试';
       } else {
@@ -144,11 +147,11 @@ export function useAuthForm(initialMode: AuthMode = 'login') {
     errorMsg.value = '';
     try {
       await ipc.changePassword({
-        username: 'admin',
+        username: username.value.trim() || 'admin',
         oldPassword: oldPassword.value,
         newPassword: password.value,
       });
-      successMsg.value = '管理员密码修改成功！';
+      successMsg.value = '管理员密码修改成功！请使用新密码重新登录。';
       return true;
     } catch (err: any) {
       errorMsg.value = err.message || '修改密码失败';

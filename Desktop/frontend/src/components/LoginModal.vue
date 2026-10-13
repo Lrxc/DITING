@@ -109,7 +109,7 @@ function handleClose() {
     </template>
 
     <div class="space-y-4 py-1">
-      <InlineAlert v-if="errorMsg" :message="errorMsg" type="error" />
+      <InlineAlert v-if="errorMsg" :message="errorMsg" type="error" shake />
       <InlineAlert v-if="successMsg" :message="successMsg" type="success" />
 
       <div v-if="lockoutSeconds > 0" class="p-3 rounded-md bg-status-warning-bg border border-status-warning/30 text-status-warning text-xs flex items-center gap-2">

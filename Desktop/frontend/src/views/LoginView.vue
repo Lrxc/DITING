@@ -38,6 +38,7 @@ const {
   errorMsg,
   successMsg,
   lockoutSeconds,
+  isAuthInitialized,
   checkAuthStatus,
   submitSetup,
   submitLogin,
@@ -189,6 +190,15 @@ onUnmounted(() => {
       :style="{ opacity: bgConfig.opacity / 100 }"
     />
 
+    <!-- 3. 装饰性柔光背景（仅默认背景下呈现） -->
+    <div
+      v-if="!hasCustomBg"
+      class="absolute inset-0 pointer-events-none overflow-hidden"
+    >
+      <div class="absolute -top-[20%] left-1/2 -translate-x-1/2 w-[600px] h-[500px] rounded-full bg-accent-seal/5 dark:bg-accent-seal/10 blur-[120px]" />
+      <div class="absolute -bottom-[20%] right-[10%] w-[500px] h-[400px] rounded-full bg-brand-container/40 dark:bg-brand-container/20 blur-[100px]" />
+    </div>
+
     <!-- 顶栏辅助操作：主题切换与自定义壁纸入口 -->
     <header class="relative z-10 w-full px-4 sm:px-8 py-4 flex items-center justify-between">
       <div
@@ -242,20 +252,20 @@ onUnmounted(() => {
       >
         <!-- 卡片头部品牌标识 -->
         <div class="p-6 sm:p-8 pb-4 text-center">
-          <div class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-brand-container shadow-xs mb-3">
-            <img :src="appLogo" alt="DITING Logo" class="w-8 h-8 object-contain rounded-md" />
+          <div class="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-brand-container shadow-xs mb-3.5 mx-auto">
+            <img :src="appLogo" alt="谛听 Logo" class="w-10 h-10 object-contain rounded-md" />
           </div>
           <h1 class="font-serif text-xl sm:text-2xl font-bold tracking-tight text-text-main">
-            {{ currentMode === 'setup' ? '初始化管理员账号' : '谛听 控制台登录' }}
+            谛听 DNS 控制台
           </h1>
-          <p class="text-xs sm:text-[13px] text-text-muted mt-1 leading-relaxed">
-            {{ currentMode === 'setup' ? '首次进入局域网 Web 控制台，请设置管理员凭据' : '安全可信的局域网 DNS 加速与防护引擎' }}
+          <p class="text-xs text-text-sub mt-1.5 leading-relaxed">
+            {{ currentMode === 'setup' ? '初始化管理员密码，守护局域网远程管理安全' : '局域网远程管理服务 · 请验证管理员凭据' }}
           </p>
         </div>
 
-        <!-- 表单输入区域 -->
-        <form @submit.prevent="handleSubmit" class="p-6 sm:p-8 pt-2 space-y-4">
-          <InlineAlert v-if="errorMsg" :message="errorMsg" type="error" />
+        <!-- 表单区域 -->
+        <form @submit.prevent="handleSubmit" class="px-6 sm:px-8 pb-6 sm:pb-8 space-y-4">
+          <InlineAlert v-if="errorMsg" :message="errorMsg" type="error" shake />
           <InlineAlert v-if="successMsg" :message="successMsg" type="success" />
 
           <!-- 安全锁定倒计时提示 -->
@@ -309,9 +319,9 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- 确认密码（仅设置模式展示） -->
+          <!-- 确认密码（仅设置模式） -->
           <div v-if="currentMode === 'setup'" class="space-y-1">
-            <label class="block text-xs font-medium text-text-sub">确认初始密码</label>
+            <label class="block text-xs font-medium text-text-sub">确认管理员密码</label>
             <div class="relative flex items-center">
               <input
                 v-model="confirmPassword"
@@ -319,59 +329,59 @@ onUnmounted(() => {
                 autocomplete="new-password"
                 :disabled="loading || lockoutSeconds > 0"
                 class="w-full h-10 pl-3 pr-10 text-sm rounded-md border border-surface-border bg-surface-card text-text-main focus:outline-none focus:border-brand-primary transition-colors disabled:opacity-50"
-                placeholder="请再次输入以确认"
+                placeholder="请再次输入设置的新密码"
               />
               <button
                 type="button"
                 @click="showConfirmPassword = !showConfirmPassword"
                 class="absolute right-2.5 p-1 text-text-muted hover:text-text-main cursor-pointer"
-                title="显隐确认密码"
+                title="显隐密码"
               >
                 <M3Icon :name="showConfirmPassword ? 'visibility_off' : 'visibility'" :size="16" />
               </button>
             </div>
           </div>
 
-          <!-- 模式切换与操作提示 -->
+          <!-- 提交登录按钮 -->
           <div class="pt-2">
             <button
               type="submit"
               :disabled="loading || lockoutSeconds > 0"
-              class="w-full h-10 rounded-md font-semibold text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed app-btn-primary"
+              class="app-btn-primary w-full h-11 text-sm font-semibold shadow-md flex items-center justify-center gap-2 cursor-pointer transition-transform active:scale-[0.99]"
             >
-              <M3Icon v-if="loading" name="refresh" :size="16" class="animate-spin" />
-              <M3Icon v-else :name="currentMode === 'setup' ? 'key' : 'lock_open'" :size="16" />
-              <span>
-                {{
-                  loading
-                    ? (currentMode === 'setup' ? '正在创建管理员账号...' : '正在验证安全凭证...')
-                    : (currentMode === 'setup' ? '创建账号并登入系统' : '安全登录')
-                }}
-              </span>
+              <M3Icon :name="loading ? 'sync' : 'check'" :size="18" :class="loading ? 'animate-spin' : ''" />
+              <span>{{ currentMode === 'setup' ? '完成初始化并进入控制台' : '立即登录' }}</span>
             </button>
           </div>
-        </form>
 
-        <!-- 卡片底部说明与系统保障 -->
-        <div class="px-6 sm:px-8 py-3.5 bg-surface-card-sub/60 rounded-b-xl border-t border-surface-border-sub flex items-center justify-between text-[11px] text-text-muted">
-          <span class="flex items-center gap-1">
-            <M3Icon name="verified_user" :size="13" class="text-status-success" />
-            <span>SHA-256 安全哈希保护</span>
-          </span>
-          <span class="font-mono">v{{ appVersion }}</span>
-        </div>
+          <!-- 模式切换与安全提示 -->
+          <div class="pt-2 border-t border-surface-border text-center text-[11px] text-text-muted space-y-1">
+            <div class="flex items-center justify-center gap-1.5 text-text-sub">
+              <M3Icon name="shield" :size="13" class="text-accent-seal" />
+              <span>SHA-256 加盐哈希保护 · 连续错误自动安全锁定</span>
+            </div>
+          </div>
+        </form>
       </div>
     </main>
 
-    <!-- 底栏版权与声明 -->
-    <footer class="relative z-10 w-full px-4 sm:px-8 py-3 text-center text-xs text-text-muted">
-      <span>谛听 DITING DNS · 跨平台局域网安全加速与网络托管引擎</span>
+    <!-- 底部版权信息 -->
+    <footer class="relative z-10 py-3 text-center text-[11px] px-4">
+      <span
+        class="transition-all duration-300"
+        :class="hasCustomBg ? 'inline-block px-3.5 py-1 rounded-full bg-surface-card/75 backdrop-blur-md border border-surface-border/60 text-text-sub shadow-2xs' : 'text-text-muted'"
+      >
+        谛听 (DITING) DNS 解析加速与安全防护系统
+      </span>
     </footer>
 
-    <!-- 自定义壁纸配置弹窗 -->
+    <!-- 自定义背景弹窗 -->
     <LoginBgModal
       :open="showBgModal"
-      :currentConfig="bgConfig"
+      :current-config="bgConfig"
+      :admin-password="password"
+      :is-auth-initialized="isAuthInitialized"
+      :is-authenticated="Boolean(ipc.isConnected && ipc.token)"
       @close="showBgModal = false"
       @change="handleBgChange"
     />

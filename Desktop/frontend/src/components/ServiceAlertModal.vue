@@ -168,12 +168,13 @@ watch(
         <p>您可以点击“重新连接”尝试握手，或点击“重启服务”刷新服务状态。</p>
       </div>
 
-      <InlineAlert v-if="serviceOperating" type="info">
-        <div class="flex items-center gap-2">
-          <M3Icon name="refresh" :size="15" class="animate-spin" />
-          <span>{{ serviceOpText || '正在处理核心服务操作...' }}</span>
-        </div>
-      </InlineAlert>
+      <InlineAlert
+        v-if="serviceOperating"
+        type="info"
+        icon="refresh"
+        iconClass="animate-spin"
+        :message="serviceOpText || '正在处理核心服务操作...'"
+      />
 
       <InlineAlert v-if="serviceOpError" :message="serviceOpError" type="error" />
     </div>
