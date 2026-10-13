@@ -37,6 +37,11 @@ type DNSStatus struct {
 	Upstreams         []UpstreamInfo       `json:"upstreams"`
 	Bootstrap         core.BootstrapConfig `json:"bootstrap"`
 	ConditionalRoutes map[string]string    `json:"conditionalRoutes,omitempty"`
+	BlockUnqualified  bool                 `json:"blockUnqualified"`
+	BlockPrivatePTR   bool                 `json:"blockPrivatePTR"`
+	BlockIPv6         bool                 `json:"blockIPv6"`
+	BlockECH          bool                 `json:"blockECH"`
+	EDNSPadding       int                  `json:"ednsPadding"`
 }
 
 // TakeoverStatus 物理网卡接管运行状态
@@ -295,6 +300,14 @@ type ConfigureECSRequest struct {
 type ConfigureClientAliasRequest struct {
 	IP   string `json:"ip"`
 	Name string `json:"name"`
+}
+
+// ConfigurePrivacyRequest 隐私保护与协议增强策略配置请求
+type ConfigurePrivacyRequest struct {
+	BlockPrivatePTR *bool `json:"blockPrivatePTR,omitempty"`
+	BlockIPv6       *bool `json:"blockIPv6,omitempty"`
+	BlockECH        *bool `json:"blockECH,omitempty"`
+	EDNSPadding     *int  `json:"ednsPadding,omitempty"`
 }
 
 

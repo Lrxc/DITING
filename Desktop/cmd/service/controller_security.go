@@ -100,3 +100,38 @@ func (p *program) ConfigureBlockUnqualified(ctx context.Context, req ipc.Configu
 	}
 	return nil
 }
+
+// ConfigurePrivacy 实现 ServiceController 接口
+func (p *program) ConfigurePrivacy(ctx context.Context, req ipc.ConfigurePrivacyRequest) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if req.BlockPrivatePTR != nil {
+		p.cfg.DNS.BlockPrivatePTR = *req.BlockPrivatePTR
+	}
+	if req.BlockIPv6 != nil {
+		p.cfg.DNS.BlockIPv6 = *req.BlockIPv6
+	}
+	if req.BlockECH != nil {
+		p.cfg.DNS.BlockECH = *req.BlockECH
+	}
+	if req.EDNSPadding != nil {
+		padding := *req.EDNSPadding
+		if padding < 0 {
+			padding = 0
+		}
+		p.cfg.DNS.EDNSPadding = padding
+		p.cfg.Upstream.EDNSPadding = padding
+		if p.resolver != nil {
+			_ = p.resolver.Configure(p.cfg.Upstream)
+		}
+	}
+
+	if p.configPath != "" {
+		if err := config.SaveConfig(p.configPath, p.cfg); err != nil {
+			log.Printf("[配置] 持久化 Privacy 配置失败: %v\n", err)
+		}
+	}
+	return nil
+}
+

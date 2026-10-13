@@ -95,6 +95,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/v1/dns/ratelimit/configure", s.withAuth(s.handleRateLimitConfigure))
 	mux.HandleFunc("/api/v1/dns/dns64/configure", s.withAuth(s.handleDNS64Configure))
 	mux.HandleFunc("/api/v1/dns/unqualified/configure", s.withAuth(s.handleUnqualifiedConfigure))
+	mux.HandleFunc("/api/v1/dns/privacy/configure", s.withAuth(s.handlePrivacyConfigure))
 	mux.HandleFunc("/api/v1/dns/rewrite/rules", s.withAuth(s.handleRewriteRules))
 	mux.HandleFunc("/api/v1/dns/rewrite/configure", s.withAuth(s.handleRewriteConfigure))
 	mux.HandleFunc("/api/v1/clients", s.withAuth(s.handleClients))

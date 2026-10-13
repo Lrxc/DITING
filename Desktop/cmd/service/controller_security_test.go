@@ -85,6 +85,26 @@ func TestController_SecurityAndTransitionConfig(t *testing.T) {
 		t.Errorf("expected BlockUnqualified to be true")
 	}
 
+	// 5. 测试 ConfigurePrivacy (BlockPrivatePTR, BlockIPv6, BlockECH, EDNSPadding)
+	bTrue := true
+	bFalse := false
+	pad256 := 256
+	privReq := ipc.ConfigurePrivacyRequest{
+		BlockPrivatePTR: &bFalse,
+		BlockIPv6:       &bTrue,
+		BlockECH:        &bTrue,
+		EDNSPadding:     &pad256,
+	}
+	if err := prg.ConfigurePrivacy(ctx, privReq); err != nil {
+		t.Fatalf("ConfigurePrivacy failed: %v", err)
+	}
+	if prg.cfg.DNS.BlockPrivatePTR != false || !prg.cfg.DNS.BlockIPv6 || !prg.cfg.DNS.BlockECH || prg.cfg.DNS.EDNSPadding != 256 {
+		t.Errorf("unexpected DNS privacy config: %+v", prg.cfg.DNS)
+	}
+	if prg.cfg.Upstream.EDNSPadding != 256 {
+		t.Errorf("expected upstream EDNSPadding to be 256, got %d", prg.cfg.Upstream.EDNSPadding)
+	}
+
 	// 验证磁盘配置文件持久化是否正确写入
 	reloaded, err := config.LoadConfig(cfgPath)
 	if err != nil {
@@ -93,5 +113,9 @@ func TestController_SecurityAndTransitionConfig(t *testing.T) {
 	if !reloaded.DNS.BlockUnqualified || !reloaded.DNS64.Enabled || !reloaded.RateLimit.Enabled {
 		t.Errorf("persisted config mismatch: %+v", reloaded)
 	}
+	if reloaded.DNS.BlockPrivatePTR != false || !reloaded.DNS.BlockIPv6 || !reloaded.DNS.BlockECH || reloaded.DNS.EDNSPadding != 256 {
+		t.Errorf("persisted privacy config mismatch: %+v", reloaded.DNS)
+	}
 	_ = os.RemoveAll(tmpDir)
 }
+

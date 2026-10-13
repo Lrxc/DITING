@@ -131,9 +131,24 @@ func (p *program) StartDNS(ctx context.Context) error {
 	accessMw := ditingdns.NewAccessMiddleware(p.accessControl)
 	rateLimitMw := ditingdns.NewRateLimitMiddleware(p.rateLimiter)
 	edeMw := ditingdns.NewEDEMiddleware(p.cfg.DNS.EnableEDE)
+	echMw := ditingdns.NewECHMiddleware(func() bool {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		return p.cfg.DNS.BlockECH
+	})
 	sudnMw := ditingdns.NewSUDNMiddleware()
+	ipv6Mw := ditingdns.NewIPv6Middleware(func() bool {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		return p.cfg.DNS.BlockIPv6
+	})
 	hostsMw := ditingdns.NewHostsMiddleware(p.hostsResolver)
 	rewriteMw := ditingdns.NewRewriteMiddleware(p.rewriteEngine)
+	privatePTRMw := ditingdns.NewPrivatePTRMiddleware(func() bool {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		return p.cfg.DNS.BlockPrivatePTR
+	}, p.clientResolver)
 	unqualifiedMw := ditingdns.NewDynamicUnqualifiedMiddleware(func() bool {
 		p.mu.Lock()
 		defer p.mu.Unlock()
@@ -145,7 +160,7 @@ func (p *program) StartDNS(ctx context.Context) error {
 	ecsMw := ditingdns.NewECSMiddleware(p.ecsMgr)
 	cacheMw := ditingdns.NewCacheMiddleware(p.cache, p.resolver)
 	forwardMw := ditingdns.NewForwardMiddleware(p.resolver)
-	pipeline := ditingdns.NewPipeline(metricsMw, edeMw, clientMw, accessMw, rateLimitMw, sudnMw, hostsMw, rewriteMw, unqualifiedMw, filterMw, rebindMw, dns64Mw, ecsMw, cacheMw, forwardMw)
+	pipeline := ditingdns.NewPipeline(metricsMw, edeMw, echMw, clientMw, accessMw, rateLimitMw, sudnMw, ipv6Mw, hostsMw, rewriteMw, privatePTRMw, unqualifiedMw, filterMw, rebindMw, dns64Mw, ecsMw, cacheMw, forwardMw)
 	udpAddrs, tcpAddrs := p.cfg.DNS.EffectiveListenAddresses()
 	serverCfg := ditingdns.ServerConfig{
 		UDPAddresses: udpAddrs,
@@ -307,6 +322,11 @@ func (p *program) GetStatus(ctx context.Context) (*ipc.StatusResponse, error) {
 			Upstreams:         upstreams,
 			Bootstrap:         p.cfg.Upstream.Bootstrap,
 			ConditionalRoutes: p.cfg.Upstream.ConditionalRoutes,
+			BlockUnqualified:  p.cfg.DNS.BlockUnqualified,
+			BlockPrivatePTR:   p.cfg.DNS.BlockPrivatePTR,
+			BlockIPv6:         p.cfg.DNS.BlockIPv6,
+			BlockECH:          p.cfg.DNS.BlockECH,
+			EDNSPadding:       p.cfg.DNS.EDNSPadding,
 		},
 		Takeover: ipc.TakeoverStatus{
 			Active:   p.takeoverMgr.IsTakeoverActive(),

@@ -30,7 +30,7 @@ func startMockDualServer(t *testing.T, handler dns.HandlerFunc) (shutdown func()
 		}
 	}()
 
-	for attempt := 0; attempt < 50; attempt++ {
+	for attempt := 0; attempt < 100; attempt++ {
 		tcpL, err = net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			continue
@@ -40,7 +40,7 @@ func startMockDualServer(t *testing.T, handler dns.HandlerFunc) (shutdown func()
 		if err == nil {
 			break
 		}
-		discardedTCP = append(discardedTCP, tcpL)
+		_ = tcpL.Close()
 		tcpL = nil
 	}
 

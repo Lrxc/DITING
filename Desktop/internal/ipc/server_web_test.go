@@ -131,6 +131,10 @@ func (m *mockController) ConfigureBlockUnqualified(ctx context.Context, req Conf
 	return nil
 }
 
+func (m *mockController) ConfigurePrivacy(ctx context.Context, req ConfigurePrivacyRequest) error {
+	return nil
+}
+
 func (m *mockController) GetRewriteRules(ctx context.Context) ([]core.RewriteRule, error) {
 	return []core.RewriteRule{}, nil
 }

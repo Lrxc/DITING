@@ -19,6 +19,10 @@ type DNSConfig struct {
 	AllowLAN         bool          `json:"allowLAN"`         // 是否启用局域网 DNS 服务器功能（监听 0.0.0.0 与所有局域网地址）
 	EnableEDE        bool          `json:"enableEDE"`        // 是否启用 RFC 8914 Extended DNS Errors 选项
 	BlockUnqualified bool          `json:"blockUnqualified"` // 是否阻止无点单标签不完整域名外泄至公网解析
+	BlockPrivatePTR  bool          `json:"blockPrivatePTR"`  // 是否启用 RFC 6303 / RFC 7793 本地私有反向解析防泄漏拦截
+	BlockIPv6        bool          `json:"blockIPv6"`        // 是否阻止 IPv6 AAAA 查询并秒级应答权威 NODATA
+	BlockECH         bool          `json:"blockECH"`         // 是否剥离 HTTPS/SVCB 响应中的 ECH 参数以防过滤绕过
+	EDNSPadding      int           `json:"ednsPadding"`      // RFC 7830 / RFC 8467 EDNS0 填充块大小（0为禁用，默认 128）
 }
 
 // EffectiveListenAddresses 根据 AllowLAN 配置返回实际应监听的双栈 UDP 与 TCP 地址
@@ -196,9 +200,14 @@ func DefaultConfig() *Config {
 			AllowLAN:         false,
 			EnableEDE:        true,
 			BlockUnqualified: false,
+			BlockPrivatePTR:  true,
+			BlockIPv6:        false,
+			BlockECH:         false,
+			EDNSPadding:      128,
 		},
 		Upstream: core.ResolverConfig{
-			Mode: core.ModePrimaryBackup,
+			Mode:        core.ModePrimaryBackup,
+			EDNSPadding: 128,
 			Providers: []core.ProviderConfig{
 				{ID: "阿里云 (DoT)", Protocol: core.ProtocolDoT, Server: "dns.alidns.com:853"},
 				{ID: "腾讯云 (DoT)", Protocol: core.ProtocolDoT, Server: "dot.pub:853"},

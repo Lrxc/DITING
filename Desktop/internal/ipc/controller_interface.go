@@ -68,5 +68,6 @@ type ServiceController interface {
 	GetClients(ctx context.Context) ([]core.ClientInfo, error)
 	ConfigureClientAlias(ctx context.Context, req ConfigureClientAliasRequest) error
 	ConfigureECS(ctx context.Context, req ConfigureECSRequest) error
+	ConfigurePrivacy(ctx context.Context, req ConfigurePrivacyRequest) error
 }
 

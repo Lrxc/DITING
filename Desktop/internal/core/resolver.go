@@ -46,6 +46,7 @@ type ResolverConfig struct {
 	Providers         []ProviderConfig  `json:"providers"`
 	Bootstrap         BootstrapConfig   `json:"bootstrap"`
 	ConditionalRoutes map[string]string `json:"conditionalRoutes,omitempty"` // 域名后缀分流: domainSuffix -> upstream
+	EDNSPadding       int               `json:"ednsPadding,omitempty"`       // RFC 7830 EDNS0 填充块大小（0 为禁用，推荐 128）
 }
 
 // Resolver 核心上游解析器接口
@@ -58,15 +59,16 @@ type Resolver interface {
 
 // CoreResolver 纯 Go DNS 核心内核实现
 type CoreResolver struct {
-	mu        sync.RWMutex
-	mode      string
-	providers []*ConfiguredProvider
-	bootstrap *BootstrapResolver
-	plain     *PlainResolver
-	doh       *DoHResolver
-	dot       *DoTResolver
-	scheduler *Scheduler
-	router    *ConditionalRouter
+	mu          sync.RWMutex
+	mode        string
+	providers   []*ConfiguredProvider
+	bootstrap   *BootstrapResolver
+	plain       *PlainResolver
+	doh         *DoHResolver
+	dot         *DoTResolver
+	scheduler   *Scheduler
+	router      *ConditionalRouter
+	ednsPadding int
 }
 
 // NewResolver 创建并初始化核心 DNS 解析器
@@ -137,6 +139,10 @@ func (r *CoreResolver) Configure(cfg ResolverConfig) error {
 
 	r.mode = mode
 	r.providers = providers
+	r.ednsPadding = cfg.EDNSPadding
+	if r.ednsPadding < 0 {
+		r.ednsPadding = 0
+	}
 	if r.bootstrap != nil {
 		r.bootstrap.UpdateConfig(cfg.Bootstrap)
 		if r.doh != nil {
@@ -270,13 +276,30 @@ func (a *conditionalProviderAdapter) Configure(cfg ResolverConfig) error { retur
 func (a *conditionalProviderAdapter) Shutdown() error                    { return nil }
 
 func (r *CoreResolver) executeProvider(ctx context.Context, p *ConfiguredProvider, rawQuery []byte) ([]byte, error) {
+	queryBytes := rawQuery
+	r.mu.RLock()
+	paddingBlock := r.ednsPadding
+	r.mu.RUnlock()
+
+	// 若配置了 EDNS Padding 且为加密传输 (DoH/DoT)，按照 RFC 7830 / RFC 8467 对齐填充抹平长度指纹
+	if paddingBlock > 0 && (p.Protocol == ProtocolDoH || p.Protocol == ProtocolDoT) {
+		var reqMsg dns.Msg
+		if err := reqMsg.Unpack(rawQuery); err == nil {
+			if PadMessage(&reqMsg, paddingBlock) {
+				if packed, pErr := reqMsg.Pack(); pErr == nil {
+					queryBytes = packed
+				}
+			}
+		}
+	}
+
 	switch p.Protocol {
 	case ProtocolDoH:
-		return r.doh.Exchange(ctx, rawQuery, p.URL)
+		return r.doh.Exchange(ctx, queryBytes, p.URL)
 	case ProtocolDoT:
-		return r.dot.Exchange(ctx, rawQuery, p.Server)
+		return r.dot.Exchange(ctx, queryBytes, p.Server)
 	default:
-		return r.plain.Exchange(ctx, rawQuery, p.Server)
+		return r.plain.Exchange(ctx, queryBytes, p.Server)
 	}
 }
 

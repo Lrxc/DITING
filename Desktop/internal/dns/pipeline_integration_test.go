@@ -261,3 +261,87 @@ func TestPipeline_RewriteClientAndECSIntegration(t *testing.T) {
 	}
 }
 
+func TestPipeline_PrivacyAndProtocolEnhancements(t *testing.T) {
+	mockRes := &pipelineMockResolver{
+		answers: map[string][]dns.RR{
+			"secure.example.com.": {
+				&dns.A{Hdr: dns.RR_Header{Name: "secure.example.com.", Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 300}, A: net.ParseIP("1.2.3.4")},
+				&dns.HTTPS{
+					SVCB: dns.SVCB{
+						Hdr:      dns.RR_Header{Name: "secure.example.com.", Rrtype: dns.TypeHTTPS, Class: dns.ClassINET, Ttl: 300},
+						Priority: 1,
+						Target:   ".",
+						Value: []dns.SVCBKeyValue{
+							&dns.SVCBAlpn{Alpn: []string{"h2", "h3"}},
+							&dns.SVCBECHConfig{ECH: []byte{0xaa, 0xbb, 0xcc}},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	blockIPv6 := true
+	blockPrivatePTR := true
+	blockECH := true
+
+	echMw := NewECHMiddleware(func() bool { return blockECH })
+	ipv6Mw := NewIPv6Middleware(func() bool { return blockIPv6 })
+	privatePTRMw := NewPrivatePTRMiddleware(func() bool { return blockPrivatePTR }, nil)
+	forwardMw := NewForwardMiddleware(mockRes)
+
+	pipeline := NewPipeline(echMw, ipv6Mw, privatePTRMw, forwardMw)
+
+	// 1. 测试 IPv6 AAAA 阻断拦截：返回 NODATA 空应答
+	req1 := new(dns.Msg)
+	req1.SetQuestion("secure.example.com.", dns.TypeAAAA)
+	ctx1 := NewDNSContext(context.Background(), req1, &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5353}, "udp")
+	if err := pipeline.Execute(ctx1); err != nil {
+		t.Fatalf("pipeline execute error: %v", err)
+	}
+	if ctx1.Resp == nil || ctx1.Resp.Rcode != dns.RcodeSuccess || len(ctx1.Resp.Answer) != 0 {
+		t.Fatalf("expected NODATA for AAAA query when blockIPv6 is enabled, got %v", ctx1.Resp)
+	}
+	if src, _ := ctx1.Get("source"); src != "block_ipv6" {
+		t.Fatalf("expected source=block_ipv6, got %v", src)
+	}
+
+	// 2. 测试 RFC 6303 私有 PTR 防泄漏：权威 NXDOMAIN，防止内网拓扑泄露给上游
+	req2 := new(dns.Msg)
+	req2.SetQuestion("10.1.168.192.in-addr.arpa.", dns.TypePTR)
+	ctx2 := NewDNSContext(context.Background(), req2, &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5353}, "udp")
+	if err := pipeline.Execute(ctx2); err != nil {
+		t.Fatalf("pipeline execute error: %v", err)
+	}
+	if ctx2.Resp == nil || ctx2.Resp.Rcode != dns.RcodeNameError {
+		t.Fatalf("expected NXDOMAIN for private PTR, got %v", ctx2.Resp)
+	}
+	if src, _ := ctx2.Get("source"); src != "locally_served_zone" {
+		t.Fatalf("expected source=locally_served_zone, got %v", src)
+	}
+
+	// 3. 测试 ECH 剥离：上游返回包含 ECH 的 HTTPS 记录，中间件自动剥离 ECH 参数并保留 ALPN
+	req3 := new(dns.Msg)
+	req3.SetQuestion("secure.example.com.", dns.TypeHTTPS)
+	ctx3 := NewDNSContext(context.Background(), req3, &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5353}, "udp")
+	if err := pipeline.Execute(ctx3); err != nil {
+		t.Fatalf("pipeline execute error: %v", err)
+	}
+	if ctx3.Resp == nil || len(ctx3.Resp.Answer) != 1 {
+		t.Fatalf("expected 1 answer, got %v", ctx3.Resp)
+	}
+	httpsRR, ok := ctx3.Resp.Answer[0].(*dns.HTTPS)
+	if !ok {
+		t.Fatalf("expected HTTPS record, got %T", ctx3.Resp.Answer[0])
+	}
+	for _, kv := range httpsRR.Value {
+		if kv.Key() == dns.SVCB_ECHCONFIG {
+			t.Fatal("expected ECH parameter to be stripped by echMw")
+		}
+	}
+	if stripped, _ := ctx3.Get("ech_stripped"); stripped != true {
+		t.Fatal("expected ech_stripped=true")
+	}
+}
+
+
