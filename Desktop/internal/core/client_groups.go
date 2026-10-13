@@ -18,6 +18,15 @@ type ClientGroup struct {
 	Clients     []string `json:"clients"`               // IP 或 CIDR，支持 IPv4/IPv6
 	RuleListIDs []string `json:"ruleListIds,omitempty"` // 该组启用的订阅列表 ID（空=全部）
 	BlockMode   string   `json:"blockMode,omitempty"`   // 组级拦截方式覆盖（空=继承全局）
+
+	// 组级分时拦截计划（借鉴 blocky config/schedule.go 的 per-group schedule 门控）：
+	// 配置了启用计划时以本组计划判定生效窗口；未配置时回落全局计划语义。
+	ScheduleEnabled bool               `json:"scheduleEnabled,omitempty"`
+	Schedules       []BlockingSchedule `json:"schedules,omitempty"`
+
+	// AllowlistOnly 组级「仅白名单」开关（空=继承全局）。
+	// 开启后仅命中放行规则的查询才被放行，其余一律阻断。
+	AllowlistOnly bool `json:"allowlistOnly,omitempty"`
 }
 
 // ClientGroupConfig 客户端分组总配置
@@ -164,6 +173,24 @@ func NormalizeClientGroupConfig(cfg *ClientGroupConfig) error {
 		if g.BlockMode != "" && !IsValidBlockMode(g.BlockMode) {
 			problems = append(problems, fmt.Sprintf("分组 %s 的拦截方式 %q 非法，已回落全局", g.ID, g.BlockMode))
 			g.BlockMode = ""
+		}
+		// 编译组级时间计划，丢弃非法条目（坏配置不阻断整体语义）
+		if len(g.Schedules) > 0 {
+			valid := g.Schedules[:0]
+			for i := range g.Schedules {
+				if err := NormalizeSchedule(&g.Schedules[i]); err != nil {
+					problems = append(problems, fmt.Sprintf("分组 %s 的时间计划 %q 非法，已丢弃: %v", g.ID, g.Schedules[i].Name, err))
+					continue
+				}
+				valid = append(valid, g.Schedules[i])
+			}
+			g.Schedules = valid
+			// 无可用计划时关闭组级计划开关，避免出现「开关开但永不生效」的歧义状态
+			if !HasEnabledSchedule(g.Schedules) {
+				g.ScheduleEnabled = false
+			}
+		} else {
+			g.ScheduleEnabled = false
 		}
 		seen[g.ID] = true
 		valid = append(valid, g)

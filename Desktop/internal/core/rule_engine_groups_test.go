@@ -8,6 +8,14 @@ import (
 	"github.com/miekg/dns"
 )
 
+// writeTestList 将列表内容写入规则缓存目录（避免测试触发外网拉取）。
+func writeTestList(t *testing.T, dir, id, body string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, id+".txt"), []byte(body), 0o600); err != nil {
+		t.Fatalf("写入列表缓存失败: %v", err)
+	}
+}
+
 // groupEngine 构建一个含两条订阅列表的引擎，列表内容直接写入缓存文件避免外网拉取。
 //
 //   - list-ads  → ||ads.example.com^
@@ -16,13 +24,8 @@ func groupEngine(t *testing.T) *RuleEngine {
 	t.Helper()
 	dir := t.TempDir()
 
-	writeList := func(id, body string) {
-		if err := os.WriteFile(filepath.Join(dir, id+".txt"), []byte(body), 0o600); err != nil {
-			t.Fatalf("写入列表缓存失败: %v", err)
-		}
-	}
-	writeList("list-ads", "||ads.example.com^\n")
-	writeList("list-soc", "||social.example.com^\n")
+	writeTestList(t, dir, "list-ads", "||ads.example.com^\n")
+	writeTestList(t, dir, "list-soc", "||social.example.com^\n")
 
 	cfg := DefaultFilterConfig()
 	cfg.DataDir = dir

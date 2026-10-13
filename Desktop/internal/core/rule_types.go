@@ -53,6 +53,10 @@ type FilterConfig struct {
 	// 开启后对上游应答中的 CNAME 目标与 A/AAAA 记录所属名二次匹配黑名单规则，
 	// 用于拦截「QNAME 合法但别名指向黑名单域」的深链绕过。
 	FilterResponse bool `json:"filterResponse"`
+
+	// AllowlistOnly 全局「仅白名单」模式（默认关闭，借鉴 blocky allowlistOnly / pi-hole 分组模型）。
+	// 开启后仅当命中放行规则（@@ 例外）才放行，未命中任何规则的查询一律阻断。
+	AllowlistOnly bool `json:"allowlistOnly"`
 }
 
 // DefaultFilterConfig 生成默认过滤配置
@@ -69,6 +73,7 @@ func DefaultFilterConfig() FilterConfig {
 		ScheduleEnabled:     false,
 		Schedules:           []BlockingSchedule{},
 		FilterResponse:      false,
+		AllowlistOnly:       false,
 	}
 }
 

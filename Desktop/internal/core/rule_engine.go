@@ -175,30 +175,7 @@ func (e *RuleEngine) GetStats() FilterStats {
 
 // Match 对域名进行过滤评估并记录遥测统计
 func (e *RuleEngine) Match(domain string, qtype uint16) CheckHostResult {
-	if !e.IsEnabled() {
-		return CheckHostResult{Action: "pass"}
-	}
-
-	// 分时拦截：计划开启且未处于生效窗口时，整体放行且不记入拦截统计
-	if !e.IsBlockingActive() {
-		return CheckHostResult{Action: "pass", Reason: ReasonScheduleInactive}
-	}
-
-	matcher := e.getMatcher()
-	if matcher == nil {
-		return CheckHostResult{Action: "pass"}
-	}
-
-	e.totalQueries.Add(1)
-	res := matcher.Match(domain, qtype)
-
-	if res.Blocked {
-		e.blockedQueries.Add(1)
-	} else if res.Action == "allow" {
-		e.allowedQueries.Add(1)
-	}
-
-	return res
+	return e.MatchForGroup(domain, qtype, DefaultClientGroupID)
 }
 
 // IsBlockingActive 判断当前时刻拦截功能是否处于生效状态。
@@ -330,7 +307,8 @@ func (e *RuleEngine) MatchForGroup(domain string, qtype uint16, groupID string) 
 	if !e.IsEnabled() {
 		return CheckHostResult{Action: "pass"}
 	}
-	if !e.IsBlockingActive() {
+	// 分时拦截：优先按分组计划判定，未配置组级计划时回落全局语义
+	if !e.IsBlockingActiveForGroup(groupID) {
 		return CheckHostResult{Action: "pass", Reason: ReasonScheduleInactive}
 	}
 
@@ -341,6 +319,11 @@ func (e *RuleEngine) MatchForGroup(domain string, qtype uint16, groupID string) 
 
 	e.totalQueries.Add(1)
 	res := matcher.Match(domain, qtype)
+
+	// 仅白名单模式：未命中放行规则时一律阻断（计划窗口外已在上面提前放行）
+	if e.IsAllowlistOnlyForGroup(groupID) {
+		res = applyAllowlistOnly(res)
+	}
 
 	if res.Blocked {
 		e.blockedQueries.Add(1)
