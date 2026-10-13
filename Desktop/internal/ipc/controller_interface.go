@@ -1,4 +1,4 @@
-﻿package ipc
+package ipc
 
 import (
 	"context"
@@ -57,5 +57,9 @@ type ServiceController interface {
 	VerifyAdminPassword(ctx context.Context, plainPassword string) bool
 	VerifyAdminPasswordWithIP(ctx context.Context, clientIP, plainPassword string) (bool, error)
 	IsAuthInitialized() bool
+	ConfigureAccess(ctx context.Context, req ConfigureAccessRequest) error
+	ConfigureRateLimit(ctx context.Context, req ConfigureRateLimitRequest) error
+	ConfigureDNS64(ctx context.Context, req ConfigureDNS64Request) error
+	ConfigureBlockUnqualified(ctx context.Context, req ConfigureBlockUnqualifiedRequest) error
 }
 

@@ -78,6 +78,19 @@ type RateLimiter struct {
 
 // NewRateLimiter 创建客户端限流引擎
 func NewRateLimiter(ctx context.Context, cfg RateLimitConfig) *RateLimiter {
+	if cfg.Rate <= 0 {
+		cfg.Rate = 50.0
+	}
+	if cfg.Burst <= 0 {
+		cfg.Burst = 100
+	}
+	if cfg.IPv4Prefix <= 0 || cfg.IPv4Prefix > 32 {
+		cfg.IPv4Prefix = 32
+	}
+	if cfg.IPv6Prefix <= 0 || cfg.IPv6Prefix > 128 {
+		cfg.IPv6Prefix = 128
+	}
+
 	r := &RateLimiter{
 		cfg:        cfg,
 		buckets:    make(map[string]*clientBucket),
@@ -95,6 +108,43 @@ func NewRateLimiter(ctx context.Context, cfg RateLimitConfig) *RateLimiter {
 	return r
 }
 
+// UpdateConfig 动态更新限流运行配置
+func (r *RateLimiter) UpdateConfig(cfg RateLimitConfig) {
+	if cfg.Rate <= 0 {
+		cfg.Rate = 50.0
+	}
+	if cfg.Burst <= 0 {
+		cfg.Burst = 100
+	}
+	if cfg.IPv4Prefix <= 0 || cfg.IPv4Prefix > 32 {
+		cfg.IPv4Prefix = 32
+	}
+	if cfg.IPv6Prefix <= 0 || cfg.IPv6Prefix > 128 {
+		cfg.IPv6Prefix = 128
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.cfg = cfg
+	r.exemptIPs = make(map[string]struct{})
+	r.exemptNets = nil
+	r.parseExemptions(cfg.ExemptIPs)
+
+	for _, b := range r.buckets {
+		b.mu.Lock()
+		oldBurst := b.burst
+		b.rate = cfg.Rate
+		b.burst = float64(cfg.Burst)
+		if b.burst > oldBurst {
+			b.tokens += (b.burst - oldBurst)
+		}
+		if b.tokens > b.burst {
+			b.tokens = b.burst
+		}
+		b.mu.Unlock()
+	}
+}
+
 func (r *RateLimiter) parseExemptions(entries []string) {
 	for _, entry := range entries {
 		entry = strings.TrimSpace(entry)
@@ -107,6 +157,9 @@ func (r *RateLimiter) parseExemptions(entries []string) {
 			}
 		} else {
 			if ip := net.ParseIP(entry); ip != nil {
+				if v4 := ip.To4(); v4 != nil {
+					ip = v4
+				}
 				r.exemptIPs[ip.String()] = struct{}{}
 			}
 		}
@@ -125,6 +178,10 @@ func (r *RateLimiter) IsExempt(ip net.IP) bool {
 	if ip == nil {
 		return true
 	}
+	if v4 := ip.To4(); v4 != nil {
+		ip = v4
+	}
+
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -148,6 +205,10 @@ func (r *RateLimiter) Allow(ip net.IP) bool {
 		return true
 	}
 
+	if v4 := ip.To4(); v4 != nil {
+		ip = v4
+	}
+
 	key := r.bucketKey(ip)
 	now := r.clock()
 
@@ -155,8 +216,29 @@ func (r *RateLimiter) Allow(ip net.IP) bool {
 	bucket, ok := r.buckets[key]
 	if !ok {
 		if len(r.buckets) >= r.maxBuckets {
-			r.mu.Unlock()
-			return false // 保护内存上限，过载时拒绝
+			// 容量达上限时，先内联淘汰空闲桶，避免无状态新客户端直接饿死
+			for k, b := range r.buckets {
+				if b.isIdle(now) {
+					delete(r.buckets, k)
+				}
+			}
+			// 若仍然超限，淘汰最久未活跃的桶腾出空间
+			if len(r.buckets) >= r.maxBuckets {
+				var oldestKey string
+				var oldestTime time.Time
+				for k, b := range r.buckets {
+					b.mu.Lock()
+					refill := b.lastRefill
+					b.mu.Unlock()
+					if oldestKey == "" || refill.Before(oldestTime) {
+						oldestKey = k
+						oldestTime = refill
+					}
+				}
+				if oldestKey != "" {
+					delete(r.buckets, oldestKey)
+				}
+			}
 		}
 		bucket = &clientBucket{
 			rate:       r.cfg.Rate,

@@ -113,6 +113,22 @@ func (m *mockController) IsAuthInitialized() bool {
 	return m.authInitialized
 }
 
+func (m *mockController) ConfigureAccess(ctx context.Context, req ConfigureAccessRequest) error {
+	return nil
+}
+
+func (m *mockController) ConfigureRateLimit(ctx context.Context, req ConfigureRateLimitRequest) error {
+	return nil
+}
+
+func (m *mockController) ConfigureDNS64(ctx context.Context, req ConfigureDNS64Request) error {
+	return nil
+}
+
+func (m *mockController) ConfigureBlockUnqualified(ctx context.Context, req ConfigureBlockUnqualifiedRequest) error {
+	return nil
+}
+
 func TestIPC_WebAndAuthEndpoints(t *testing.T) {
 	mockCtrl := &mockController{}
 	token := "ipc-secret-token"

@@ -76,3 +76,35 @@ func TestUnqualifiedMiddleware_Disabled(t *testing.T) {
 		t.Fatalf("expected query to pass when disabled")
 	}
 }
+
+func TestUnqualifiedMiddleware_DynamicToggle(t *testing.T) {
+	enabled := false
+	mw := NewDynamicUnqualifiedMiddleware(func() bool { return enabled })
+
+	req := new(dns.Msg)
+	req.SetQuestion("printer.", dns.TypeA)
+	ctx := NewDNSContext(context.Background(), req, &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5353}, "udp")
+
+	// 初始关闭：应放行
+	called := false
+	_ = mw(ctx, func() error {
+		called = true
+		return nil
+	})
+	if !called {
+		t.Fatal("expected query to pass when initially false")
+	}
+
+	// 动态开启：应拦截
+	enabled = true
+	ctx2 := NewDNSContext(context.Background(), req, &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5353}, "udp")
+	called2 := false
+	_ = mw(ctx2, func() error {
+		called2 = true
+		return nil
+	})
+	if called2 || ctx2.Resp == nil || ctx2.Resp.Rcode != dns.RcodeNameError {
+		t.Fatal("expected query to be blocked after dynamic toggle to true")
+	}
+}
+

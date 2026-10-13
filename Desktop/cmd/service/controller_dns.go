@@ -131,7 +131,11 @@ func (p *program) StartDNS(ctx context.Context) error {
 	edeMw := ditingdns.NewEDEMiddleware(p.cfg.DNS.EnableEDE)
 	sudnMw := ditingdns.NewSUDNMiddleware()
 	hostsMw := ditingdns.NewHostsMiddleware(p.hostsResolver)
-	unqualifiedMw := ditingdns.NewUnqualifiedMiddleware(p.cfg.DNS.BlockUnqualified)
+	unqualifiedMw := ditingdns.NewDynamicUnqualifiedMiddleware(func() bool {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		return p.cfg.DNS.BlockUnqualified
+	})
 	filterMw := ditingdns.NewFilterMiddleware(p.filterEngine)
 	rebindMw := ditingdns.NewRebindMiddleware(rebindMgr, p.cache)
 	dns64Mw := ditingdns.NewDNS64Middleware(p.dns64Synth, p.resolver)

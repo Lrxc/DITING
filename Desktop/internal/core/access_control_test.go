@@ -117,3 +117,26 @@ func TestAccessControl_InvalidCIDR(t *testing.T) {
 		t.Fatal("expected error for invalid CIDR")
 	}
 }
+
+func TestAccessControl_IPv4MappedIPv6(t *testing.T) {
+	cfg := AccessControlConfig{
+		BlockedClients: []string{"192.168.1.50"},
+		AllowedClients: []string{"192.168.1.0/24"},
+	}
+	ac, err := NewAccessControl(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// 模拟双栈监听器接收到的 IPv4-mapped IPv6 地址 (::ffff:192.168.1.50 与 ::ffff:192.168.1.60)
+	v4MappedBlocked := net.ParseIP("::ffff:192.168.1.50")
+	if allowed, _ := ac.CheckAccess(v4MappedBlocked); allowed {
+		t.Fatal("expected ::ffff:192.168.1.50 to be blocked")
+	}
+
+	v4MappedAllowed := net.ParseIP("::ffff:192.168.1.60")
+	if allowed, _ := ac.CheckAccess(v4MappedAllowed); !allowed {
+		t.Fatal("expected ::ffff:192.168.1.60 to be allowed")
+	}
+}
+

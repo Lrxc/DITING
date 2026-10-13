@@ -99,6 +99,10 @@ func (ac *AccessControl) CheckAccess(ip net.IP) (bool, string) {
 		return true, ""
 	}
 
+	if v4 := ip.To4(); v4 != nil {
+		ip = v4
+	}
+
 	ac.mu.RLock()
 	defer ac.mu.RUnlock()
 
@@ -141,6 +145,9 @@ func parseIPOrCIDR(s string) (net.IP, *net.IPNet, error) {
 	ip := net.ParseIP(s)
 	if ip == nil {
 		return nil, nil, fmt.Errorf("无效的 IP 地址: %s", s)
+	}
+	if v4 := ip.To4(); v4 != nil {
+		ip = v4
 	}
 	return ip, nil, nil
 }

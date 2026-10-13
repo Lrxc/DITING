@@ -152,3 +152,80 @@ func TestRateLimiter_ConcurrentAccess(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestRateLimiter_ZeroConfigDefaults(t *testing.T) {
+	// 验证未传 Rate/Burst 或反序列化为 0 时的默认回退保护
+	zeroCfg := RateLimitConfig{
+		Enabled: true,
+	}
+	limiter := NewRateLimiter(context.Background(), zeroCfg)
+	defer limiter.Close()
+
+	ip := net.ParseIP("192.168.1.100")
+	// 不应因 Rate/Burst 为 0 而直接全部拒绝
+	if !limiter.Allow(ip) {
+		t.Fatal("zero config should fallback to safe defaults, not block immediately")
+	}
+}
+
+func TestRateLimiter_CapacityEviction(t *testing.T) {
+	cfg := RateLimitConfig{
+		Enabled: true,
+		Rate:    10.0,
+		Burst:   10,
+	}
+	limiter := NewRateLimiter(context.Background(), cfg)
+	defer limiter.Close()
+	limiter.maxBuckets = 3 // 设定测试小容量
+
+	fakeNow := time.Now()
+	limiter.clock = func() time.Time { return fakeNow }
+
+	// 创建 3 个客户端桶
+	limiter.Allow(net.ParseIP("10.0.0.1"))
+	limiter.Allow(net.ParseIP("10.0.0.2"))
+	limiter.Allow(net.ParseIP("10.0.0.3"))
+
+	if len(limiter.buckets) != 3 {
+		t.Fatalf("expected 3 buckets, got %d", len(limiter.buckets))
+	}
+
+	// 推进 65 秒使旧桶空闲
+	fakeNow = fakeNow.Add(65 * time.Second)
+
+	// 新客户端访问，应触发内联淘汰并成功允许
+	if !limiter.Allow(net.ParseIP("10.0.0.4")) {
+		t.Fatal("new client should be allowed after evicting idle buckets")
+	}
+}
+
+func TestRateLimiter_UpdateConfig(t *testing.T) {
+	cfg := RateLimitConfig{
+		Enabled: true,
+		Rate:    1.0,
+		Burst:   1,
+	}
+	limiter := NewRateLimiter(context.Background(), cfg)
+	defer limiter.Close()
+
+	ip := net.ParseIP("192.168.1.200")
+	if !limiter.Allow(ip) {
+		t.Fatal("first query should pass")
+	}
+	if limiter.Allow(ip) {
+		t.Fatal("second query should be rate limited")
+	}
+
+	// 动态更新提升 burst 为 10
+	limiter.UpdateConfig(RateLimitConfig{
+		Enabled: true,
+		Rate:    10.0,
+		Burst:   10,
+	})
+
+	// 更新后应立即扩容并允许
+	if !limiter.Allow(ip) {
+		t.Fatal("query should pass after updating burst capacity")
+	}
+}
+

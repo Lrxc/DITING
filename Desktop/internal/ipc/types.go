@@ -245,3 +245,31 @@ type SetLoginBackgroundRequest struct {
 	Blur          int    `json:"blur"`                    // 毛玻璃模糊 0 - 20 px
 	AdminPassword string `json:"adminPassword,omitempty"` // 远程未登录客户端鉴权密码（可选）
 }
+
+// ConfigureAccessRequest 客户端访问控制配置请求
+type ConfigureAccessRequest struct {
+	AllowedClients []string `json:"allowedClients"`
+	BlockedClients []string `json:"blockedClients"`
+}
+
+// ConfigureRateLimitRequest 客户端限流配置请求
+type ConfigureRateLimitRequest struct {
+	Enabled    bool     `json:"enabled"`
+	Rate       float64  `json:"rate"`
+	Burst      int      `json:"burst"`
+	IPv4Prefix int      `json:"ipv4Prefix"`
+	IPv6Prefix int      `json:"ipv6Prefix"`
+	ExemptIPs  []string `json:"exemptIPs"`
+}
+
+// ConfigureDNS64Request DNS64 IPv6 过渡合成配置请求
+type ConfigureDNS64Request struct {
+	Enabled  bool     `json:"enabled"`
+	Prefixes []string `json:"prefixes"`
+}
+
+// ConfigureBlockUnqualifiedRequest 单标签域名外泄阻断配置请求
+type ConfigureBlockUnqualifiedRequest struct {
+	BlockUnqualified bool `json:"blockUnqualified"`
+}
+

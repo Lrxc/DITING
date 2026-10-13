@@ -240,25 +240,25 @@ func TestBootstrap_TruncatedFallbackTCP(t *testing.T) {
 	var err error
 	var addr string
 
-	var discardedUDP []net.PacketConn
+	var discardedTCP []net.Listener
 	defer func() {
-		for _, c := range discardedUDP {
-			_ = c.Close()
+		for _, l := range discardedTCP {
+			_ = l.Close()
 		}
 	}()
 
 	for attempt := 0; attempt < 50; attempt++ {
-		udpConn, err = net.ListenPacket("udp", "127.0.0.1:0")
+		tcpListener, err = net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			continue
 		}
-		addr = udpConn.LocalAddr().String()
-		tcpListener, err = net.Listen("tcp", addr)
+		addr = tcpListener.Addr().String()
+		udpConn, err = net.ListenPacket("udp", addr)
 		if err == nil {
 			break
 		}
-		discardedUDP = append(discardedUDP, udpConn)
-		udpConn = nil
+		discardedTCP = append(discardedTCP, tcpListener)
+		tcpListener = nil
 	}
 	if udpConn == nil || tcpListener == nil {
 		t.Fatalf("listen mock dual server failed: %v", err)
