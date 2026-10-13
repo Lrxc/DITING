@@ -42,6 +42,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.haoze.diting.ui.components.SettingsScaffold
 import com.haoze.diting.ui.dashboard.AllModeDashboard
 import com.haoze.diting.ui.dashboard.FilteredModeDashboard
+import com.haoze.diting.data.RequestStatus
 import com.haoze.diting.ui.dashboard.OffModeDashboard
 import com.haoze.diting.ui.dashboard.formatClockTime
 
@@ -50,6 +51,7 @@ fun ModernLogDashboardScreen(
     onBack: () -> Unit = {},
     onNavigateToDnsLogs: () -> Unit,
     onNavigateToDnsCache: () -> Unit,
+    onNavigateToRequestLogs: ((RequestStatus?) -> Unit)? = null,
     onNavigateToRaceStats: () -> Unit,
     onNavigateToBootstrapStats: () -> Unit,
     onNavigateToSubscriptionInterceptionStats: () -> Unit,
@@ -164,6 +166,7 @@ fun ModernLogDashboardScreen(
                     DnsLogMode.ALL -> AllModeDashboard(
                         state = uiState,
                         onNavigateToDnsLogs = onNavigateToDnsLogs,
+                        onNavigateToRequestLogs = onNavigateToRequestLogs,
                         onNavigateToDnsCache = onNavigateToDnsCache,
                         onNavigateToRaceStats = onNavigateToRaceStats,
                         onNavigateToBootstrapStats = onNavigateToBootstrapStats,

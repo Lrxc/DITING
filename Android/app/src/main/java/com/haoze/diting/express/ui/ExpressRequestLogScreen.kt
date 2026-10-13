@@ -31,6 +31,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -42,7 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.haoze.diting.data.ExpressRulesDatabase
@@ -51,6 +52,7 @@ import com.haoze.diting.data.RequestStatus
 import com.haoze.diting.data.RuleDataset
 import com.haoze.diting.data.entity.RuleScope
 import com.haoze.diting.ui.DomainActionDialog
+import com.haoze.diting.ui.RequestLogDetailDialog
 import com.haoze.diting.ui.RequestLogItem
 import com.haoze.diting.ui.RequestLogViewModel
 import com.haoze.diting.ui.RuntimeDnsSettingsRefresher
@@ -60,6 +62,8 @@ import com.haoze.diting.ui.components.SettingsCardMargin
 import com.haoze.diting.ui.components.SettingsItemSpacing
 import com.haoze.diting.ui.components.SettingsScaffold
 import com.haoze.diting.ui.components.SettingsSurfaceItem
+import com.haoze.diting.ui.components.SystemAppPlaceholder
+import com.haoze.diting.ui.systemUid
 import com.haoze.diting.ui.components.cascade.CascadeDropdownMenu
 import com.haoze.diting.ui.copyToClipboard
 import com.haoze.diting.ui.localizedText
@@ -89,9 +93,9 @@ fun ExpressRequestLogScreen(
     val viewModel: RequestLogViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
         key = "ExpressRequestLogViewModel",
         factory = RequestLogViewModel.factory(
-            context.applicationContext as Application,
-            RequestSource.DNS,
-            RuleDataset.EXPRESS
+            application = context.applicationContext as Application,
+            initialSource = RequestSource.DNS,
+            dataset = RuleDataset.EXPRESS
         )
     )
 
@@ -100,6 +104,7 @@ fun ExpressRequestLogScreen(
     val query = state.query
     val searching = state.searching
     var pendingDomain by remember { mutableStateOf<String?>(null) }
+    var detailItem by remember { mutableStateOf<RequestLogItem?>(null) }
     var showTopMenu by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -238,6 +243,14 @@ fun ExpressRequestLogScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            if (visibleItems.isNotEmpty()) {
+                Text(
+                    text = localizedText("已加载") + " ${visibleItems.size} / ${state.total}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = SettingsCardMargin, vertical = 4.dp)
+                )
+            }
             val currentError = state.error
             if (currentError != null && visibleItems.isEmpty() && !state.loading) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -267,9 +280,25 @@ fun ExpressRequestLogScreen(
                             index = index,
                             itemCount = visibleItems.size
                         ) {
-                            ExpressRequestLogCard(item) {
-                                item.domain?.let { domain ->
-                                    pendingDomain = domain
+                            ExpressRequestLogCard(
+                                item = item,
+                                onClick = { detailItem = item },
+                                onDomainAction = {
+                                    item.domain?.let { domain -> pendingDomain = domain }
+                                }
+                            )
+                        }
+                    }
+                    if (state.hasMore && !state.loading) {
+                        item {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                TextButton(onClick = { viewModel.loadMore() }) {
+                                    Text(localizedText("加载更多"))
                                 }
                             }
                         }
@@ -289,6 +318,20 @@ fun ExpressRequestLogScreen(
                 }
             }
         }
+    }
+
+    detailItem?.let { current ->
+        val domain = current.domain?.takeIf { it.isNotBlank() }
+        RequestLogDetailDialog(
+            item = current,
+            onDismiss = { detailItem = null },
+            onDomainAction = domain?.let { target ->
+                {
+                    detailItem = null
+                    pendingDomain = target
+                }
+            }
+        )
     }
 
     pendingDomain?.let { domain ->
@@ -329,7 +372,11 @@ fun ExpressRequestLogScreen(
 }
 
 @Composable
-private fun ExpressRequestLogCard(item: RequestLogItem, onClick: () -> Unit) {
+private fun ExpressRequestLogCard(
+    item: RequestLogItem,
+    onClick: () -> Unit,
+    onDomainAction: () -> Unit
+) {
     val color = when (item.status) {
         RequestStatus.BLOCKED,
         RequestStatus.ERROR -> MaterialTheme.colorScheme.error
@@ -337,44 +384,57 @@ private fun ExpressRequestLogCard(item: RequestLogItem, onClick: () -> Unit) {
         RequestStatus.REWRITTEN -> MaterialTheme.colorScheme.tertiary
         else -> MaterialTheme.colorScheme.primary
     }
+    val systemUid = if (item.appName == null) item.systemUid() else null
+    val appLabel = item.appName
+        ?: systemUid?.let { localizedText("系统") + " (uid $it)" }
+        ?: ""
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onDomainAction)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
+            if (systemUid != null) {
+                SystemAppPlaceholder(size = 40.dp)
+            } else {
+                AppIconImage(packageName = item.packageName, size = 40.dp)
+            }
+            Column(
                 modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                AppIconImage(packageName = item.packageName, size = 24.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = appLabel,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    RuleTagChip(
+                        text = localizedText(item.status.label),
+                        containerColor = color.copy(alpha = .12f),
+                        contentColor = color
+                    )
+                }
                 Text(
-                    item.title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.weight(1f)
+                    text = item.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
-            RuleTagChip(
-                text = localizedText(item.status.label),
-                containerColor = color.copy(alpha = .12f),
-                contentColor = color
-            )
-        }
-        Text(localizedText(item.subtitle), style = MaterialTheme.typography.bodySmall)
-        item.detail?.takeIf { it.isNotBlank() }?.let {
-            Text(
-                it,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }

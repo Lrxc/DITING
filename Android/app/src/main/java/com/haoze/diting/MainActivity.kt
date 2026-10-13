@@ -30,6 +30,7 @@ import com.haoze.diting.ui.InitialAgreementDialog
 import com.haoze.diting.ui.MainViewModel
 import com.haoze.diting.ui.PermissionDisclosureDialog
 import com.haoze.diting.ui.RecentsPrivacyController
+import com.haoze.diting.ui.Routes
 import com.haoze.diting.ui.background.CustomBackgroundManager
 import com.haoze.diting.ui.mode.AppWorkMode
 import com.haoze.diting.ui.mode.WorkModeStore
@@ -146,6 +147,13 @@ class MainActivity : AppLocalizedActivity() {
                                 },
                                 onNavigateToLogRoute = { route, dataset ->
                                     navigationCoordinator.launchLogRoute(route, dataset)
+                                },
+                                onNavigateToRequestLogs = { status ->
+                                    navigationCoordinator.launchLogRoute(
+                                        Routes.DNS_LOGS,
+                                        dataset = null,
+                                        requestStatus = status
+                                    )
                                 },
                                 onNavigateToModeSelection = {
                                     navigationCoordinator.launchModeSelection()

@@ -191,6 +191,8 @@ internal fun translateCommonExact(text: String): String? = when (text) {
     "DNS 提供商健康情况" -> "DNS provider health"
     "刷新" -> "Refresh"
     "重新加载" -> "Reload"
+    "加载更多" -> "Load more"
+    "已加载" -> "Loaded"
     "未参与" -> "Not participating"
     "打开最近请求" -> "Open recent requests"
     "最近请求" -> "Recent requests"

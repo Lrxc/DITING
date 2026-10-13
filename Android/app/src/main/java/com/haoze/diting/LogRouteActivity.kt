@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.haoze.diting.data.RequestSource
+import com.haoze.diting.data.RequestStatus
 import com.haoze.diting.data.RuleDataset
 import com.haoze.diting.ui.*
 import com.haoze.diting.ui.settings.AppearanceSettingsStore
@@ -33,6 +34,11 @@ class LogRouteActivity : AppLocalizedActivity() {
     private val requestedRequestSource: RequestSource?
         get() = intent.getStringExtra(EXTRA_REQUEST_SOURCE)?.let { value ->
             runCatching { RequestSource.valueOf(value) }.getOrNull()
+        }
+
+    private val requestedRequestStatus: RequestStatus?
+        get() = intent.getStringExtra(EXTRA_REQUEST_STATUS)?.let { value ->
+            runCatching { RequestStatus.valueOf(value) }.getOrNull()
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -92,6 +98,15 @@ class LogRouteActivity : AppLocalizedActivity() {
         onRuntimeDnsSettingsChanged: () -> Unit
     ) {
         val onNavigateToDnsLogs = { onNavigate(Routes.DNS_LOGS) }
+        // Dashboard stat cards open the request log pre-filtered by the tapped status.
+        val onNavigateToRequestLogs: (RequestStatus?) -> Unit = { status ->
+            if (!childLaunchInProgress && route != Routes.DNS_LOGS) {
+                childLaunchInProgress = true
+                startActivity(
+                    createIntent(this, Routes.DNS_LOGS, requestStatus = status, dataset = dataset)
+                )
+            }
+        }
         val onNavigateToDnsCache = { onNavigate(Routes.DNS_CACHE) }
         val onNavigateToRaceStats = { onNavigate(Routes.RACE_STATS) }
         val onNavigateToBootstrapStats = { onNavigate(Routes.BOOTSTRAP_STATS) }
@@ -113,6 +128,7 @@ class LogRouteActivity : AppLocalizedActivity() {
                     RequestLogScreen(
                         onBack = onBack,
                         initialSource = requestedRequestSource ?: if (route == Routes.HTTP_REQUEST_LOGS) RequestSource.HTTPS else RequestSource.ALL,
+                        initialStatus = requestedRequestStatus ?: RequestStatus.ALL,
                         onRuntimeDnsSettingsChanged = onRuntimeDnsSettingsChanged
                     )
                 }
@@ -138,6 +154,7 @@ class LogRouteActivity : AppLocalizedActivity() {
                     ModernLogDashboardScreen(
                         onBack = onBack,
                         onNavigateToDnsLogs = onNavigateToDnsLogs,
+                        onNavigateToRequestLogs = onNavigateToRequestLogs,
                         onNavigateToDnsCache = onNavigateToDnsCache,
                         onNavigateToRaceStats = onNavigateToRaceStats,
                         onNavigateToBootstrapStats = onNavigateToBootstrapStats,
@@ -153,18 +170,21 @@ class LogRouteActivity : AppLocalizedActivity() {
     companion object {
         const val EXTRA_ROUTE = "log_route"
         const val EXTRA_REQUEST_SOURCE = "log_request_source"
+        const val EXTRA_REQUEST_STATUS = "log_request_status"
         const val EXTRA_DATASET = "log_dataset"
 
         fun createIntent(
             context: android.content.Context,
             route: String,
             requestSource: RequestSource? = null,
+            requestStatus: RequestStatus? = null,
             dataset: RuleDataset? = null
         ): Intent =
             Intent(context, LogRouteActivity::class.java)
                 .putExtra(EXTRA_ROUTE, route)
                 .apply {
                     requestSource?.let { putExtra(EXTRA_REQUEST_SOURCE, it.name) }
+                    requestStatus?.let { putExtra(EXTRA_REQUEST_STATUS, it.name) }
                     dataset?.let { putExtra(EXTRA_DATASET, it.name) }
                 }
     }

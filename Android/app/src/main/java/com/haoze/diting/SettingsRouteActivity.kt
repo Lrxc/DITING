@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.fillMaxSize
 import com.haoze.diting.data.RequestSource
+import com.haoze.diting.data.RequestStatus
 import com.haoze.diting.data.RuleDataset
 import com.haoze.diting.data.entity.RuleScope
 import com.haoze.diting.server.DnsMainActivity
@@ -64,6 +65,10 @@ class SettingsRouteActivity : AppLocalizedActivity() {
     private val requestedRequestSource: RequestSource?
         get() = intent.getStringExtra(EXTRA_REQUEST_SOURCE)?.let { value ->
             runCatching { RequestSource.valueOf(value) }.getOrNull()
+        }
+    private val requestedRequestStatus: RequestStatus?
+        get() = intent.getStringExtra(EXTRA_REQUEST_STATUS)?.let { value ->
+            runCatching { RequestStatus.valueOf(value) }.getOrNull()
         }
     private val requestedTitle: String?
         get() = intent.getStringExtra(EXTRA_TITLE)
@@ -451,6 +456,7 @@ class SettingsRouteActivity : AppLocalizedActivity() {
                     RequestLogScreen(
                         onBack = onBack,
                         initialSource = requestedRequestSource ?: if (route == Routes.HTTP_REQUEST_LOGS) RequestSource.HTTPS else RequestSource.ALL,
+                        initialStatus = requestedRequestStatus ?: RequestStatus.ALL,
                         onRuntimeDnsSettingsChanged = onRuntimeDnsSettingsChanged
                     )
                 }
@@ -523,6 +529,7 @@ class SettingsRouteActivity : AppLocalizedActivity() {
         private const val TAG = "SettingsRoute"
         const val EXTRA_ROUTE = "settings_route"
         const val EXTRA_REQUEST_SOURCE = "settings_request_source"
+        const val EXTRA_REQUEST_STATUS = "settings_request_status"
         const val EXTRA_RUNTIME_DNS_CHANGED = "settings_runtime_dns_changed"
         const val EXTRA_WORK_MODE_CHANGED = "settings_work_mode_changed"
         const val EXTRA_HIDE_FROM_RECENTS = "settings_hide_from_recents"
@@ -540,6 +547,7 @@ class SettingsRouteActivity : AppLocalizedActivity() {
             ruleKind: ManagedRuleKind? = null,
             title: String? = null,
             requestSource: RequestSource? = null,
+            requestStatus: RequestStatus? = null,
             dataset: RuleDataset? = null,
             batchTarget: BatchRuleTarget? = null
         ): Intent = Intent(context, SettingsRouteActivity::class.java)
@@ -549,6 +557,7 @@ class SettingsRouteActivity : AppLocalizedActivity() {
                 ruleKind?.let { putExtra(EXTRA_RULE_KIND, it.name) }
                 title?.let { putExtra(EXTRA_TITLE, it) }
                 requestSource?.let { putExtra(EXTRA_REQUEST_SOURCE, it.name) }
+                requestStatus?.let { putExtra(EXTRA_REQUEST_STATUS, it.name) }
                 dataset?.let { putExtra(EXTRA_RULE_DATASET, it.name) }
                 batchTarget?.let { putExtra(EXTRA_BATCH_RULE_TARGET, it.name) }
             }

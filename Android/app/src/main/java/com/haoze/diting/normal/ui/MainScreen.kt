@@ -1,5 +1,6 @@
 package com.haoze.diting.normal.ui
 
+import com.haoze.diting.data.RequestStatus
 import com.haoze.diting.ui.*
 import com.haoze.diting.ui.dashboard.*
 import android.widget.Toast
@@ -102,6 +103,7 @@ fun MainScreen(
     onNavigateToDataCleanup: () -> Unit = {},
     onNavigateToAgentApiSettings: () -> Unit = {},
     onNavigateToLogRoute: (String) -> Unit = { onNavigateToLogs() },
+    onNavigateToRequestLogs: (RequestStatus?) -> Unit = {},
     onNavigateToSettingsRoute: (String) -> Unit = { onNavigateToSettings() },
     onNavigateToModeSelection: () -> Unit = {},
     resetToHomeTrigger: Long = 0L,
@@ -289,6 +291,7 @@ fun MainScreen(
                     ModernLogDashboardScreen(
                         onBack = {},
                         onNavigateToDnsLogs = { onNavigateToLogRoute(Routes.DNS_LOGS) },
+                        onNavigateToRequestLogs = onNavigateToRequestLogs,
                         onNavigateToDnsCache = { onNavigateToLogRoute(Routes.DNS_CACHE) },
                         onNavigateToRaceStats = { onNavigateToLogRoute(Routes.RACE_STATS) },
                         onNavigateToBootstrapStats = { onNavigateToLogRoute(Routes.BOOTSTRAP_STATS) },

@@ -15,6 +15,9 @@ interface HttpRequestLogDao {
     @RawQuery
     suspend fun queryList(query: SupportSQLiteQuery): List<HttpRequestLogEntity>
 
+    @RawQuery
+    suspend fun count(query: SupportSQLiteQuery): Int
+
     @Query("SELECT * FROM http_request_log ORDER BY timestamp DESC LIMIT :limit")
     suspend fun recent(limit: Int): List<HttpRequestLogEntity>
 

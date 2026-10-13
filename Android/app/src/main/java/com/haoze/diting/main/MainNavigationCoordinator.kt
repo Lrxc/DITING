@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import com.haoze.diting.LogRouteActivity
 import com.haoze.diting.SettingsRouteActivity
+import com.haoze.diting.data.RequestStatus
 import com.haoze.diting.data.RuleDataset
 import com.haoze.diting.ui.RecentsPrivacyController
 import com.haoze.diting.ui.Routes
@@ -71,8 +72,14 @@ class MainNavigationCoordinator(
         launchLogRoute(Routes.LOG_DASHBOARD, dataset)
     }
 
-    fun launchLogRoute(route: String, dataset: RuleDataset? = null) {
-        activity.startActivity(LogRouteActivity.createIntent(activity, route, dataset = dataset))
+    fun launchLogRoute(
+        route: String,
+        dataset: RuleDataset? = null,
+        requestStatus: RequestStatus? = null
+    ) {
+        activity.startActivity(
+            LogRouteActivity.createIntent(activity, route, requestStatus = requestStatus, dataset = dataset)
+        )
     }
 
     fun launchModeSelection(isFirstLaunch: Boolean = false) {

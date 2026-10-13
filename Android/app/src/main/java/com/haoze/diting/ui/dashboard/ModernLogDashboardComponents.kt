@@ -58,7 +58,7 @@ val DashboardPillShape = SettingsCornerShape
 val DashboardTagShape = SettingsCornerShape
 
 @Composable
-fun DashboardHero(title: String, description: String) {
+fun DashboardHero(title: String, description: String? = null) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -70,12 +70,14 @@ fun DashboardHero(title: String, description: String) {
             fontWeight = FontWeight.Bold,
             fontSize = 24.sp
         )
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = description,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        if (description != null) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
@@ -84,9 +86,12 @@ fun MetricCard(
     label: String,
     value: String,
     valueColor: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null
 ) {
-    DashboardCard(modifier = modifier) {
+    DashboardCard(
+        modifier = if (onClick != null) modifier.clickable(onClick = onClick) else modifier
+    ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
@@ -487,16 +492,19 @@ fun TrafficMonitorDashboardCard(onClick: () -> Unit) {
     val trafficSnapshot by TrafficStatsManager.uiSnapshot.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
 
-    DashboardCard {
+    DashboardCard(
+        modifier = Modifier
+            .clip(DashboardCardShape)
+            .clickable(onClick = onClick)
+    ) {
         SectionTitle(
-            title = localizedText("应用流量统计"),
+            title = localizedText("应用统计"),
             trailing = { PillLink(text = localizedText("详情"), onClick = onClick) }
         )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(SettingsCornerShape)
-                .clickable(onClick = onClick)
                 .padding(vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
