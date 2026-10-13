@@ -96,6 +96,7 @@ export interface FilterStats {
   blockedQueries: number;
   allowedQueries: number;
   blockRate: number;
+  scheduleActive: boolean;
 }
 
 export interface StatusResponse {
@@ -164,85 +165,8 @@ export interface CacheDomainStat {
   lastHitAt: number;
 }
 
-export type QueryStatus = 'allowed' | 'blocked' | 'cached' | 'stale' | 'error';
-
-/** 单条查询历史记录 */
-export interface QueryLogRecord {
-  ts: number;
-  domain: string;
-  qtype?: string;
-  clientIP?: string;
-  clientName?: string;
-  durationMs: number;
-  rcode?: string;
-  status: QueryStatus;
-  cached?: boolean;
-  cacheHit?: string;
-  blocked?: boolean;
-  filterRule?: string;
-  filterReason?: string;
-  protocol?: string;
-  error?: string;
-}
-
-export interface QueryLogSearchQuery {
-  domain?: string;
-  client?: string;
-  qtype?: string;
-  rcode?: string;
-  status?: string;
-  startMs?: number;
-  endMs?: number;
-  limit?: number;
-  offset?: number;
-  /** 内存环不足时是否回退扫描落盘历史，默认 true */
-  includeFile?: boolean;
-}
-
-export interface QueryLogSearchResult {
-  total: number;
-  entries: QueryLogRecord[];
-}
-
-export interface QueryNameCount {
-  name: string;
-  count: number;
-}
-
-export interface QueryHourPoint {
-  hourMs: number;
-  queries: number;
-  blocked: number;
-  cached: number;
-}
-
-export interface QuerySummary {
-  queries: number;
-  blocked: number;
-  cached: number;
-  forwarded: number;
-  errors: number;
-  avgResponseMs: number;
-  cacheHitRate: number;
-}
-
-export interface QueryStatsResponse {
-  summary: QuerySummary;
-  perHour: QueryHourPoint[] | null;
-  topDomains: QueryNameCount[] | null;
-  topBlocked: QueryNameCount[] | null;
-  topClients: QueryNameCount[] | null;
-}
-
-export interface QueryLogConfig {
-  enabled: boolean;
-  maxEntries: number;
-  fileEnabled: boolean;
-  retentionDays: number;
-  logClients: boolean;
-  dataDir: string;
-}
-
+/** 查询历史与统计中心类型（定义见 ./types.querylog） */
+export * from './types.querylog';
 export interface AdapterInfo {
   id: string;
   name: string;
@@ -313,6 +237,36 @@ export interface FilterConfig {
   lists: FilterList[];
   updateIntervalHours: number;
   dataDir?: string;
+  scheduleEnabled: boolean;
+  schedules: BlockingSchedule[];
+}
+
+/** 单条分时拦截（时间计划） */
+export interface BlockingSchedule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  /** "mon".."sun"，空数组表示每天生效 */
+  weekdays: string[];
+  /** "HH:MM" */
+  start: string;
+  /** "HH:MM"，早于 start 表示跨夜窗口 */
+  end: string;
+}
+
+/** 时间计划配置 + 实时生效状态 */
+export interface ScheduleConfigResponse {
+  enabled: boolean;
+  schedules: BlockingSchedule[];
+  /** 当前时刻拦截是否处于生效窗口 */
+  active: boolean;
+  /** 当前命中的计划 ID（无则空串） */
+  activeId: string;
+}
+
+export interface UpdateScheduleRequest {
+  enabled?: boolean;
+  schedules?: BlockingSchedule[];
 }
 
 export interface CheckHostResult {

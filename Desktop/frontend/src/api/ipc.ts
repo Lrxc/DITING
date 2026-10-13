@@ -95,6 +95,8 @@ class IPCService {
   public getCustomRules = () => this.filter.getCustomRules();
   public setCustomRules = (rules: string[]) => this.filter.setCustomRules(rules);
   public checkHost = (domain: string, qtype: string | number = 'A') => this.filter.checkHost(domain, qtype);
+  public getBlockingSchedule = () => this.filter.getSchedule();
+  public configureBlockingSchedule = (req: Parameters<FilterApi['configureSchedule']>[0]) => this.filter.configureSchedule(req);
 
   // --- 自定义重写与客户端管理 ---
   public getRewriteRules = () => this.rewrite.getRewriteRules();

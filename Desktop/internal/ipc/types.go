@@ -335,3 +335,17 @@ type ConfigureHostsRequest struct {
 	CustomFiles   []string `json:"customFiles,omitempty"`
 	TTL           *uint32  `json:"ttl,omitempty"`
 }
+
+// ScheduleConfigResponse 分时拦截（时间计划）配置与实时生效状态
+type ScheduleConfigResponse struct {
+	Enabled   bool                    `json:"enabled"`
+	Schedules []core.BlockingSchedule `json:"schedules"`
+	Active    bool                    `json:"active"`   // 当前时刻拦截是否生效
+	ActiveID  string                  `json:"activeId"` // 当前命中的计划 ID（无则空）
+}
+
+// ConfigureScheduleRequest 分时拦截配置请求
+type ConfigureScheduleRequest struct {
+	Enabled   *bool                    `json:"enabled,omitempty"`
+	Schedules *[]core.BlockingSchedule `json:"schedules,omitempty"`
+}

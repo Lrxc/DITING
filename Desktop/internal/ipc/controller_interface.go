@@ -39,6 +39,8 @@ type ServiceController interface {
 	GetCustomRules(ctx context.Context) ([]string, error)
 	SetCustomRules(ctx context.Context, rules []string) error
 	CheckHostRule(ctx context.Context, domain string, qtype uint16) (*core.CheckHostResult, error)
+	GetBlockingSchedule(ctx context.Context) (*ScheduleConfigResponse, error)
+	ConfigureBlockingSchedule(ctx context.Context, req ConfigureScheduleRequest) error
 	GetLANStatus(ctx context.Context) (*LANStatusResponse, error)
 	ConfigureLAN(ctx context.Context, req ConfigureLANRequest) error
 	ConfigureFirewall(ctx context.Context, enable bool) error

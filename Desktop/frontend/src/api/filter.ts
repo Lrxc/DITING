@@ -1,4 +1,4 @@
-import type { FilterStats, FilterConfig, FilterList, CheckHostResult } from './types';
+import type { FilterStats, FilterConfig, FilterList, CheckHostResult, ScheduleConfigResponse, UpdateScheduleRequest } from './types';
 import type { HttpTransport } from './http';
 
 /** 规则拦截（过滤引擎、订阅列表与自定义规则） */
@@ -69,6 +69,17 @@ export class FilterApi {
     return this.http.request<CheckHostResult>('/api/v1/filter/check', {
       method: 'POST',
       body: JSON.stringify({ domain, qtype: String(qtype) }),
+    });
+  }
+
+  public getSchedule(): Promise<ScheduleConfigResponse> {
+    return this.http.request<ScheduleConfigResponse>('/api/v1/filter/schedule');
+  }
+
+  public async configureSchedule(req: UpdateScheduleRequest): Promise<void> {
+    await this.http.request<void>('/api/v1/filter/schedule', {
+      method: 'POST',
+      body: JSON.stringify(req),
     });
   }
 }

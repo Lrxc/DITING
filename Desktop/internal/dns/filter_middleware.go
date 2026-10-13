@@ -1,4 +1,4 @@
-﻿package dns
+package dns
 
 import (
 	"net"
@@ -22,6 +22,15 @@ func NewFilterMiddleware(engine *core.RuleEngine) Middleware {
 		}
 
 		res := engine.Match(domain, q.Qtype)
+
+		// 分时拦截窗口外：整体放行，标记原因供日志观测
+		if res.Action == "pass" && res.Reason == core.ReasonScheduleInactive {
+			ctx.Set("filter_action", "pass")
+			ctx.Set("filter_blocked", false)
+			ctx.Set("filter_reason", res.Reason)
+			ctx.Set("filter_schedule_inactive", true)
+			return next()
+		}
 
 		if res.Blocked {
 			// 构建阻断响应报文并短路返回

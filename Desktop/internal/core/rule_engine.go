@@ -22,6 +22,9 @@ type RuleEngine struct {
 
 	httpClient *http.Client
 	stopCh     chan struct{}
+
+	// now 时钟注入点，默认 time.Now；测试可借此固定"当前时刻"
+	now func() time.Time
 }
 
 // NewRuleEngine 初始化规则引擎并自动加载构建规则索引
@@ -35,6 +38,7 @@ func NewRuleEngine(cfg FilterConfig) *RuleEngine {
 			Timeout: 15 * time.Second,
 		},
 		stopCh: make(chan struct{}),
+		now:    time.Now,
 	}
 
 	// 确保规则缓存目录存在
@@ -79,29 +83,33 @@ func (e *RuleEngine) UpdateConfig(cfg FilterConfig) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	old := e.cfg
+
 	// 保持未显式更新字段
 	if cfg.CustomRules == nil {
-		cfg.CustomRules = e.cfg.CustomRules
+		cfg.CustomRules = old.CustomRules
 	}
 	if cfg.Lists == nil {
-		cfg.Lists = e.cfg.Lists
+		cfg.Lists = old.Lists
 	}
 	if cfg.DataDir == "" {
-		cfg.DataDir = e.cfg.DataDir
+		cfg.DataDir = old.DataDir
+	}
+	// 深拷贝时间计划，避免编译产物写回引擎在用切片的后备数组
+	if cfg.Schedules == nil {
+		cfg.Schedules = append([]BlockingSchedule(nil), old.Schedules...)
+	} else {
+		cfg.Schedules = append([]BlockingSchedule(nil), cfg.Schedules...)
 	}
 	NormalizeFilterConfig(&cfg)
 
-	// 若仅切换了 Enabled 状态，无需全量从磁盘重构
-	onlyEnabledChanged := (e.cfg.Enabled != cfg.Enabled &&
-		e.cfg.BlockMode == cfg.BlockMode &&
-		e.cfg.BlockingIPv4 == cfg.BlockingIPv4 &&
-		e.cfg.BlockingIPv6 == cfg.BlockingIPv6 &&
-		e.cfg.UpdateIntervalHours == cfg.UpdateIntervalHours &&
-		len(e.cfg.CustomRules) == len(cfg.CustomRules) &&
-		len(e.cfg.Lists) == len(cfg.Lists))
-
 	e.cfg = cfg
-	if onlyEnabledChanged && e.matcher != nil && e.matcher.TotalRules() > 0 {
+
+	// 规则索引仅由自定义规则与订阅列表决定；其余字段（开关、时间计划等）热更新即可
+	matcherInputsUnchanged := e.matcher != nil && e.matcher.TotalRules() > 0 &&
+		len(old.CustomRules) == len(cfg.CustomRules) &&
+		len(old.Lists) == len(cfg.Lists)
+	if matcherInputsUnchanged {
 		return nil
 	}
 
@@ -139,6 +147,12 @@ func (e *RuleEngine) GetStats() FilterStats {
 		totalRules = e.matcher.TotalRules()
 	}
 
+	// 计划关闭或未配置启用计划时恒为生效（避免重入加锁，直接内联判定）
+	scheduleActive := true
+	if e.cfg.ScheduleEnabled && HasEnabledSchedule(e.cfg.Schedules) {
+		scheduleActive = ActiveSchedule(e.cfg.Schedules, e.currentTime())
+	}
+
 	return FilterStats{
 		Enabled:        e.cfg.Enabled,
 		TotalRules:     totalRules,
@@ -147,6 +161,7 @@ func (e *RuleEngine) GetStats() FilterStats {
 		BlockedQueries: blocked,
 		AllowedQueries: allowed,
 		BlockRate:      rate,
+		ScheduleActive: scheduleActive,
 	}
 }
 
@@ -154,6 +169,11 @@ func (e *RuleEngine) GetStats() FilterStats {
 func (e *RuleEngine) Match(domain string, qtype uint16) CheckHostResult {
 	if !e.IsEnabled() {
 		return CheckHostResult{Action: "pass"}
+	}
+
+	// 分时拦截：计划开启且未处于生效窗口时，整体放行且不记入拦截统计
+	if !e.IsBlockingActive() {
+		return CheckHostResult{Action: "pass", Reason: ReasonScheduleInactive}
 	}
 
 	matcher := e.getMatcher()
@@ -171,6 +191,63 @@ func (e *RuleEngine) Match(domain string, qtype uint16) CheckHostResult {
 	}
 
 	return res
+}
+
+// IsBlockingActive 判断当前时刻拦截功能是否处于生效状态。
+//
+// 语义：时间计划开关关闭，或未配置任何启用计划时，拦截恒为常开（等价历史行为）；
+// 开关开启且存在启用计划时，仅命中窗口才拦截。
+func (e *RuleEngine) IsBlockingActive() bool {
+	return e.IsBlockingActiveAt(e.currentTime())
+}
+
+// IsBlockingActiveAt 判断给定时刻拦截功能是否处于生效状态（便于测试注入时钟）。
+func (e *RuleEngine) IsBlockingActiveAt(now time.Time) bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	if !e.cfg.ScheduleEnabled || !HasEnabledSchedule(e.cfg.Schedules) {
+		return true
+	}
+	return ActiveSchedule(e.cfg.Schedules, now)
+}
+
+// CurrentSchedule 返回当前生效的时间计划（无则 nil）。
+func (e *RuleEngine) CurrentSchedule() *BlockingSchedule {
+	return e.CurrentScheduleAt(e.currentTime())
+}
+
+// CurrentScheduleAt 返回给定时刻生效的时间计划（无则 nil）。
+func (e *RuleEngine) CurrentScheduleAt(now time.Time) *BlockingSchedule {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	if !e.cfg.ScheduleEnabled {
+		return nil
+	}
+	return FirstActiveSchedule(e.cfg.Schedules, now)
+}
+
+// SetClock 注入自定义时钟（测试专用），传 nil 恢复 time.Now。
+func (e *RuleEngine) SetClock(now func() time.Time) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if now == nil {
+		e.now = time.Now
+		return
+	}
+	e.now = now
+}
+
+// currentTime 读取注入时钟的当前时刻（锁外调用，仅读函数指针）。
+func (e *RuleEngine) currentTime() time.Time {
+	e.mu.RLock()
+	now := e.now
+	e.mu.RUnlock()
+	if now == nil {
+		now = time.Now
+	}
+	return now()
 }
 
 // CheckHost 提供外部纯只读检测（不增加正式查询指标计数）

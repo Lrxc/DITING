@@ -1,6 +1,8 @@
-﻿package core
+package core
 
 import (
+	"log"
+
 	"github.com/haoze-evolluling/diting/desktop/internal/platform"
 )
 
@@ -42,6 +44,10 @@ type FilterConfig struct {
 	Lists               []FilterList `json:"lists"`        // 订阅规则列表
 	UpdateIntervalHours int          `json:"updateIntervalHours"`
 	DataDir             string       `json:"dataDir"` // 规则源 .txt 缓存目录
+
+	// 分时拦截（时间计划）：开启后仅在命中计划的窗口内执行拦截
+	ScheduleEnabled bool               `json:"scheduleEnabled"`
+	Schedules       []BlockingSchedule `json:"schedules"`
 }
 
 // DefaultFilterConfig 生成默认过滤配置
@@ -55,6 +61,8 @@ func DefaultFilterConfig() FilterConfig {
 		Lists:               defaultSubscriptionLists(),
 		UpdateIntervalHours: 24,
 		DataDir:             platform.DefaultFilterDir(),
+		ScheduleEnabled:     false,
+		Schedules:           []BlockingSchedule{},
 	}
 }
 
@@ -98,6 +106,20 @@ func NormalizeFilterConfig(cfg *FilterConfig) {
 	if cfg.Lists == nil {
 		cfg.Lists = defaultSubscriptionLists()
 	}
+	// 编译时间计划，丢弃非法条目并记录日志（坏配置不阻断拦截常开语义）
+	if cfg.Schedules == nil {
+		cfg.Schedules = []BlockingSchedule{}
+	} else {
+		valid := cfg.Schedules[:0]
+		for i := range cfg.Schedules {
+			if err := NormalizeSchedule(&cfg.Schedules[i]); err != nil {
+				log.Printf("[FilterConfig] 丢弃非法时间计划 (%s): %v", cfg.Schedules[i].Name, err)
+				continue
+			}
+			valid = append(valid, cfg.Schedules[i])
+		}
+		cfg.Schedules = valid
+	}
 }
 
 // FilterStats 规则引擎运行时统计指标
@@ -109,6 +131,8 @@ type FilterStats struct {
 	BlockedQueries uint64  `json:"blockedQueries"`
 	AllowedQueries uint64  `json:"allowedQueries"`
 	BlockRate      float64 `json:"blockRate"`
+	// ScheduleActive 当前时刻拦截是否处于生效窗口（计划关闭时恒为 true）
+	ScheduleActive bool `json:"scheduleActive"`
 }
 
 // CheckHostResult 域名过滤检测结果

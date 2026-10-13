@@ -21,6 +21,7 @@ const stats = ref<FilterStats>({
   blockedQueries: 0,
   allowedQueries: 0,
   blockRate: 0,
+  scheduleActive: true,
 });
 
 const config = ref<FilterConfig>({
@@ -31,6 +32,8 @@ const config = ref<FilterConfig>({
   customRules: [],
   lists: [],
   updateIntervalHours: 24,
+  scheduleEnabled: false,
+  schedules: [],
 });
 
 const listCount = ref(0);

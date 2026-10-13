@@ -92,6 +92,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/v1/filter/lists/refresh", s.withAuth(s.handleFilterListRefresh))
 	mux.HandleFunc("/api/v1/filter/rules", s.withAuth(s.handleFilterRules))
 	mux.HandleFunc("/api/v1/filter/check", s.withAuth(s.handleFilterCheck))
+	mux.HandleFunc("/api/v1/filter/schedule", s.withAuth(s.handleFilterSchedule))
 	mux.HandleFunc("/api/v1/dns/lan", s.withAuth(s.handleLANStatus))
 	mux.HandleFunc("/api/v1/dns/lan/configure", s.withAuth(s.handleLANConfigure))
 	mux.HandleFunc("/api/v1/dns/lan/firewall", s.withAuth(s.handleFirewallConfigure))

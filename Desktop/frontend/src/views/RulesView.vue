@@ -4,6 +4,7 @@ import SegmentedTabs from '../components/ui/SegmentedTabs.vue';
 import RulesPanel from '../components/rules/RulesPanel.vue';
 import RewritePanel from '../components/rules/RewritePanel.vue';
 import PrivacyPanel from '../components/rules/PrivacyPanel.vue';
+import SchedulePanel from '../components/rules/SchedulePanel.vue';
 import { SUB_TABS } from '../constants/navigation';
 import { useSubTab } from '../composables/useSubTab';
 
@@ -24,6 +25,7 @@ const active = useSubTab(segments, () => props.sub, 'lists');
 
     <RewritePanel v-if="active === 'rewrite'" />
     <PrivacyPanel v-else-if="active === 'privacy'" />
+    <SchedulePanel v-else-if="active === 'schedule'" />
     <RulesPanel v-else v-model:sub="active" />
   </div>
 </template>
