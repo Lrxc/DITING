@@ -25,6 +25,7 @@ const stats = ref<CacheStats>({
   entryCount: 0,
   maxEntries: 4096,
   evictionCount: 0,
+  prefetchCount: 0,
 });
 
 const config = ref<CacheConfig>({
@@ -40,6 +41,9 @@ const config = ref<CacheConfig>({
   negativeTtlEnabled: true,
   negativeTtlSeconds: 30,
   optimistic: true,
+  prefetchEnabled: false,
+  prefetchThreshold: 5,
+  prefetchBeforeExpiryMs: 30000,
 });
 
 const entries = ref<CacheEntryItem[]>([]);
@@ -274,6 +278,12 @@ usePoller(pollMetrics, 4000);
             label="无效网址拦截"
             :value="stats.negativeHits.toLocaleString()"
             valueClass="text-[18px] font-bold text-accent-seal font-mono"
+          />
+
+          <CardTile
+            label="热点预取刷新"
+            :value="stats.prefetchCount.toLocaleString()"
+            valueClass="text-[18px] font-bold text-brand-primary font-mono"
           />
         </div>
 

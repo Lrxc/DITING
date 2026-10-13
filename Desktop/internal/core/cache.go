@@ -19,11 +19,15 @@ type DNSCache struct {
 
 	flight *singleFlightGroup
 
-	totalHits    atomic.Uint64
-	totalMisses  atomic.Uint64
-	staleHits    atomic.Uint64
-	negativeHits atomic.Uint64
-	evictions    atomic.Uint64
+	prefetcherMu sync.RWMutex
+	prefetcher   Resolver
+
+	totalHits     atomic.Uint64
+	totalMisses   atomic.Uint64
+	staleHits     atomic.Uint64
+	negativeHits  atomic.Uint64
+	evictions     atomic.Uint64
+	prefetchCount atomic.Uint64
 
 	stopCleaner chan struct{}
 	closed      atomic.Bool

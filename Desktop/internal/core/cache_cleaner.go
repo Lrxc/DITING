@@ -12,6 +12,7 @@ func (c *DNSCache) startCleaner() {
 				return
 			case now := <-ticker.C:
 				c.cleanupExpired(now)
+				c.prefetchHotEntries(now)
 			}
 		}
 	}()

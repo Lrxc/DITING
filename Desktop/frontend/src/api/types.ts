@@ -85,6 +85,7 @@ export interface CacheStats {
   entryCount: number;
   maxEntries: number;
   evictionCount: number;
+  prefetchCount: number;
 }
 
 export interface FilterStats {
@@ -131,6 +132,9 @@ export interface CacheConfig {
   negativeTtlEnabled: boolean;
   negativeTtlSeconds: number;
   optimistic: boolean;
+  prefetchEnabled: boolean;
+  prefetchThreshold: number;
+  prefetchBeforeExpiryMs: number;
 }
 
 export interface CacheEntryItem {

@@ -31,6 +31,22 @@ func NormalizeCacheConfig(cfg *CacheConfig) {
 	if cfg.Mode == "" {
 		cfg.Mode = "limit_max_ttl"
 	}
+	// 主动预取参数钳制：门槛至少 1，提前量下限 1s、上限 1h
+	if cfg.PrefetchThreshold <= 0 {
+		cfg.PrefetchThreshold = defaultPrefetchThreshold
+	}
+	if cfg.PrefetchThreshold > 100000 {
+		cfg.PrefetchThreshold = 100000
+	}
+	if cfg.PrefetchBeforeExpiryMs <= 0 {
+		cfg.PrefetchBeforeExpiryMs = defaultPrefetchBeforeMs
+	}
+	if cfg.PrefetchBeforeExpiryMs < 1000 {
+		cfg.PrefetchBeforeExpiryMs = 1000
+	}
+	if cfg.PrefetchBeforeExpiryMs > maxPrefetchBeforeMs {
+		cfg.PrefetchBeforeExpiryMs = maxPrefetchBeforeMs
+	}
 }
 
 // CacheKey 生成标准化缓存键 (domain:qtype:qclass)

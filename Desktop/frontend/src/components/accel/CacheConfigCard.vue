@@ -110,6 +110,39 @@ const emit = defineEmits<{
           class="shrink-0"
         />
       </div>
+
+      <!-- 热点域名主动预取 -->
+      <div class="app-card-sub p-3 space-y-2.5">
+        <div class="flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <span class="text-[12px] font-bold text-text-main block">热点域名主动预取</span>
+            <p class="text-[11px] text-text-muted">在常用域名记录到期前提前回源刷新，避免首次访问的等待</p>
+          </div>
+          <md-switch
+            :selected="config.prefetchEnabled"
+            @change="config.prefetchEnabled = extractSwitchValue($event)"
+            class="shrink-0"
+          />
+        </div>
+
+        <div v-if="config.prefetchEnabled" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 border-t border-surface-border-sub/60">
+          <md-outlined-text-field
+            label="命中次数门槛"
+            type="number"
+            supporting-text="被访问达到该次数的域名才会预取"
+            :value="String(config.prefetchThreshold)"
+            @input="config.prefetchThreshold = Number(($event.target as any).value)"
+          ></md-outlined-text-field>
+
+          <md-outlined-text-field
+            label="剩余有效期阈值 (毫秒)"
+            type="number"
+            supporting-text="剩余有效期低于该值时触发刷新"
+            :value="String(config.prefetchBeforeExpiryMs)"
+            @input="config.prefetchBeforeExpiryMs = Number(($event.target as any).value)"
+          ></md-outlined-text-field>
+        </div>
+      </div>
     </div>
   </AppCard>
 </template>

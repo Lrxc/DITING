@@ -35,6 +35,7 @@ func (c *DNSCache) Stats() CacheStats {
 		EntryCount:    count,
 		MaxEntries:    c.maxEntries,
 		EvictionCount: c.evictions.Load(),
+		PrefetchCount: c.prefetchCount.Load(),
 	}
 }
 

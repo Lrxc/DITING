@@ -30,6 +30,11 @@ type CacheConfig struct {
 	NegativeTTLEnabled   bool   `json:"negativeTtlEnabled"`
 	NegativeTTLSeconds   int64  `json:"negativeTtlSeconds"`
 	Optimistic           bool   `json:"optimistic"` // Optimistic Stale-While-Revalidate (SWR)
+
+	// 热点域名主动预取：在条目临近过期时后台回源刷新，避免热点到期后的首请求延迟
+	PrefetchEnabled        bool  `json:"prefetchEnabled"`
+	PrefetchThreshold      int   `json:"prefetchThreshold"`      // 命中次数门槛，默认 5
+	PrefetchBeforeExpiryMs int64 `json:"prefetchBeforeExpiryMs"` // 剩余有效期阈值（毫秒），默认 30000
 }
 
 // DefaultCacheConfig 返回标准默认缓存配置
@@ -47,6 +52,10 @@ func DefaultCacheConfig() CacheConfig {
 		NegativeTTLEnabled:   true,
 		NegativeTTLSeconds:   30,
 		Optimistic:           true,
+
+		PrefetchEnabled:        false,
+		PrefetchThreshold:      defaultPrefetchThreshold,
+		PrefetchBeforeExpiryMs: defaultPrefetchBeforeMs,
 	}
 }
 
@@ -61,6 +70,7 @@ type CacheStats struct {
 	EntryCount    int     `json:"entryCount"`
 	MaxEntries    int     `json:"maxEntries"`
 	EvictionCount uint64  `json:"evictionCount"`
+	PrefetchCount uint64  `json:"prefetchCount"`
 }
 
 // CacheEntryItem 供 IPC 传输与 UI 呈现的单个缓存条目详情
@@ -106,6 +116,9 @@ type cacheEntry struct {
 	hitCount  atomic.Uint64
 	lastHitAt atomic.Int64
 	elem      *list.Element
+
+	// lastPrefetchAt 最近一次主动预取回源时间（Unix 纳秒），用于抑制高频重复刷新
+	lastPrefetchAt atomic.Int64
 }
 
 // cacheShard 内部独立分片

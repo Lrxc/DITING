@@ -128,6 +128,7 @@ func (p *program) run() error {
 	}
 	p.resolver = res
 	p.cache = core.NewDNSCache(cfg.Cache)
+	p.cache.SetPrefetcher(res)
 	p.queryLog = querylog.New(cfg.QueryLog)
 	p.filterEngine = core.NewRuleEngine(cfg.Filter)
 
