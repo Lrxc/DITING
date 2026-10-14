@@ -15,6 +15,9 @@ interface HttpRequestLogDao {
     @RawQuery
     suspend fun queryList(query: SupportSQLiteQuery): List<HttpRequestLogEntity>
 
+    @RawQuery
+    suspend fun count(query: SupportSQLiteQuery): Int
+
     @Query("SELECT * FROM http_request_log ORDER BY timestamp DESC LIMIT :limit")
     suspend fun recent(limit: Int): List<HttpRequestLogEntity>
 
@@ -36,6 +39,26 @@ interface HttpRequestLogDao {
         since: Long,
         blockedOutcome: String
     ): List<SubscriptionInterceptionStatRow>
+
+    @Query("""
+        SELECT packageName AS packageName, COUNT(*) AS hits
+        FROM http_request_log
+        WHERE timestamp >= :since
+            AND outcome = :blockedOutcome
+        GROUP BY packageName
+    """)
+    suspend fun blockedCountByPackage(
+        since: Long,
+        blockedOutcome: String
+    ): List<PackageBlockedStatRow>
+
+    @Query("""
+        SELECT packageName AS packageName, COUNT(*) AS hits
+        FROM http_request_log
+        WHERE timestamp >= :since
+        GROUP BY packageName
+    """)
+    suspend fun requestCountByPackage(since: Long): List<PackageBlockedStatRow>
 
     @Query("DELETE FROM http_request_log WHERE timestamp < :before")
     suspend fun deleteBefore(before: Long)

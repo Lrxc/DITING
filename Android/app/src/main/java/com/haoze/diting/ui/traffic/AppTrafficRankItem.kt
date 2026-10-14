@@ -4,7 +4,6 @@ import com.haoze.diting.util.formatBytes
 import com.haoze.diting.util.formatSpeed
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,29 +23,35 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.graphics.drawable.toBitmap
+import com.haoze.diting.ui.components.AppIconImage
 import com.haoze.diting.ui.components.SettingsCornerShape
+import com.haoze.diting.ui.dashboard.formatCount
+
+/** Green for the request total shown beside the blocked count; no theme role fits it. */
+private val BlockedTotalColor = Color(0xFF4CAF50)
 
 @Composable
 internal fun AppTrafficRankItem(
     item: AppTrafficUiItem,
+    sortMode: TrafficSortMode,
     onClick: () -> Unit
 ) {
-    val context = LocalContext.current
     val colors = MaterialTheme.colorScheme
     val animatedProgress by animateFloatAsState(targetValue = item.percentage, label = "progress")
 
-    val appIcon = remember(item.packageName) {
-        runCatching { context.packageManager.getApplicationIcon(item.packageName) }.getOrNull()
+    // The headline value follows the active sort mode so it matches what the bar and order show.
+    // The blocked mode renders its own two-tone ratio instead of a single string.
+    val headlineText = when (sortMode) {
+        TrafficSortMode.TOTAL_TRAFFIC -> formatBytes(item.totalBytes)
+        TrafficSortMode.REALTIME_SPEED -> formatSpeed(item.currentTotalSpeedBps)
+        TrafficSortMode.BLOCKED -> null
     }
 
     Card(
@@ -68,29 +73,26 @@ internal fun AppTrafficRankItem(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                if (appIcon != null) {
-                    val bitmap = remember(appIcon) { appIcon.toBitmap(96, 96).asImageBitmap() }
-                    Image(
-                        bitmap = bitmap,
-                        contentDescription = null,
-                        modifier = Modifier.size(36.dp)
-                    )
-                } else {
-                    Surface(
-                        color = colors.primary.copy(alpha = 0.15f),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = item.appName.take(1).uppercase(),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.primary
-                            )
+                AppIconImage(
+                    packageName = item.packageName,
+                    size = 36.dp,
+                    fallback = {
+                        Surface(
+                            color = colors.primary.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = item.appName.take(1).uppercase(),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.primary
+                                )
+                            }
                         }
                     }
-                }
+                )
 
                 Column(
                     modifier = Modifier.weight(1f),
@@ -113,18 +115,39 @@ internal fun AppTrafficRankItem(
                 }
 
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = formatBytes(item.totalBytes),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.onSurface
-                    )
-                    if (item.currentTotalSpeedBps > 0) {
+                    if (sortMode == TrafficSortMode.BLOCKED) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "block ",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.error
+                            )
+                            Text(
+                                text = formatCount(item.blockedCount),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.error
+                            )
+                            Text(
+                                text = "/",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.onSurfaceVariant
+                            )
+                            Text(
+                                text = formatCount(item.totalRequestCount),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = BlockedTotalColor
+                            )
+                        }
+                    } else if (headlineText != null) {
                         Text(
-                            text = "↓ " + formatSpeed(item.currentRxSpeedBps),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = colors.primary,
-                            fontWeight = FontWeight.SemiBold
+                            text = headlineText,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.onSurface
                         )
                     }
                 }
@@ -140,23 +163,6 @@ internal fun AppTrafficRankItem(
                 trackColor = colors.surfaceVariant
             )
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "↓ " + formatBytes(item.rxBytes) + "   ↑ " + formatBytes(item.txBytes),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = colors.onSurfaceVariant
-                )
-                if (item.currentTxSpeedBps > 0) {
-                    Text(
-                        text = "↑ " + formatSpeed(item.currentTxSpeedBps),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colors.tertiary
-                    )
-                }
-            }
         }
     }
 }

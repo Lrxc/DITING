@@ -62,6 +62,7 @@ fun HttpInspectionAppsScreen(onBack: () -> Unit) {
         showSelectionActions = true,
         isDirty = selectedPackages != initialPackages,
         onSave = { saveHttpInspectionApps() },
-        onBack = onBack
+        onBack = onBack,
+        onReload = appListAccess.reload
     )
 }

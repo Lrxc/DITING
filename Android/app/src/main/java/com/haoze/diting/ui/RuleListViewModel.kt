@@ -14,6 +14,8 @@ import com.haoze.diting.core.rule.BlockListManager
 import com.haoze.diting.core.rule.RewriteRuleManager
 import com.haoze.diting.core.rule.GoUrlRuleManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -49,6 +51,9 @@ class RuleListViewModel(
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+    // Cancels the in-flight load so a slow earlier query cannot overwrite a newer result.
+    private var loadJob: Job? = null
+    private var searchJob: Job? = null
 
     private val _sourceFilter = MutableStateFlow<RuleSourceFilter>(RuleSourceFilter.All)
     val sourceFilter: StateFlow<RuleSourceFilter> = _sourceFilter.asStateFlow()
@@ -86,7 +91,8 @@ class RuleListViewModel(
     }
 
     fun loadPage(page: Int) {
-        viewModelScope.launch(Dispatchers.IO) {
+        loadJob?.cancel()
+        loadJob =         viewModelScope.launch(Dispatchers.IO) {
             val query = _searchQuery.value.trim()
             val offset = (page - 1) * pageSize
             val rules = loadRules(query, pageSize, offset)
@@ -103,7 +109,12 @@ class RuleListViewModel(
 
     fun onSearchQueryChange(query: String) {
         _searchQuery.value = query
-        loadPage(1)
+        // Debounced: one query per pause instead of one per keystroke.
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            delay(250)
+            loadPage(1)
+        }
     }
 
     fun selectSourceFilter(filter: RuleSourceFilter) {

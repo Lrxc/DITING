@@ -34,44 +34,18 @@ class RequestLogRepository(
         runCatching {
             onFlushRequested?.invoke() ?: activeFlusher?.invoke()
         }
-        val trimmed = query.trim()
 
         val dns = async {
             if (source == RequestSource.HTTPS) {
                 emptyList()
             } else {
-                val sql = StringBuilder("SELECT * FROM dns_log WHERE 1=1")
-                val args = mutableListOf<Any>()
-
-                if (trimmed.isNotEmpty()) {
-                    sql.append(" AND (queryName LIKE ? OR packageName LIKE ? OR message LIKE ?)")
-                    val pattern = "%${trimmed.lowercase()}%"
-                    args.add(pattern)
-                    args.add(pattern)
-                    args.add(pattern)
-                }
-
-                when (status) {
-                    RequestStatus.ALL -> Unit
-                    RequestStatus.PASSED -> {
-                        sql.append(" AND result = 'PASSED' AND queryType > 0 AND queryName NOT LIKE 'TCP %' AND queryName NOT LIKE 'UDP %' AND (message IS NULL OR (message NOT LIKE '%blocked_by=connection%' AND message NOT LIKE '%blocked_by=rewrite=%' AND message NOT LIKE '%matched rewrite rule%' AND message NOT LIKE '%复写%' AND message NOT LIKE '%覆写%'))")
-                    }
-                    RequestStatus.REWRITTEN -> {
-                        sql.append(" AND (result = 'REWRITTEN' OR message LIKE '%blocked_by=rewrite=%' OR message LIKE '%matched rewrite rule%' OR message LIKE '%复写%' OR message LIKE '%覆写%') AND queryType > 0 AND queryName NOT LIKE 'TCP %' AND queryName NOT LIKE 'UDP %' AND (message IS NULL OR message NOT LIKE '%blocked_by=connection%')")
-                    }
-                    RequestStatus.BLOCKED -> {
-                        sql.append(" AND (result = 'BLOCKED' OR message LIKE '%blocked_by=firewall:%') AND (message IS NULL OR (message NOT LIKE '%blocked_by=rewrite=%' AND message NOT LIKE '%matched rewrite rule%' AND message NOT LIKE '%复写%' AND message NOT LIKE '%覆写%'))")
-                    }
-                    RequestStatus.ERROR -> {
-                        sql.append(" AND result = 'ERROR' AND queryType > 0 AND queryName NOT LIKE 'TCP %' AND queryName NOT LIKE 'UDP %' AND (message IS NULL OR (message NOT LIKE '%blocked_by=connection%' AND message NOT LIKE '%blocked_by=rewrite=%' AND message NOT LIKE '%matched rewrite rule%' AND message NOT LIKE '%复写%' AND message NOT LIKE '%覆写%'))")
-                    }
-                    RequestStatus.BYPASSED -> {
-                        sql.append(" AND (queryType = 0 OR queryName LIKE 'TCP %' OR queryName LIKE 'UDP %' OR message LIKE '%blocked_by=connection%') AND (message IS NULL OR message NOT LIKE '%blocked_by=firewall:%')")
-                    }
-                }
-
-                sql.append(" ORDER BY timestamp DESC LIMIT $limit")
-                dnsDao.queryList(SimpleSQLiteQuery(sql.toString(), args.toTypedArray()))
+                val filter = dnsFilter(status, query)
+                dnsDao.queryList(
+                    SimpleSQLiteQuery(
+                        "SELECT * FROM dns_log WHERE 1=1${filter.sql} ORDER BY timestamp DESC LIMIT $limit",
+                        filter.args
+                    )
+                )
             }
         }
 
@@ -80,43 +54,123 @@ class RequestLogRepository(
             if (source == RequestSource.DNS || dao == null) {
                 emptyList()
             } else {
-                val sql = StringBuilder("SELECT * FROM http_request_log WHERE 1=1")
-                val args = mutableListOf<Any>()
-
-                if (trimmed.isNotEmpty()) {
-                    sql.append(" AND (authority LIKE ? OR packageName LIKE ? OR matchedRule LIKE ?)")
-                    val pattern = "%${trimmed.lowercase()}%"
-                    args.add(pattern)
-                    args.add(pattern)
-                    args.add(pattern)
-                }
-
-                when (status) {
-                    RequestStatus.ALL -> Unit
-                    RequestStatus.PASSED -> {
-                        sql.append(" AND outcome = 'allowed'")
-                    }
-                    RequestStatus.REWRITTEN -> {
-                        sql.append(" AND outcome = 'rewritten'")
-                    }
-                    RequestStatus.BLOCKED -> {
-                        sql.append(" AND outcome IN ('blocked', 'invalid')")
-                    }
-                    RequestStatus.ERROR -> {
-                        sql.append(" AND outcome NOT IN ('allowed', 'rewritten', 'blocked', 'invalid', 'passthrough', 'bypassed', 'unsupported_protocol', 'resource_bypass')")
-                    }
-                    RequestStatus.BYPASSED -> {
-                        sql.append(" AND outcome IN ('passthrough', 'bypassed', 'unsupported_protocol', 'resource_bypass')")
-                    }
-                }
-
-                sql.append(" ORDER BY timestamp DESC LIMIT $limit")
-                dao.queryList(SimpleSQLiteQuery(sql.toString(), args.toTypedArray()))
+                val filter = httpFilter(status, query)
+                dao.queryList(
+                    SimpleSQLiteQuery(
+                        "SELECT * FROM http_request_log WHERE 1=1${filter.sql} ORDER BY timestamp DESC LIMIT $limit",
+                        filter.args
+                    )
+                )
             }
         }
 
         val dnsRows = dns.await()
         val httpRows = http.await()
         RequestLogBatch(dnsRows, httpRows, dnsRows.size >= limit || httpRows.size >= limit)
+    }
+
+    /**
+     * Counts the records matching the same filters as [load], so the UI can show
+     * "loaded x / total y" instead of leaving the user guessing whether more exist.
+     */
+    suspend fun count(
+        source: RequestSource = RequestSource.ALL,
+        status: RequestStatus = RequestStatus.ALL,
+        query: String = ""
+    ): Int = coroutineScope {
+        val dns = async {
+            if (source == RequestSource.HTTPS) {
+                0
+            } else {
+                val filter = dnsFilter(status, query)
+                dnsDao.count(
+                    SimpleSQLiteQuery("SELECT COUNT(*) FROM dns_log WHERE 1=1${filter.sql}", filter.args)
+                )
+            }
+        }
+        val http = async {
+            val dao = httpDao
+            if (source == RequestSource.DNS || dao == null) {
+                0
+            } else {
+                val filter = httpFilter(status, query)
+                dao.count(
+                    SimpleSQLiteQuery("SELECT COUNT(*) FROM http_request_log WHERE 1=1${filter.sql}", filter.args)
+                )
+            }
+        }
+        dns.await() + http.await()
+    }
+
+    private class SqlFilter(val sql: String, val args: Array<Any>)
+
+    private fun dnsFilter(status: RequestStatus, query: String): SqlFilter {
+        val sql = StringBuilder()
+        val args = mutableListOf<Any>()
+        val trimmed = query.trim()
+
+        if (trimmed.isNotEmpty()) {
+            sql.append(" AND (queryName LIKE ? OR packageName LIKE ? OR message LIKE ?)")
+            val pattern = "%${trimmed.lowercase()}%"
+            args.add(pattern)
+            args.add(pattern)
+            args.add(pattern)
+        }
+
+        when (status) {
+            RequestStatus.ALL -> Unit
+            RequestStatus.PASSED -> {
+                sql.append(" AND result = 'PASSED' AND queryType > 0 AND queryName NOT LIKE 'TCP %' AND queryName NOT LIKE 'UDP %' AND (message IS NULL OR (message NOT LIKE '%blocked_by=connection%' AND message NOT LIKE '%blocked_by=rewrite=%' AND message NOT LIKE '%matched rewrite rule%' AND message NOT LIKE '%复写%' AND message NOT LIKE '%覆写%'))")
+            }
+            RequestStatus.REWRITTEN -> {
+                sql.append(" AND (result = 'REWRITTEN' OR message LIKE '%blocked_by=rewrite=%' OR message LIKE '%matched rewrite rule%' OR message LIKE '%复写%' OR message LIKE '%覆写%') AND queryType > 0 AND queryName NOT LIKE 'TCP %' AND queryName NOT LIKE 'UDP %' AND (message IS NULL OR message NOT LIKE '%blocked_by=connection%')")
+            }
+            RequestStatus.BLOCKED -> {
+                sql.append(" AND (result = 'BLOCKED' OR message LIKE '%blocked_by=firewall:%') AND (message IS NULL OR (message NOT LIKE '%blocked_by=rewrite=%' AND message NOT LIKE '%matched rewrite rule%' AND message NOT LIKE '%复写%' AND message NOT LIKE '%覆写%'))")
+            }
+            RequestStatus.ERROR -> {
+                sql.append(" AND result = 'ERROR' AND queryType > 0 AND queryName NOT LIKE 'TCP %' AND queryName NOT LIKE 'UDP %' AND (message IS NULL OR (message NOT LIKE '%blocked_by=connection%' AND message NOT LIKE '%blocked_by=rewrite=%' AND message NOT LIKE '%matched rewrite rule%' AND message NOT LIKE '%复写%' AND message NOT LIKE '%覆写%'))")
+            }
+            RequestStatus.BYPASSED -> {
+                sql.append(" AND (queryType = 0 OR queryName LIKE 'TCP %' OR queryName LIKE 'UDP %' OR message LIKE '%blocked_by=connection%') AND (message IS NULL OR message NOT LIKE '%blocked_by=firewall:%')")
+            }
+        }
+
+        return SqlFilter(sql.toString(), args.toTypedArray())
+    }
+
+    private fun httpFilter(status: RequestStatus, query: String): SqlFilter {
+        val sql = StringBuilder()
+        val args = mutableListOf<Any>()
+        val trimmed = query.trim()
+
+        if (trimmed.isNotEmpty()) {
+            sql.append(" AND (authority LIKE ? OR packageName LIKE ? OR matchedRule LIKE ?)")
+            val pattern = "%${trimmed.lowercase()}%"
+            args.add(pattern)
+            args.add(pattern)
+            args.add(pattern)
+        }
+
+        when (status) {
+            RequestStatus.ALL -> Unit
+            RequestStatus.PASSED -> {
+                sql.append(" AND outcome = 'allowed'")
+            }
+            RequestStatus.REWRITTEN -> {
+                sql.append(" AND outcome = 'rewritten'")
+            }
+            RequestStatus.BLOCKED -> {
+                sql.append(" AND outcome IN ('blocked', 'invalid')")
+            }
+            RequestStatus.ERROR -> {
+                sql.append(" AND outcome NOT IN ('allowed', 'rewritten', 'blocked', 'invalid', 'passthrough', 'bypassed', 'unsupported_protocol', 'resource_bypass')")
+            }
+            RequestStatus.BYPASSED -> {
+                sql.append(" AND outcome IN ('passthrough', 'bypassed', 'unsupported_protocol', 'resource_bypass')")
+            }
+        }
+
+        return SqlFilter(sql.toString(), args.toTypedArray())
     }
 }

@@ -8,7 +8,6 @@ import com.haoze.diting.data.RuleDataset
 import com.haoze.diting.data.RuleDatabases
 import com.haoze.diting.data.entity.AllowRuleEntity
 import com.haoze.diting.data.entity.CosmeticRuleEntity
-import com.haoze.diting.data.entity.GoUrlRuleEntity
 import com.haoze.diting.data.entity.GoUrlRuleKind
 import com.haoze.diting.data.entity.RuleScope
 import com.haoze.diting.ui.settings.RuleSettingsAccess
@@ -18,6 +17,8 @@ import com.haoze.diting.core.rule.CosmeticRuleManager
 import com.haoze.diting.core.rule.DefaultWhitelistSeeder
 import com.haoze.diting.core.rule.GoUrlRuleManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -57,6 +58,9 @@ class WhitelistViewModel(
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+    // Cancels the in-flight load so a slow earlier query cannot overwrite a newer result.
+    private var loadJob: Job? = null
+    private var searchJob: Job? = null
 
     private val _filter = MutableStateFlow(WhitelistFilter.ALL)
     val filter: StateFlow<WhitelistFilter> = _filter.asStateFlow()
@@ -94,7 +98,12 @@ class WhitelistViewModel(
 
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
-        loadPage(1)
+        // Debounced: one query per pause instead of one per keystroke.
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            delay(250)
+            loadPage(1)
+        }
     }
 
     fun refreshAll() {
@@ -136,7 +145,8 @@ class WhitelistViewModel(
     }
 
     fun loadPage(page: Int) {
-        viewModelScope.launch(Dispatchers.IO) {
+        loadJob?.cancel()
+        loadJob =         viewModelScope.launch(Dispatchers.IO) {
             val query = _searchQuery.value.trim().lowercase()
             val currentFilter = _filter.value
             val domainRulesEnabled = settings.isMasterEnabled(getApplication())

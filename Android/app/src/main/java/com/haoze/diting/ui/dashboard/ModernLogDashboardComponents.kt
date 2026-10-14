@@ -27,6 +27,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,6 +37,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -44,6 +46,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.haoze.diting.ui.DashboardCacheEntryItem
 import com.haoze.diting.ui.DashboardDailyStats
 import com.haoze.diting.ui.DashboardRequestLogItem
+import com.haoze.diting.ui.components.AppIconImage
 import com.haoze.diting.ui.components.SettingsCornerShape
 import com.haoze.diting.ui.localizedText
 import com.haoze.diting.core.traffic.TrafficStatsManager
@@ -57,7 +60,7 @@ val DashboardPillShape = SettingsCornerShape
 val DashboardTagShape = SettingsCornerShape
 
 @Composable
-fun DashboardHero(title: String, description: String) {
+fun DashboardHero(title: String, description: String? = null) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -69,12 +72,14 @@ fun DashboardHero(title: String, description: String) {
             fontWeight = FontWeight.Bold,
             fontSize = 24.sp
         )
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = description,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        if (description != null) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
@@ -83,9 +88,12 @@ fun MetricCard(
     label: String,
     value: String,
     valueColor: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null
 ) {
-    DashboardCard(modifier = modifier) {
+    DashboardCard(
+        modifier = if (onClick != null) modifier.clickable(onClick = onClick) else modifier
+    ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
@@ -361,7 +369,8 @@ fun RequestLogRow(item: DashboardRequestLogItem, compactTag: Boolean = false) {
             "${formatClockTime(item.timestamp)} · ${item.source} · ${item.meta}"
         }),
         tag = localizedText(item.resultLabel),
-        tagColor = tagColor
+        tagColor = tagColor,
+        packageName = item.packageName
     )
 }
 
@@ -380,7 +389,8 @@ fun DashboardListRow(
     title: String,
     subtitle: String,
     tag: String,
-    tagColor: Color
+    tagColor: Color,
+    packageName: String? = null
 ) {
     Row(
         modifier = Modifier
@@ -389,6 +399,7 @@ fun DashboardListRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        AppIconImage(packageName = packageName, size = 24.dp)
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
@@ -482,17 +493,27 @@ fun ErrorBanner(message: String) {
 fun TrafficMonitorDashboardCard(onClick: () -> Unit) {
     val trafficSnapshot by TrafficStatsManager.uiSnapshot.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
+    // Today's totals live in process memory and are restored from the DB by the VPN service.
+    // If this card renders first (app restarted, service not up yet) ask for that restore now,
+    // otherwise it would keep showing 0 until the service restarts.
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        TrafficStatsManager.ensureTodayLoaded(context)
+    }
 
-    DashboardCard {
+    DashboardCard(
+        modifier = Modifier
+            .clip(DashboardCardShape)
+            .clickable(onClick = onClick)
+    ) {
         SectionTitle(
-            title = localizedText("应用流量统计"),
+            title = localizedText("应用统计"),
             trailing = { PillLink(text = localizedText("详情"), onClick = onClick) }
         )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(SettingsCornerShape)
-                .clickable(onClick = onClick)
                 .padding(vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically

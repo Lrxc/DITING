@@ -18,6 +18,19 @@ data class RequestLogItem(
     val subtitle: String,
     val detail: String?,
     val domain: String?,
+    val packageName: String? = null,
+    /** Resolved application label for [packageName], when it could be resolved. */
+    val appName: String? = null,
+    /** DNS record type, transport protocol, or HTTP protocol, depending on [source]. */
+    val requestType: String? = null,
+    /** Rule that blocked this request; null when nothing was blocked or no rule was recorded. */
+    val matchedRule: String? = null,
+    /** Handling time in milliseconds, when the log recorded one. */
+    val elapsedMs: Long? = null,
+    /** Subscription that supplied the blocking rule, when one was recorded. */
+    val blockSubscriptionId: Long? = null,
+    /** Name of [blockSubscriptionId], resolved by the ViewModel. */
+    val subscriptionName: String? = null,
     val cached: Boolean = false
 )
 
@@ -44,6 +57,8 @@ fun dnsRequestItem(log: DnsLogEntity): RequestLogItem {
         message.contains("blocked_by=rewrite=", ignoreCase = true) ||
         message.contains("复写") || message.contains("覆写")
     val appInfo = log.packageName?.let { " · $it" } ?: ""
+    val blockedRule = extractBlockedRule(message)
+    val elapsedMs = extractElapsedMs(message)
 
     return if (isConnection) {
         val proto = if (log.queryName.startsWith("UDP", ignoreCase = true)) "UDP" else "TCP"
@@ -58,23 +73,34 @@ fun dnsRequestItem(log: DnsLogEntity): RequestLogItem {
             subtitle = "${formatRequestTime(log.timestamp)} · $tag$appInfo",
             detail = log.message,
             domain = null,
+            packageName = log.packageName,
+            requestType = proto,
+            matchedRule = if (status == RequestStatus.BLOCKED) blockedRule else null,
+            elapsedMs = elapsedMs,
+            blockSubscriptionId = log.blockSubscriptionId,
             cached = false
         )
     } else {
+        val status = when {
+            rewritten -> RequestStatus.REWRITTEN
+            log.result == LogResult.PASSED.value -> RequestStatus.PASSED
+            log.result == LogResult.BLOCKED.value -> RequestStatus.BLOCKED
+            else -> RequestStatus.ERROR
+        }
         RequestLogItem(
             key = "dns-${log.id}",
             timestamp = log.timestamp,
             source = RequestSource.DNS,
-            status = when {
-                rewritten -> RequestStatus.REWRITTEN
-                log.result == LogResult.PASSED.value -> RequestStatus.PASSED
-                log.result == LogResult.BLOCKED.value -> RequestStatus.BLOCKED
-                else -> RequestStatus.ERROR
-            },
+            status = status,
             title = log.queryName,
             subtitle = "${formatRequestTime(log.timestamp)} · DNS · ${dnsRequestType(log.queryType)}${if (log.cached) " · 命中缓存" else ""}$appInfo",
             detail = log.message,
             domain = log.queryName,
+            packageName = log.packageName,
+            requestType = dnsRequestType(log.queryType),
+            matchedRule = if (status == RequestStatus.BLOCKED) blockedRule else null,
+            elapsedMs = elapsedMs,
+            blockSubscriptionId = log.blockSubscriptionId,
             cached = log.cached
         )
     }
@@ -127,7 +153,11 @@ fun httpRequestItem(log: HttpRequestLogEntity): RequestLogItem {
         title = log.authority ?: "未取得 authority",
         subtitle = "${formatRequestTime(log.timestamp)} · ${log.protocol} · ${log.packageName}",
         detail = detail,
-        domain = log.authority
+        domain = log.authority,
+        packageName = log.packageName,
+        requestType = log.protocol,
+        matchedRule = if (status == RequestStatus.BLOCKED) log.matchedRule?.takeIf { it.isNotBlank() } else null,
+        blockSubscriptionId = log.blockSubscriptionId
     )
 }
 
@@ -139,4 +169,63 @@ private fun dnsRequestType(type: Int) = when (type) {
     16 -> "TXT"
     2 -> "NS"
     else -> "TYPE_$type"
+}
+
+/** Pulls the rule name out of a DNS log message such as `app=x, blocked_by=<rule>, elapsed=3ms`. */
+private fun extractBlockedRule(message: String): String? {
+    val marker = "blocked_by="
+    val index = message.indexOf(marker, ignoreCase = true)
+    if (index < 0) return null
+    return message.substring(index + marker.length)
+        .substringBefore(',')
+        .trim()
+        .takeIf { it.isNotBlank() }
+}
+
+/** Pulls the elapsed milliseconds out of a DNS log message, when present. */
+private fun extractElapsedMs(message: String): Long? {
+    val marker = "elapsed="
+    val index = message.indexOf(marker, ignoreCase = true)
+    if (index < 0) return null
+    return message.substring(index + marker.length)
+        .substringBefore(',')
+        .trim()
+        .removeSuffix("ms")
+        .trim()
+        .toLongOrNull()
+}
+
+private const val SYSTEM_UID_PREFIX = "uid:"
+private const val UNKNOWN_OWNER = "unknown"
+private const val ROOT_PROXY_OWNER = "RootProxy"
+
+/**
+ * Owner markers the tunnel writes when a request cannot be attributed to an installed package.
+ * They are not package names, so the UI must label them explicitly instead of resolving them.
+ */
+sealed interface RequestOwner {
+    /** Kernel/root traffic known only by UID, written as `uid:<n>`. */
+    data class Uid(val uid: Int) : RequestOwner
+
+    /** The tunnel could not resolve the owner at all, written as `unknown`. */
+    data object Unknown : RequestOwner
+
+    /** Server mode: the query came from this device rather than a LAN client (`RootProxy`). */
+    data object RootProxy : RequestOwner
+}
+
+/**
+ * Decodes those markers so the list and the detail sheet can show a name and a placeholder icon
+ * instead of a blank row. Returns null for real package names and for missing packages.
+ */
+fun RequestLogItem.requestOwner(): RequestOwner? {
+    val pkg = packageName ?: return null
+    return when {
+        pkg.startsWith(SYSTEM_UID_PREFIX) ->
+            pkg.removePrefix(SYSTEM_UID_PREFIX).toIntOrNull()?.let { RequestOwner.Uid(it) }
+
+        pkg.equals(UNKNOWN_OWNER, ignoreCase = true) -> RequestOwner.Unknown
+        pkg.equals(ROOT_PROXY_OWNER, ignoreCase = true) -> RequestOwner.RootProxy
+        else -> null
+    }
 }

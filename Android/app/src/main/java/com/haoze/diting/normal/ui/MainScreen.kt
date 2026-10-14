@@ -1,9 +1,9 @@
 package com.haoze.diting.normal.ui
 
+import com.haoze.diting.data.RequestStatus
 import com.haoze.diting.ui.*
 import com.haoze.diting.ui.dashboard.*
 import android.widget.Toast
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -102,6 +102,8 @@ fun MainScreen(
     onNavigateToDataCleanup: () -> Unit = {},
     onNavigateToAgentApiSettings: () -> Unit = {},
     onNavigateToLogRoute: (String) -> Unit = { onNavigateToLogs() },
+    onNavigateToRequestLogs: (RequestStatus?) -> Unit = {},
+    onNavigateToBlockedLogs: (String) -> Unit,
     onNavigateToSettingsRoute: (String) -> Unit = { onNavigateToSettings() },
     onNavigateToModeSelection: () -> Unit = {},
     resetToHomeTrigger: Long = 0L,
@@ -159,15 +161,6 @@ fun MainScreen(
         message?.let {
             context.showToast(it, Toast.LENGTH_SHORT)
             viewModel.clearMessage()
-        }
-    }
-
-    BackHandler(enabled = pagerState.currentPage != 0) {
-        coroutineScope.launch {
-            pagerState.animateScrollToPage(
-                page = 0,
-                animationSpec = tween(durationMillis = 280)
-            )
         }
     }
 
@@ -289,6 +282,7 @@ fun MainScreen(
                     ModernLogDashboardScreen(
                         onBack = {},
                         onNavigateToDnsLogs = { onNavigateToLogRoute(Routes.DNS_LOGS) },
+                        onNavigateToRequestLogs = onNavigateToRequestLogs,
                         onNavigateToDnsCache = { onNavigateToLogRoute(Routes.DNS_CACHE) },
                         onNavigateToRaceStats = { onNavigateToLogRoute(Routes.RACE_STATS) },
                         onNavigateToBootstrapStats = { onNavigateToLogRoute(Routes.BOOTSTRAP_STATS) },
@@ -304,7 +298,8 @@ fun MainScreen(
                     AppTrafficStatsScreen(
                         onBack = {},
                         showBackIcon = false,
-                        contentBottomPadding = 108.dp
+                        contentBottomPadding = 108.dp,
+                        onNavigateToBlockedLogs = onNavigateToBlockedLogs
                     )
                 }
                 BottomBarDestination.NETWORK_TOOLS -> {

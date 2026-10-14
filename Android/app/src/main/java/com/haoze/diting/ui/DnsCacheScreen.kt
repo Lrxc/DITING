@@ -33,8 +33,6 @@ import com.haoze.diting.core.rule.BlockListManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,24 +40,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemContentType
 import com.haoze.diting.data.entity.DnsCacheEntity
-import com.haoze.diting.ui.components.SettingsCornerShape
 import com.haoze.diting.ui.components.SettingsItemSpacing
 import com.haoze.diting.ui.components.SettingsScaffold
 import com.haoze.diting.ui.components.SettingsSurfaceItem
@@ -85,27 +79,16 @@ fun DnsCacheScreen(
         )
     )
     val params by viewModel.params.collectAsStateWithLifecycle()
-    val nowMillis by viewModel.nowMillis.collectAsStateWithLifecycle()
     val entries = viewModel.entries.collectAsLazyPagingItems()
     val scope = rememberCoroutineScope()
     val database = remember(context, dataset) { RuleDatabases.forDataset(context, dataset) }
     var isSearchActive by remember { mutableStateOf(false) }
     var activeAnalysisTarget by remember { mutableStateOf<AnalysisTarget?>(null) }
     var pendingDomain by remember { mutableStateOf<String?>(null) }
-    val lifecycleOwner = LocalLifecycleOwner.current
 
     NavigationSettledEffect {
         viewModel.activate()
         viewModel.refreshCacheList()
-    }
-
-    LaunchedEffect(lifecycleOwner) {
-        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (true) {
-                delay(1_000L)
-                viewModel.updateClock()
-            }
-        }
     }
 
     SettingsScaffold(
@@ -185,7 +168,6 @@ fun DnsCacheScreen(
                         ) {
                             DnsCacheItem(
                                 entry = entry,
-                                nowMillis = nowMillis,
                                 onClick = { pendingDomain = entry.queryName }
                             )
                         }
@@ -275,9 +257,16 @@ fun DnsCacheScreen(
 @Composable
 private fun DnsCacheItem(
     entry: DnsCacheEntity,
-    nowMillis: Long,
     onClick: (() -> Unit)? = null
 ) {
+    // Ticking inside the row keeps recomposition scoped to it: a screen-level clock used to
+    // invalidate every visible row once per second.
+    val nowMillis by produceState(initialValue = System.currentTimeMillis(), key1 = entry.expiresAt) {
+        while (true) {
+            delay(1_000L)
+            value = System.currentTimeMillis()
+        }
+    }
     val remaining = max(0L, (entry.expiresAt - nowMillis + 999L) / 1000L)
     val expirationText = if (remaining == 0L) {
         "已过期"

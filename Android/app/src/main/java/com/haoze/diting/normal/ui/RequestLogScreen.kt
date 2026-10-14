@@ -7,7 +7,6 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,11 +19,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
@@ -37,19 +33,17 @@ import androidx.compose.material.icons.filled.Search
 import com.haoze.diting.SettingsRouteActivity
 import com.haoze.diting.ui.agent.AgentAnalysisSheet
 import com.haoze.diting.ui.agent.AnalysisTarget
-import com.haoze.diting.ui.components.AppAlertDialog
-import com.haoze.diting.ui.components.AppDialogButton
+import com.haoze.diting.ui.components.AppIconImage
 import com.haoze.diting.ui.components.RuleFilterChipRow
 import com.haoze.diting.ui.components.RuleTagChip
 import com.haoze.diting.ui.components.SettingsItemSpacing
 import com.haoze.diting.ui.components.SettingsScaffold
 import com.haoze.diting.ui.components.SettingsSurfaceItem
-import androidx.compose.material3.Card
+import com.haoze.diting.ui.components.SystemAppPlaceholder
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -62,24 +56,18 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.haoze.diting.data.AppDatabase
 import com.haoze.diting.data.RequestSource
 import com.haoze.diting.data.RequestStatus
-import com.haoze.diting.data.entity.DnsLogEntity
-import com.haoze.diting.data.entity.HttpRequestLogEntity
 import com.haoze.diting.data.entity.RuleScope
 import com.haoze.diting.core.rule.AllowListManager
 import com.haoze.diting.core.rule.BlockListManager
-import com.haoze.diting.core.log.LogResult
 import com.haoze.diting.ui.components.cascade.CascadeDropdownMenu
-import com.haoze.diting.ui.components.SettingsCornerShape
 import com.haoze.diting.ui.components.SettingsDivider
-import com.haoze.diting.ui.components.SettingsOutlinedActionButton
 import com.haoze.diting.ui.components.SettingsCardMargin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -92,20 +80,27 @@ import java.util.Locale
 fun RequestLogScreen(
     onBack: () -> Unit,
     initialSource: RequestSource = RequestSource.ALL,
+    initialStatus: RequestStatus = RequestStatus.ALL,
+    initialQuery: String = "",
     onRuntimeDnsSettingsChanged: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val database = remember(context) { AppDatabase.getInstance(context) }
     val viewModel: RequestLogViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
-        key = "RequestLogViewModel_${initialSource.name}",
+        key = "RequestLogViewModel_${initialSource.name}_${initialStatus.name}_${initialQuery.hashCode()}",
         factory = RequestLogViewModel.factory(
-            context.applicationContext as Application,
-            initialSource
+            application = context.applicationContext as Application,
+            initialSource = initialSource,
+            initialStatus = initialStatus,
+            initialQuery = initialQuery
         )
     )
-    LaunchedEffect(initialSource) {
+    LaunchedEffect(initialSource, initialStatus) {
         if (viewModel.state.value.source != initialSource) {
             viewModel.setSource(initialSource)
+        }
+        if (viewModel.state.value.status != initialStatus) {
+            viewModel.setStatus(initialStatus)
         }
     }
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -115,6 +110,7 @@ fun RequestLogScreen(
     val searching = state.searching
     var pendingDomain by remember { mutableStateOf<String?>(null) }
     var pendingRuleScope by remember { mutableStateOf(RuleScope.DNS) }
+    var detailItem by remember { mutableStateOf<RequestLogItem?>(null) }
     var showTopMenu by remember { mutableStateOf(false) }
     var activeAnalysisTarget by remember { mutableStateOf<AnalysisTarget?>(null) }
     val scope = rememberCoroutineScope()
@@ -255,6 +251,14 @@ fun RequestLogScreen(
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             RequestFilterRow(RequestSource.entries, source, { it.label }, viewModel::setSource)
+            if (visibleItems.isNotEmpty()) {
+                Text(
+                    text = localizedText("已加载") + " ${visibleItems.size} / ${state.total}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = SettingsCardMargin, vertical = 4.dp)
+                )
+            }
             SettingsDivider()
             val currentError = state.error
             if (currentError != null && visibleItems.isEmpty() && !state.loading) {
@@ -285,10 +289,26 @@ fun RequestLogScreen(
                             index = index,
                             itemCount = visibleItems.size
                         ) {
-                            RequestLogCard(item) {
-                                item.domain?.let { domain ->
-                                    pendingDomain = domain
-                                    pendingRuleScope = RuleScope.DNS
+                            RequestLogCard(
+                                item = item,
+                                onClick = { detailItem = item },
+                                onDomainAction = {
+                                    item.domain?.let { domain ->
+                                        pendingDomain = domain
+                                        pendingRuleScope = RuleScope.DNS
+                                    }
+                                }
+                            )
+                        }
+                    }
+                    if (state.hasMore && !state.loading) {
+                        item {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                TextButton(onClick = { viewModel.loadMore() }) {
+                                    Text(localizedText("加载更多"))
                                 }
                             }
                         }
@@ -298,6 +318,21 @@ fun RequestLogScreen(
             }
         }
     }
+    detailItem?.let { current ->
+        val domain = current.domain?.takeIf { it.isNotBlank() }
+        RequestLogDetailDialog(
+            item = current,
+            onDismiss = { detailItem = null },
+            onDomainAction = domain?.let { target ->
+                {
+                    detailItem = null
+                    pendingDomain = target
+                    pendingRuleScope = RuleScope.DNS
+                }
+            }
+        )
+    }
+
     pendingDomain?.let { domain ->
         DomainActionDialog(
             domain = domain,
@@ -357,31 +392,62 @@ private fun <T> RequestFilterRow(values: List<T>, selected: T, label: (T) -> Str
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun RequestLogCard(item: RequestLogItem, onLongClick: () -> Unit) {
-    val color = when (item.status) {
-        RequestStatus.BLOCKED,
-        RequestStatus.ERROR -> MaterialTheme.colorScheme.error
-        RequestStatus.BYPASSED -> MaterialTheme.colorScheme.onSurfaceVariant
-        RequestStatus.REWRITTEN -> MaterialTheme.colorScheme.tertiary
-        else -> MaterialTheme.colorScheme.primary
-    }
+private fun RequestLogCard(
+    item: RequestLogItem,
+    onClick: () -> Unit,
+    onDomainAction: () -> Unit
+) {
+    val color = requestStatusColor(item.status)
+    val owner = if (item.appName == null) item.requestOwner() else null
+    val appLabel = item.appName ?: requestOwnerLabel(owner)
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = onLongClick, onLongClick = onLongClick)
+            .combinedClickable(onClick = onClick, onLongClick = onDomainAction)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(item.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-            RuleTagChip(
-                text = localizedText(item.status.label),
-                containerColor = color.copy(alpha = .12f),
-                contentColor = color
-            )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (owner != null) {
+                SystemAppPlaceholder(size = 40.dp)
+            } else {
+                AppIconImage(packageName = item.packageName, size = 40.dp)
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = appLabel,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    RuleTagChip(
+                        text = localizedText(item.status.label),
+                        containerColor = color.copy(alpha = .12f),
+                        contentColor = color
+                    )
+                }
+                Text(
+                    text = item.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
-        Text(localizedText(item.subtitle), style = MaterialTheme.typography.bodySmall)
-        item.detail?.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
 }
 

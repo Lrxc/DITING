@@ -7,13 +7,11 @@ import android.graphics.drawable.Drawable
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import com.haoze.diting.permission.AppListPermissionHelper
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,9 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import com.haoze.diting.ui.components.AppAlertDialog
 import com.haoze.diting.ui.components.AppConfirmDialog
-import com.haoze.diting.ui.components.AppDialogButton
 import com.haoze.diting.ui.components.cascade.CascadeDropdownMenu
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
@@ -33,7 +29,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
@@ -56,12 +51,11 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.haoze.diting.ui.components.SettingsInfoText
 import com.haoze.diting.ui.components.SettingsLoadingContent
-import com.haoze.diting.ui.components.SettingsDivider
-import com.haoze.diting.ui.components.SettingsItem
 import com.haoze.diting.ui.components.SettingsActionButton
-import com.haoze.diting.ui.components.SettingsSurfaceGroup
-import com.google.accompanist.drawablepainter.rememberDrawablePainter
+import com.haoze.diting.ui.components.DrawableIconImage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
@@ -215,6 +209,23 @@ internal suspend fun loadInstalledApps(context: Context): List<InstalledApp> = w
     }
 }
 
+/** Extra attempts made when the loader returns an empty list while the permission probe passes. */
+private const val EMPTY_APP_LIST_MAX_RETRIES = 2
+private const val EMPTY_APP_LIST_RETRY_DELAY_MS = 400L
+
+/**
+ * Runs [loader], turning failures into an empty list. Cancellation is rethrown so leaving the
+ * screen still cancels the in-flight query instead of swallowing it as an empty result.
+ */
+private suspend fun <T> loadAppsSafely(loader: suspend () -> List<T>): List<T> =
+    try {
+        loader()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        emptyList()
+    }
+
 @Composable
 internal fun InstalledAppCheckboxItem(
     app: InstalledApp,
@@ -277,17 +288,19 @@ private fun InstalledAppItem(
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest),
             contentAlignment = Alignment.Center
         ) {
-            app.icon?.let { icon ->
-                Image(
-                    painter = rememberDrawablePainter(drawable = icon),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize().scale(1.06f)
-                )
-            } ?: Icon(
-                imageVector = Icons.Default.Android,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(28.dp)
+            DrawableIconImage(
+                drawable = app.icon,
+                cacheKey = app.packageName,
+                size = 40.dp,
+                modifier = Modifier.scale(1.06f),
+                fallback = {
+                    Icon(
+                        imageVector = Icons.Default.Android,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
             )
         }
         Column(
@@ -318,7 +331,9 @@ internal data class AppListAccessState<T>(
     val showDisclosure: Boolean,
     val allowAccess: () -> Unit,
     val dismissDisclosure: () -> Unit,
-    val retry: () -> Unit
+    val retry: () -> Unit,
+    /** Re-queries the app list without touching permission or disclosure state. */
+    val reload: () -> Unit
 )
 
 @Composable
@@ -368,19 +383,35 @@ internal fun <T> rememberAppListAccessState(loader: suspend () -> List<T>): AppL
     LaunchedEffect(loadGeneration, showDisclosure) {
         if (showDisclosure) return@LaunchedEffect
 
+        // isGranted caches its probe result for a short window, and that cache can hold a
+        // negative result left behind by an earlier transient failure. Probing again here
+        // keeps a stale negative from pinning this screen to "unavailable" (or to a spinner).
+        AppListPermissionHelper.invalidateCache()
         if (!AppListPermissionHelper.isGranted(context)) {
             if (AppListPermissionHelper.isDisclosureAccepted(context)) {
                 unavailable = true
                 apps = emptyList()
+            } else {
+                // Never leave apps == null on this path: that renders a spinner forever.
+                showDisclosure = true
             }
             return@LaunchedEffect
         }
 
         unavailable = false
-        val loaded = try {
-            loader()
-        } catch (_: Exception) {
-            emptyList()
+        apps = null
+        var loaded = loadAppsSafely(loader)
+        // PackageManager can hand back an incomplete or empty list while the system is busy
+        // (for example right after boot). Back off and retry before showing an empty state.
+        var retry = 0
+        while (
+            loaded.isEmpty() &&
+            retry < EMPTY_APP_LIST_MAX_RETRIES &&
+            AppListPermissionHelper.isGranted(context)
+        ) {
+            delay(EMPTY_APP_LIST_RETRY_DELAY_MS * (retry + 1))
+            loaded = loadAppsSafely(loader)
+            retry++
         }
         if (loaded.isNotEmpty()) {
             apps = loaded
@@ -457,7 +488,8 @@ internal fun <T> rememberAppListAccessState(loader: suspend () -> List<T>): AppL
                     fallbackToSettings = runtimeRequestAttempted
                 )
             }
-        }
+        },
+        reload = { requestLoad() }
     )
 }
 

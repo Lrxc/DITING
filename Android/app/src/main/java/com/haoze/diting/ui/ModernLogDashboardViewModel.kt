@@ -10,7 +10,6 @@ import com.haoze.diting.data.RuleDatabases
 import com.haoze.diting.data.RuleDataset
 import com.haoze.diting.data.BootstrapStatsRange
 import com.haoze.diting.data.RaceStatsRange
-import com.haoze.diting.data.SubscriptionInterceptionStatsRange
 import com.haoze.diting.data.entity.DnsCacheEntity
 import com.haoze.diting.data.entity.DnsLogEntity
 import com.haoze.diting.data.entity.HttpRequestLogEntity
@@ -21,13 +20,18 @@ import com.haoze.diting.data.repository.RaceLogRepository
 import com.haoze.diting.ui.settings.SystemSettingsStore
 import com.haoze.diting.util.dayStartMillis
 import com.haoze.diting.core.log.LogResult
+import androidx.compose.runtime.Immutable
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+@Immutable
 data class DashboardDailyStats(
     val total: Int = 0,
     val passed: Int = 0,
@@ -37,15 +41,18 @@ data class DashboardDailyStats(
     val cached: Int = 0
 )
 
+@Immutable
 data class DashboardRequestLogItem(
     val timestamp: Long,
     val source: String,
     val name: String,
     val meta: String,
     val status: String,
-    val resultLabel: String
+    val resultLabel: String,
+    val packageName: String? = null
 )
 
+@Immutable
 data class DashboardCacheEntryItem(
     val queryName: String,
     val queryType: String,
@@ -57,12 +64,14 @@ data class DashboardCacheEntryItem(
     val lastHitAt: Long
 )
 
+@Immutable
 data class DashboardRaceWinnerItem(
     val name: String,
     val wins: Int,
     val avgElapsedMs: Double
 )
 
+@Immutable
 data class DashboardRaceSummary(
     val requests: Int = 0,
     val successes: Int = 0,
@@ -70,6 +79,7 @@ data class DashboardRaceSummary(
     val winners: List<DashboardRaceWinnerItem> = emptyList()
 )
 
+@Immutable
 data class DashboardBootstrapIpItem(
     val name: String,
     val ip: String,
@@ -78,6 +88,7 @@ data class DashboardBootstrapIpItem(
     val avgElapsedMs: Double
 )
 
+@Immutable
 data class DashboardBootstrapSummary(
     val attempts: Int = 0,
     val successes: Int = 0,
@@ -87,18 +98,13 @@ data class DashboardBootstrapSummary(
     val ips: List<DashboardBootstrapIpItem> = emptyList()
 )
 
-data class DashboardSubscriptionItem(
-    val name: String,
-    val enabled: Boolean,
-    val deleted: Boolean,
-    val hits: Int,
-    val rate: Double
-)
-
+@Immutable
 data class DashboardSubscriptionSummary(
-    val items: List<DashboardSubscriptionItem> = emptyList()
+    /** Rules contained in every subscription shown on the dashboard card. */
+    val totalRuleCount: Int = 0
 )
 
+@Immutable
 data class ModernLogDashboardUiState(
     val loading: Boolean = true,
     val hasData: Boolean = false,
@@ -146,42 +152,68 @@ class ModernLogDashboardViewModel @JvmOverloads constructor(
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = _uiState.value.copy(loading = true, error = null)
-            val result = runCatching { buildDashboardState() }
-            _uiState.value = result.fold(
-                onSuccess = { it },
-                onFailure = { error ->
-                    lastRefreshTimeMs = 0L
-                    _uiState.value.copy(
-                        loading = false,
-                        hasData = _uiState.value.hasData,
-                        generatedAt = System.currentTimeMillis(),
-                        error = error.message ?: "加载失败"
-                    )
-                }
-            )
+            _uiState.value = try {
+                buildDashboardState()
+            } catch (e: CancellationException) {
+                // A superseded refresh is not a failure: rethrow and leave the state untouched,
+                // otherwise cancelling flashes "加载失败" over the dashboard.
+                throw e
+            } catch (e: Exception) {
+                lastRefreshTimeMs = 0L
+                _uiState.value.copy(
+                    loading = false,
+                    hasData = _uiState.value.hasData,
+                    generatedAt = System.currentTimeMillis(),
+                    error = e.message ?: "加载失败"
+                )
+            }
         }
     }
 
-    private suspend fun buildDashboardState(): ModernLogDashboardUiState {
+    private suspend fun buildDashboardState(): ModernLogDashboardUiState = coroutineScope {
         val now = System.currentTimeMillis()
         val logMode = SystemSettingsStore.getDnsLogMode(getApplication(), dataset)
-        val storedDailyStats = if (logMode == DnsLogMode.OFF) null else dnsLogRepository.dailyStats(dayStartMillis())
+
+        // Ten independent queries back this screen. They used to run back to back, so every
+        // refresh paid the sum of all round trips; fan them out and join instead.
+        val storedDailyStatsDeferred = async {
+            if (logMode == DnsLogMode.OFF) null else dnsLogRepository.dailyStats(dayStartMillis())
+        }
+        val recentLogsDeferred = async { dnsLogRepository.recentLogs(RECENT_LOG_LIMIT, logMode) }
+        val recentHttpLogsDeferred = async {
+            if (!isNormal || logMode == DnsLogMode.OFF) {
+                emptyList()
+            } else {
+                normalDatabase?.httpRequestLogDao()?.recent(RECENT_LOG_LIMIT)
+                    ?.filter { logMode == DnsLogMode.ALL || normalizeHttpOutcome(it.outcome) != "passed" }
+                    .orEmpty()
+            }
+        }
+        val httpStatsDeferred = async {
+            if (!isNormal || logMode == DnsLogMode.OFF) {
+                emptyList()
+            } else {
+                normalDatabase?.httpRequestLogDao()?.dailyStats(dayStartMillis()).orEmpty()
+            }
+        }
+        val recentCacheEntriesDeferred = async { dnsCacheRepository.recentEntries(now, RECENT_CACHE_LIMIT) }
+        val totalCacheCountDeferred = async { dnsCacheRepository.countUnexpired(now) }
+        val totalCacheHitsDeferred = async { dnsCacheRepository.totalHitCount() }
+        val raceStatsDeferred = async { raceLogRepository.stats(RaceStatsRange.TODAY) }
+        val bootstrapStatsDeferred = async { bootstrapLogRepository.stats(BootstrapStatsRange.TODAY) }
+        // Only the aggregate rule count is shown on the dashboard; the per-subscription
+        // breakdown (hits / rate) had no consumer left, so its stats query was dropped.
+        val subscriptionsDeferred = async {
+            if (logMode == DnsLogMode.OFF) emptyList() else ruleSources.subscriptionDao().all()
+        }
+
+        val storedDailyStats = storedDailyStatsDeferred.await()
         val dailyStats = storedDailyStats?.let {
             if (logMode == DnsLogMode.BLOCKED_AND_ERRORS) it.copy(passed = 0, cached = 0) else it
         }
-        val recentLogs = dnsLogRepository.recentLogs(RECENT_LOG_LIMIT, logMode)
-        val recentHttpLogs = if (!isNormal || logMode == DnsLogMode.OFF) {
-            emptyList()
-        } else {
-            normalDatabase?.httpRequestLogDao()?.recent(RECENT_LOG_LIMIT)
-                ?.filter { logMode == DnsLogMode.ALL || normalizeHttpOutcome(it.outcome) != "passed" }
-                .orEmpty()
-        }
-        val httpStats = if (!isNormal || logMode == DnsLogMode.OFF) {
-            emptyList()
-        } else {
-            normalDatabase?.httpRequestLogDao()?.dailyStats(dayStartMillis()).orEmpty()
-        }
+        val recentLogs = recentLogsDeferred.await()
+        val recentHttpLogs = recentHttpLogsDeferred.await()
+        val httpStats = httpStatsDeferred.await()
         var httpPassed = 0
         var httpBlocked = 0
         var httpError = 0
@@ -195,47 +227,19 @@ class ModernLogDashboardViewModel @JvmOverloads constructor(
                     else -> httpError += row.count
                 }
             }
-        val recentCacheEntries = dnsCacheRepository.recentEntries(now, RECENT_CACHE_LIMIT)
-        val totalCacheCount = dnsCacheRepository.countUnexpired(now)
-        val totalCacheHits = dnsCacheRepository.totalHitCount()
-        val raceStats = raceLogRepository.stats(RaceStatsRange.TODAY)
-        val bootstrapStats = bootstrapLogRepository.stats(BootstrapStatsRange.TODAY)
-        val subscriptionStats = if (logMode == DnsLogMode.OFF) {
-            null
-        } else {
-            dnsLogRepository.subscriptionInterceptionStats(SubscriptionInterceptionStatsRange.TODAY)
-        }
-        val subscriptions = if (logMode == DnsLogMode.OFF) {
-            emptyList()
-        } else {
-            ruleSources.subscriptionDao().all()
-        }
-        val subscriptionsById = subscriptions.associateBy { it.id }
-        val subscriptionItems = (subscriptionsById.keys + subscriptionStats?.hitsBySubscriptionId.orEmpty().keys)
-            .map { id ->
-                val subscription = subscriptionsById[id]
-                val hits = subscriptionStats?.hitsBySubscriptionId?.get(id) ?: 0
-                DashboardSubscriptionItem(
-                    name = subscription?.name ?: "已删除订阅 #$id",
-                    enabled = subscription?.enabled ?: false,
-                    deleted = subscription == null,
-                    hits = hits,
-                    rate = if (subscriptionStats == null || subscriptionStats.totalRequests == 0) {
-                        0.0
-                    } else {
-                        hits.toDouble() / subscriptionStats.totalRequests
-                    }
-                )
-            }
-            .sortedByDescending { it.hits }
-            .take(SUBSCRIPTION_LIST_LIMIT)
+        val recentCacheEntries = recentCacheEntriesDeferred.await()
+        val totalCacheCount = totalCacheCountDeferred.await()
+        val totalCacheHits = totalCacheHitsDeferred.await()
+        val raceStats = raceStatsDeferred.await()
+        val bootstrapStats = bootstrapStatsDeferred.await()
+        val subscriptions = subscriptionsDeferred.await()
 
         val passed = (dailyStats?.passed ?: 0) + httpPassed
         val blocked = (dailyStats?.blocked ?: 0) + httpBlocked
         val errors = (dailyStats?.error ?: 0) + httpError
         val totalLogs = passed + blocked + errors + httpBypassed
 
-        return ModernLogDashboardUiState(
+        ModernLogDashboardUiState(
             loading = false,
             hasData = true,
             generatedAt = now,
@@ -281,7 +285,9 @@ class ModernLogDashboardViewModel @JvmOverloads constructor(
                     )
                 }
             ),
-            subscriptions = DashboardSubscriptionSummary(items = subscriptionItems)
+            subscriptions = DashboardSubscriptionSummary(
+                totalRuleCount = subscriptions.sumOf { it.ruleCount }
+            )
         )
     }
 
@@ -319,7 +325,8 @@ class ModernLogDashboardViewModel @JvmOverloads constructor(
                     LogResult.BLOCKED.value -> "blocked"
                     else -> "error"
                 },
-                resultLabel = if (isConn) "旁路" else resultLabel(log.result)
+                resultLabel = if (isConn) "旁路" else resultLabel(log.result),
+                packageName = log.packageName
             )
         } + httpLogs.map { log ->
             val status = normalizeHttpOutcome(log.outcome)
@@ -339,7 +346,8 @@ class ModernLogDashboardViewModel @JvmOverloads constructor(
                     "blocked" -> "过滤"
                     "bypassed" -> "旁路"
                     else -> "失败"
-                }
+                },
+                packageName = log.packageName
             )
         }
         return rows.sortedByDescending { it.timestamp }.take(RECENT_LOG_LIMIT)
@@ -415,7 +423,6 @@ class ModernLogDashboardViewModel @JvmOverloads constructor(
 
         private const val RECENT_LOG_LIMIT = 5
         private const val RECENT_CACHE_LIMIT = 5
-        private const val SUBSCRIPTION_LIST_LIMIT = 5
         private const val TOP_LIST_LIMIT = 8
     }
 }

@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.haoze.diting.ui.components.RuleListEmptyState
 import com.haoze.diting.ui.components.RuleSearchField
+import com.haoze.diting.ui.components.SettingsActionButton
 import com.haoze.diting.ui.components.SettingsCardMargin
 import com.haoze.diting.ui.components.SettingsInfoText
 import com.haoze.diting.ui.components.SettingsScaffold
@@ -59,16 +60,21 @@ internal fun AppPickerScreen(
     onBack: () -> Unit,
     singleSelect: Boolean = false,
     headerContent: @Composable () -> Unit = {},
+    onReload: (() -> Unit)? = null,
 ) {
     var filter by remember { mutableStateOf(initialFilter) }
     var sort by remember { mutableStateOf(initialSort) }
     var query by remember { mutableStateOf("") }
     var debouncedQuery by remember { mutableStateOf("") }
     var visibleApps by remember { mutableStateOf(emptyList<InstalledApp>()) }
+    // Frozen at first composition: the list is grouped by the selection the user arrived with,
+    // so toggling an app no longer makes it jump to the top while they work down the list.
+    // The grouping refreshes the next time the screen opens.
+    val initialSelection = remember { selectedPackages }
 
     LaunchedEffect(query) { delay(250); debouncedQuery = query }
 
-    LaunchedEffect(apps, filter, sort, debouncedQuery, selectedPackages) {
+    LaunchedEffect(apps, filter, sort, debouncedQuery, selectedPackages, initialSelection) {
         val normalizedQuery = debouncedQuery.trim().lowercase(Locale.ROOT)
         visibleApps = withContext(Dispatchers.Default) {
             apps.filter { app ->
@@ -78,24 +84,22 @@ internal fun AppPickerScreen(
                     (filter == AppListFilter.SELECTED && app.packageName in selectedPackages)) &&
                     (normalizedQuery.isEmpty() || app.normalizedLabel.contains(normalizedQuery) ||
                         app.normalizedPackageName.contains(normalizedQuery))
-            }.sortedWith(sort.comparator)
+            }.sortedWith(
+                // Selected apps float to the top; the chosen sort order applies within each group.
+                compareByDescending<InstalledApp> { it.packageName in initialSelection }
+                    .then(sort.comparator)
+            )
         }
     }
 
-    val saveAndBack = {
-        if (isDirty) {
-            onSave()
-        }
-        onBack()
-    }
-
+    // Leaving the screen discards pending edits; only the save button commits them.
     BackHandler {
-        saveAndBack()
+        onBack()
     }
 
     SettingsScaffold(
         title = title,
-        onBack = saveAndBack,
+        onBack = onBack,
         actions = {
             AppListOverflowMenu(
                 filter = filter,
@@ -139,10 +143,25 @@ internal fun AppPickerScreen(
                     modifier = Modifier.padding(horizontal = SettingsCardMargin)
                 )
                 if (visibleApps.isEmpty()) {
-                    RuleListEmptyState(
-                        message = localizedText(if (query.isNotEmpty()) "未找到匹配应用" else "暂无应用"),
-                        modifier = Modifier.padding(horizontal = SettingsCardMargin)
-                    )
+                    Column(
+                        modifier = Modifier.padding(horizontal = SettingsCardMargin),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        RuleListEmptyState(
+                            message = localizedText(if (query.isNotEmpty()) "未找到匹配应用" else "暂无应用"),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        // Offer a manual reload only when the source list itself is empty; an
+                        // empty filter/search result is not a loading failure.
+                        if (onReload != null && query.isEmpty() && apps.isEmpty()) {
+                            SettingsActionButton(
+                                onClick = onReload,
+                                modifier = Modifier.padding(top = 8.dp)
+                            ) {
+                                Text(localizedText("重新加载"))
+                            }
+                        }
+                    }
                 } else {
                     LazyColumn(
                         modifier = Modifier
@@ -183,7 +202,9 @@ internal fun AppPickerScreen(
 
             FloatingActionButton(
                 onClick = {
-                    onSave()
+                    if (isDirty) {
+                        onSave()
+                    }
                     onBack()
                 },
                 modifier = Modifier

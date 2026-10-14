@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.fillMaxSize
 import com.haoze.diting.data.RequestSource
+import com.haoze.diting.data.RequestStatus
 import com.haoze.diting.data.RuleDataset
 import com.haoze.diting.data.entity.RuleScope
 import com.haoze.diting.server.DnsMainActivity
@@ -65,6 +66,12 @@ class SettingsRouteActivity : AppLocalizedActivity() {
         get() = intent.getStringExtra(EXTRA_REQUEST_SOURCE)?.let { value ->
             runCatching { RequestSource.valueOf(value) }.getOrNull()
         }
+    private val requestedRequestStatus: RequestStatus?
+        get() = intent.getStringExtra(EXTRA_REQUEST_STATUS)?.let { value ->
+            runCatching { RequestStatus.valueOf(value) }.getOrNull()
+        }
+    private val requestedRequestQuery: String?
+        get() = intent.getStringExtra(EXTRA_REQUEST_QUERY)
     private val requestedTitle: String?
         get() = intent.getStringExtra(EXTRA_TITLE)
     private val requestedBatchRuleTarget: BatchRuleTarget?
@@ -451,6 +458,8 @@ class SettingsRouteActivity : AppLocalizedActivity() {
                     RequestLogScreen(
                         onBack = onBack,
                         initialSource = requestedRequestSource ?: if (route == Routes.HTTP_REQUEST_LOGS) RequestSource.HTTPS else RequestSource.ALL,
+                        initialStatus = requestedRequestStatus ?: RequestStatus.ALL,
+                        initialQuery = requestedRequestQuery.orEmpty(),
                         onRuntimeDnsSettingsChanged = onRuntimeDnsSettingsChanged
                     )
                 }
@@ -504,7 +513,20 @@ class SettingsRouteActivity : AppLocalizedActivity() {
             Routes.SPONSOR -> SponsorScreen(onBack, "赞助")
             Routes.SPONSOR_LIST -> SponsorListScreen(onBack, "赞助者名单")
             Routes.CO_BUILDER_LIST -> CoBuilderListScreen(onBack, "共建者名单")
-            Routes.APP_TRAFFIC_STATS -> AppTrafficStatsScreen(onBack)
+            Routes.APP_TRAFFIC_STATS -> AppTrafficStatsScreen(
+                onBack = onBack,
+                onNavigateToBlockedLogs = { packageName ->
+                    startActivity(
+                        createIntent(
+                            this@SettingsRouteActivity,
+                            Routes.DNS_LOGS,
+                            requestStatus = RequestStatus.BLOCKED,
+                            requestQuery = packageName,
+                            dataset = ruleDataset
+                        )
+                    )
+                }
+            )
             Routes.OPTIONAL_FEATURES,
             Routes.HIDDEN_FEATURES -> if (isExpress) ExpressHiddenFeaturesScreen(onBack) else HiddenFeaturesScreen(onBack)
             Routes.WORK_MODE_SELECTION -> {
@@ -523,6 +545,8 @@ class SettingsRouteActivity : AppLocalizedActivity() {
         private const val TAG = "SettingsRoute"
         const val EXTRA_ROUTE = "settings_route"
         const val EXTRA_REQUEST_SOURCE = "settings_request_source"
+        const val EXTRA_REQUEST_STATUS = "settings_request_status"
+        const val EXTRA_REQUEST_QUERY = "settings_request_query"
         const val EXTRA_RUNTIME_DNS_CHANGED = "settings_runtime_dns_changed"
         const val EXTRA_WORK_MODE_CHANGED = "settings_work_mode_changed"
         const val EXTRA_HIDE_FROM_RECENTS = "settings_hide_from_recents"
@@ -540,6 +564,8 @@ class SettingsRouteActivity : AppLocalizedActivity() {
             ruleKind: ManagedRuleKind? = null,
             title: String? = null,
             requestSource: RequestSource? = null,
+            requestStatus: RequestStatus? = null,
+            requestQuery: String? = null,
             dataset: RuleDataset? = null,
             batchTarget: BatchRuleTarget? = null
         ): Intent = Intent(context, SettingsRouteActivity::class.java)
@@ -549,6 +575,8 @@ class SettingsRouteActivity : AppLocalizedActivity() {
                 ruleKind?.let { putExtra(EXTRA_RULE_KIND, it.name) }
                 title?.let { putExtra(EXTRA_TITLE, it) }
                 requestSource?.let { putExtra(EXTRA_REQUEST_SOURCE, it.name) }
+                requestStatus?.let { putExtra(EXTRA_REQUEST_STATUS, it.name) }
+                requestQuery?.let { putExtra(EXTRA_REQUEST_QUERY, it) }
                 dataset?.let { putExtra(EXTRA_RULE_DATASET, it.name) }
                 batchTarget?.let { putExtra(EXTRA_BATCH_RULE_TARGET, it.name) }
             }

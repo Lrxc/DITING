@@ -1,6 +1,5 @@
 package com.haoze.diting.ui.apprule
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -38,9 +37,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.google.accompanist.drawablepainter.rememberDrawablePainter
-import com.haoze.diting.data.entity.AllowRuleEntity
-import com.haoze.diting.data.entity.BlockRuleEntity
+import com.haoze.diting.ui.components.DrawableIconImage
 import com.haoze.diting.ui.InstalledApp
 import com.haoze.diting.ui.components.SettingsCornerShape
 import com.haoze.diting.ui.components.SettingsItemSpacing
@@ -92,17 +89,19 @@ internal fun SingleAppRulePanel(
                         .background(MaterialTheme.colorScheme.surfaceContainerHighest),
                     contentAlignment = Alignment.Center
                 ) {
-                    app.icon?.let { icon ->
-                        Image(
-                            painter = rememberDrawablePainter(drawable = icon),
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize().scale(1.06f)
-                        )
-                    } ?: Icon(
-                        imageVector = Icons.Default.Android,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(22.dp)
+                    DrawableIconImage(
+                        drawable = app.icon,
+                        cacheKey = app.packageName,
+                        size = 36.dp,
+                        modifier = Modifier.scale(1.06f),
+                        fallback = {
+                            Icon(
+                                imageVector = Icons.Default.Android,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                     )
                 }
                 Spacer(Modifier.width(10.dp))

@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.haoze.diting.data.entity.SubscriptionEntity
@@ -30,6 +31,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/** Visual dimming applied to subscriptions that are currently disabled. */
+private const val DISABLED_ITEM_ALPHA = 0.5f
+
 @Composable
 internal fun SubscriptionItems(
     subscriptions: List<SubscriptionEntity>,
@@ -40,8 +44,15 @@ internal fun SubscriptionItems(
     onShowUrl: (SubscriptionEntity) -> Unit,
     onShowActions: (SubscriptionEntity) -> Unit
 ) {
+    // Sorted once per subscription change instead of on every recomposition of the list.
+    val ordered = remember(subscriptions) {
+        subscriptions.sortedWith(
+            compareBy<SubscriptionEntity> { if (it.enabled) 0 else 1 }
+                .thenByDescending { it.addedAt }
+        )
+    }
     SettingsSurfaceGroup(
-        content = subscriptions.map { sub ->
+        content = ordered.map { sub ->
             {
                 SubscriptionItem(
                     sub,
@@ -70,6 +81,7 @@ internal fun SubscriptionItem(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .alpha(if (subscription.enabled) 1f else DISABLED_ITEM_ALPHA)
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         Row(

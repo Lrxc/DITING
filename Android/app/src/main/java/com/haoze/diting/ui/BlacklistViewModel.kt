@@ -14,6 +14,8 @@ import com.haoze.diting.core.rule.AdGuardRuleParser
 import com.haoze.diting.core.rule.BlockListManager
 import com.haoze.diting.core.rule.GoUrlRuleManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -56,6 +58,9 @@ class BlacklistViewModel(
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+    // Cancels the in-flight load so a slow earlier query cannot overwrite a newer result.
+    private var loadJob: Job? = null
+    private var searchJob: Job? = null
 
     private val _filter = MutableStateFlow(BlacklistFilter.ALL)
     val filter: StateFlow<BlacklistFilter> = _filter.asStateFlow()
@@ -79,7 +84,12 @@ class BlacklistViewModel(
 
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
-        loadPage(1)
+        // Debounced: one query per pause instead of one per keystroke.
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            delay(250)
+            loadPage(1)
+        }
     }
 
     fun refreshAll() {
@@ -113,7 +123,8 @@ class BlacklistViewModel(
     }
 
     fun loadPage(page: Int) {
-        viewModelScope.launch(Dispatchers.IO) {
+        loadJob?.cancel()
+        loadJob =         viewModelScope.launch(Dispatchers.IO) {
             val query = _searchQuery.value.trim()
             val currentFilter = _filter.value
             val domainRulesEnabled = settings.isMasterEnabled(getApplication())

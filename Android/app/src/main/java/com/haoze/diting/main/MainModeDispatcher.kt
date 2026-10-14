@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.haoze.diting.data.RequestStatus
 import com.haoze.diting.data.RuleDataset
 import com.haoze.diting.express.ui.ExpressMainScreen
 import com.haoze.diting.normal.ui.MainScreen
@@ -26,6 +27,8 @@ fun MainModeDispatcher(
     onNavigateToSettings: (String, RuleDataset?) -> Unit,
     onNavigateToLogs: (RuleDataset?) -> Unit,
     onNavigateToLogRoute: (String, RuleDataset?) -> Unit,
+    onNavigateToRequestLogs: (RequestStatus?) -> Unit = {},
+    onNavigateToBlockedLogs: (String) -> Unit,
     onNavigateToModeSelection: () -> Unit,
     onSwitchToNormalMode: () -> Unit,
     resetToHomeTrigger: Long,
@@ -111,6 +114,8 @@ fun MainModeDispatcher(
                     onNavigateToDataCleanup = { onNavigateToSettings(Routes.DATA_CLEANUP, null) },
                     onNavigateToAgentApiSettings = { onNavigateToSettings(Routes.AGENT_API_SETTINGS, null) },
                     onNavigateToLogRoute = { r -> onNavigateToLogRoute(r, null) },
+                    onNavigateToRequestLogs = onNavigateToRequestLogs,
+                    onNavigateToBlockedLogs = onNavigateToBlockedLogs,
                     onNavigateToSettingsRoute = { r -> onNavigateToSettings(r, null) },
                     onNavigateToModeSelection = onNavigateToModeSelection,
                     resetToHomeTrigger = resetToHomeTrigger,

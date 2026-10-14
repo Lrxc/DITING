@@ -1,6 +1,6 @@
 package com.haoze.diting.ui.traffic
 
-import com.haoze.diting.data.entity.AppTrafficDailyEntity
+import androidx.compose.runtime.Immutable
 
 enum class TrafficTimeRange(val displayName: String) {
     SESSION("本次会话"),
@@ -12,11 +12,11 @@ enum class TrafficTimeRange(val displayName: String) {
 
 enum class TrafficSortMode(val displayName: String) {
     TOTAL_TRAFFIC("按总流量"),
-    DOWNLOAD("按下载流量"),
-    UPLOAD("按上传流量"),
-    REALTIME_SPEED("按实时网速")
+    REALTIME_SPEED("按实时网速"),
+    BLOCKED("按拦截数量")
 }
 
+@Immutable
 data class AppTrafficUiItem(
     val packageName: String,
     val appName: String,
@@ -27,9 +27,14 @@ data class AppTrafficUiItem(
     val percentage: Float, // 0.0f - 1.0f
     val currentTxSpeedBps: Long,
     val currentRxSpeedBps: Long,
-    val currentTotalSpeedBps: Long
+    val currentTotalSpeedBps: Long,
+    /** Requests blocked by filtering rules during the selected time range (DNS + HTTPS). */
+    val blockedCount: Int = 0,
+    /** All requests recorded for this app during the selected time range (DNS + HTTPS). */
+    val totalRequestCount: Int = 0
 )
 
+@Immutable
 data class AppDetailTrafficState(
     val packageName: String,
     val appName: String,
@@ -39,15 +44,15 @@ data class AppDetailTrafficState(
     val sessionTxBytes: Long,
     val sessionRxBytes: Long,
     val totalHistoryTxBytes: Long,
-    val totalHistoryRxBytes: Long,
-    val dailyRecords: List<AppTrafficDailyEntity> = emptyList()
+    val totalHistoryRxBytes: Long
 )
 
+@Immutable
 data class AppTrafficStatsUiState(
     val isRunning: Boolean = false,
     val isGoTunnelActive: Boolean = false,
     val selectedTimeRange: TrafficTimeRange = TrafficTimeRange.TODAY,
-    val selectedSortMode: TrafficSortMode = TrafficSortMode.TOTAL_TRAFFIC,
+    val selectedSortMode: TrafficSortMode = TrafficSortMode.BLOCKED,
     val searchQuery: String = "",
     val hideSystemApps: Boolean = false,
     val totalTxSpeedBps: Long = 0L,

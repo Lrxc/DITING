@@ -1,6 +1,5 @@
 package com.haoze.diting.ui.apprule
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -10,7 +9,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -36,7 +34,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.google.accompanist.drawablepainter.rememberDrawablePainter
+import com.haoze.diting.ui.components.DrawableIconImage
 import com.haoze.diting.ui.InstalledApp
 import com.haoze.diting.ui.components.RuleTagChip
 import com.haoze.diting.ui.localizedText
@@ -63,17 +61,19 @@ internal fun UnifiedAppItemRow(
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest),
             contentAlignment = Alignment.Center
         ) {
-            app.icon?.let { icon ->
-                Image(
-                    painter = rememberDrawablePainter(drawable = icon),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize().scale(1.06f)
-                )
-            } ?: Icon(
-                imageVector = Icons.Default.Android,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(26.dp)
+            DrawableIconImage(
+                drawable = app.icon,
+                cacheKey = app.packageName,
+                size = 40.dp,
+                modifier = Modifier.scale(1.06f),
+                fallback = {
+                    Icon(
+                        imageVector = Icons.Default.Android,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
             )
         }
 

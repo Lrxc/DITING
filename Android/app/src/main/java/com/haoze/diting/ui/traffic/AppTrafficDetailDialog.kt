@@ -6,13 +6,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -35,7 +31,8 @@ import com.haoze.diting.ui.localizedText
 @Composable
 internal fun AppTrafficDetailDialog(
     detail: AppDetailTrafficState,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onNavigateToBlockedLogs: (String) -> Unit
 ) {
     val context = LocalContext.current
     val colors = MaterialTheme.colorScheme
@@ -111,57 +108,16 @@ internal fun AppTrafficDetailDialog(
                     }
                 }
 
-                if (detail.dailyRecords.isNotEmpty()) {
-                    Text(
-                        text = localizedText("历史日消耗记录"),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(160.dp)
-                    ) {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(detail.dailyRecords) { record ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = record.date,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = colors.onSurfaceVariant
-                                    )
-                                    Column(
-                                        horizontalAlignment = Alignment.End,
-                                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                                    ) {
-                                        Text(
-                                            text = formatBytes(record.txBytes + record.rxBytes),
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = colors.onSurface
-                                        )
-                                        Text(
-                                            text = "↓ " + formatBytes(record.rxBytes) + "  ↑ " + formatBytes(record.txBytes),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = colors.onSurfaceVariant.copy(alpha = 0.8f)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
             }
         },
         confirmButton = {
             AppDialogButton(label = "关闭", onClick = onDismiss)
+        },
+        dismissButton = {
+            AppDialogButton(
+                label = "查看拦截记录",
+                onClick = { onNavigateToBlockedLogs(detail.packageName) }
+            )
         }
     )
 }
