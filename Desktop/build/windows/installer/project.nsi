@@ -104,6 +104,7 @@ Name "${INFO_PRODUCTNAME}"
   InstallDir "$PROGRAMFILES64\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}"
 !endif
 ShowInstDetails show
+ShowUninstDetails show
 
 Function .onInit
    !insertmacro wails.checkArchitecture
@@ -112,11 +113,37 @@ FunctionEnd
 Function un.onInit
     StrCpy $DeleteConfig "1"
     ${un.GetParameters} $R0
+
+    # 支持 /KEEPCONFIG、-KEEPCONFIG 与 --KEEPCONFIG（大小写不敏感）
+    ClearErrors
     ${un.GetOptions} $R0 "/KEEPCONFIG" $R1
     ${IfNot} ${Errors}
         StrCpy $DeleteConfig "0"
     ${EndIf}
+    ClearErrors
+    ${un.GetOptions} $R0 "-KEEPCONFIG" $R1
+    ${IfNot} ${Errors}
+        StrCpy $DeleteConfig "0"
+    ${EndIf}
+    ClearErrors
+    ${un.GetOptions} $R0 "--KEEPCONFIG" $R1
+    ${IfNot} ${Errors}
+        StrCpy $DeleteConfig "0"
+    ${EndIf}
+
+    # 支持 /DELETECONFIG、-DELETECONFIG 与 --DELETECONFIG
+    ClearErrors
     ${un.GetOptions} $R0 "/DELETECONFIG" $R1
+    ${IfNot} ${Errors}
+        StrCpy $DeleteConfig "1"
+    ${EndIf}
+    ClearErrors
+    ${un.GetOptions} $R0 "-DELETECONFIG" $R1
+    ${IfNot} ${Errors}
+        StrCpy $DeleteConfig "1"
+    ${EndIf}
+    ClearErrors
+    ${un.GetOptions} $R0 "--DELETECONFIG" $R1
     ${IfNot} ${Errors}
         StrCpy $DeleteConfig "1"
     ${EndIf}
@@ -142,7 +169,7 @@ Function un.ConfirmPage
     ${NSD_CreateLabel} 0 0 100% 28u "$(PAGE_UNINST_LABEL)$\r$\n$INSTDIR"
     Pop $0
 
-    ${NSD_CreateCheckbox} 0 38u 100% 12u "$(PAGE_UNINST_CHECKBOX)"
+    ${NSD_CreateCheckbox} 0 36u 100% 12u "$(PAGE_UNINST_CHECKBOX)"
     Pop $un_Checkbox
 
     ${If} $DeleteConfig == "1"
@@ -151,7 +178,7 @@ Function un.ConfirmPage
         ${NSD_Uncheck} $un_Checkbox
     ${EndIf}
 
-    ${NSD_CreateLabel} 12u 54u 90% 24u "$(PAGE_UNINST_CHECKBOX_DESC)"
+    ${NSD_CreateLabel} 12u 52u 88% 32u "$(PAGE_UNINST_CHECKBOX_DESC)"
     Pop $0
 
     nsDialogs::Show
@@ -252,7 +279,11 @@ Section "uninstall"
     Delete "$INSTDIR\${PRODUCT_EXECUTABLE}"
     RMDir /r $INSTDIR
 
-    # 6. 删除快捷方式
+    # 7. 删除快捷方式（同时清理公共所有用户与当前用户上下文）
+    SetShellVarContext all
+    Delete "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk"
+    Delete "$DESKTOP\${INFO_PRODUCTNAME}.lnk"
+    SetShellVarContext current
     Delete "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk"
     Delete "$DESKTOP\${INFO_PRODUCTNAME}.lnk"
 
