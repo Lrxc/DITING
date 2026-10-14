@@ -108,7 +108,10 @@ fun RequestLogDetailDialog(
                 )
                 DetailLine(localizedText("来源"), localizedText(item.source.label))
                 DetailLine(localizedText("类型"), item.requestType.orEmpty())
-                DetailLine(localizedText("耗时"), item.elapsedMs?.let { formatMs(it.toDouble()) }.orEmpty())
+                DetailLine(
+                    label = localizedText("耗时"),
+                    value = formatMs((item.elapsedMs ?: 0L).toDouble())
+                )
                 DetailLine(
                     label = localizedText("缓存"),
                     value = localizedText(if (item.cached) "命中" else "未命中"),

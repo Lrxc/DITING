@@ -322,25 +322,31 @@ class RuleOperationWorker(
             var unchanged = 0
             var failed = 0
             var totalRules = 0
-            val subscriptions = subscriptionManager.remoteSubscriptions()
-            subscriptions.forEachIndexed { index, subscription ->
-                setProgressAsync(progressData(type, subscription.id, index, subscriptions.size))
-                notifyProgress(titleFor(type), index, subscriptions.size)
-                when (val outcome = subscriptionManager.updateSubscription(subscription.id)) {
-                    is SubscriptionUpdateOutcome.Updated -> {
-                        updated++
-                        totalRules += outcome.ruleCount
+            // Disabled subscriptions stay out of the engine, so refreshing them would only
+            // waste bandwidth and rewrite rules nobody is using.
+            val subscriptions = subscriptionManager.remoteSubscriptions().filter { it.enabled }
+            if (subscriptions.isEmpty()) {
+                OperationExecutionResult("没有已启用的规则订阅需要更新", hasChanges = false)
+            } else {
+                subscriptions.forEachIndexed { index, subscription ->
+                    setProgressAsync(progressData(type, subscription.id, index, subscriptions.size))
+                    notifyProgress(titleFor(type), index, subscriptions.size)
+                    when (val outcome = subscriptionManager.updateSubscription(subscription.id)) {
+                        is SubscriptionUpdateOutcome.Updated -> {
+                            updated++
+                            totalRules += outcome.ruleCount
+                        }
+                        is SubscriptionUpdateOutcome.NotModified -> unchanged++
+                        is SubscriptionUpdateOutcome.Failed -> failed++
                     }
-                    is SubscriptionUpdateOutcome.NotModified -> unchanged++
-                    is SubscriptionUpdateOutcome.Failed -> failed++
+                    setProgressAsync(progressData(type, subscription.id, index + 1, subscriptions.size))
+                    notifyProgress(titleFor(type), index + 1, subscriptions.size)
                 }
-                setProgressAsync(progressData(type, subscription.id, index + 1, subscriptions.size))
-                notifyProgress(titleFor(type), index + 1, subscriptions.size)
+                OperationExecutionResult(
+                    "检查完成：更新 $updated 个，已是最新 $unchanged 个，失败 $failed 个，共导入 $totalRules 条规则",
+                    hasChanges = updated > 0
+                )
             }
-            OperationExecutionResult(
-                "检查完成：更新 $updated 个，已是最新 $unchanged 个，失败 $failed 个，共导入 $totalRules 条规则",
-                hasChanges = updated > 0
-            )
         }
         RuleOperationType.IMPORT_RULES -> {
             val kind = requestedSubscriptionKind()
