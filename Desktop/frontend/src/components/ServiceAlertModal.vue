@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { ipc } from '../api/ipc';
 import { useServiceControl } from '../composables/useServiceControl';
+import { usePlatform } from '../composables/usePlatform';
+import { useCopyFeedback } from '../composables/useCopyFeedback';
+import { isWebMode } from '../utils/env';
 import M3Icon from './M3Icon.vue';
 import AppModal from './AppModal.vue';
 import InlineAlert from './ui/InlineAlert.vue';
@@ -24,6 +27,36 @@ const {
   fetchStatus: loadCoreServiceStatus,
   run,
 } = useServiceControl();
+
+const webMode = isWebMode();
+const { isLinux } = usePlatform();
+const { copy, isCopied } = useCopyFeedback(2000);
+
+// Linux + Web 控制台：无桌面端可用，改为提供宿主机 systemctl 命令指引
+const linuxWebMode = computed(() => isLinux.value && webMode);
+
+const installCmd = computed(() =>
+  coreServiceStatus.value?.installed
+    ? 'sudo systemctl enable --now diting-dnsservice'
+    : 'sudo /usr/local/bin/diting-service -install   # 或运行安装包内 install.sh'
+);
+
+/** 权限描述：Windows 用管理员/UAC 措辞，Linux 强调 root 身份 */
+const isElevatedText = computed(() =>
+  coreServiceStatus.value?.isElevated
+    ? isLinux.value
+      ? 'root 特权模式'
+      : '管理员特权模式'
+    : isLinux.value
+      ? '需以 root 身份运行'
+      : '按需请求系统权限'
+);
+
+const notInstalledText = computed(() =>
+  isLinux.value
+    ? '检测到宿主机尚未安装谛听核心 systemd 服务。'
+    : '检测到当前 Windows 系统尚未安装谛听核心特权服务组件。'
+);
 
 const isRetrying = ref(false);
 
@@ -141,7 +174,7 @@ watch(
           </span>
         </div>
         <span class="text-[11px] text-text-muted">
-          {{ coreServiceStatus?.isElevated ? '管理员特权模式' : '按需请求系统权限' }}
+          {{ isElevatedText }}
         </span>
       </div>
 
@@ -151,21 +184,48 @@ watch(
       </div>
 
       <div v-else-if="!coreServiceStatus || !coreServiceStatus.installed" class="space-y-2 text-xs text-text-sub leading-relaxed">
-        <p>检测到当前 Windows 系统尚未安装谛听核心特权服务组件。</p>
-        <p>核心服务负责双栈物理网卡 DNS 安全接管与多协议上游转发。点击下方<b>“安装服务”</b>或<b>“安装并启动服务”</b>，客户端将自动向系统注册服务并按需申请管理员权限。</p>
+        <p>{{ notInstalledText }}</p>
+        <p v-if="!linuxWebMode">核心服务负责双栈物理网卡 DNS 安全接管与多协议上游转发。点击下方<b>“安装服务”</b>或<b>“安装并启动服务”</b>，客户端将自动向系统注册服务并按需申请管理员权限。</p>
+        <p v-else>核心服务负责双栈物理网卡 DNS 安全接管与多协议上游转发。请在宿主机以 root 身份安装并启用服务，下方提供了对应命令。</p>
         <div v-if="coreServiceStatus?.executablePath" class="text-[11px] font-mono text-text-muted truncate" :title="coreServiceStatus.executablePath">
           组件位置: {{ coreServiceStatus.executablePath }}
         </div>
       </div>
 
-      <div v-else-if="!coreServiceStatus.running" class="space-y-2 text-xs text-text-sub leading-relaxed">
+      <div v-else-if="!coreServiceStatus?.running" class="space-y-2 text-xs text-text-sub leading-relaxed">
         <p>后台核心服务已向系统注册，但当前处于<b>停止状态</b>。</p>
-        <p>点击下方<b>“启动服务”</b>即可直接恢复网络加速与防护，系统将在需要时按需申请系统权限。</p>
+        <p v-if="!linuxWebMode">点击下方<b>“启动服务”</b>即可直接恢复网络加速与防护，系统将在需要时按需申请系统权限。</p>
+        <p v-else>请在上表中列出的宿主机以 root 身份启动服务，下方提供了对应命令。</p>
       </div>
 
       <div v-else class="space-y-2 text-xs text-text-sub leading-relaxed">
         <p>核心服务进程已在系统中运行，但客户端尚未成功建立通信。可能服务正在启动初始化中，或者本地端口被占用。</p>
-        <p>您可以点击“重新连接”尝试握手，或点击“重启服务”刷新服务状态。</p>
+        <p v-if="!linuxWebMode">您可以点击“重新连接”尝试握手，或点击“重启服务”刷新服务状态。</p>
+        <p v-else>请检查宿主机网络与端口占用情况，确认后点击“重新尝试连接”。</p>
+      </div>
+
+      <!-- Linux Web 控制台：无桌面端可用，提供宿主机 systemctl 命令指引 -->
+      <div v-if="linuxWebMode" class="space-y-2 p-3 rounded-md bg-surface-card-sub border border-surface-border">
+        <div class="text-[11px] font-semibold text-text-main flex items-center gap-1.5">
+          <M3Icon name="terminal" :size="14" />
+          <span>宿主机命令指引（以 root 执行）</span>
+        </div>
+        <div class="flex items-center justify-between gap-2 p-2 rounded-md bg-surface-card border border-surface-border font-mono text-[11px]">
+          <span class="text-text-main select-all truncate">{{ installCmd }}</span>
+          <button
+            type="button"
+            @click="copy(installCmd)"
+            class="app-btn-secondary app-btn-compact shrink-0"
+          >
+            <M3Icon :name="isCopied(installCmd) ? 'check' : 'content_copy'" :size="12" />
+            <span>{{ isCopied(installCmd) ? '已复制' : '复制' }}</span>
+          </button>
+        </div>
+        <p class="text-[11px] text-text-muted leading-relaxed">
+          亦可通过以下命令查看服务状态与日志：
+          <span class="font-mono text-text-sub">systemctl status diting-dnsservice</span> /
+          <span class="font-mono text-text-sub">journalctl -u diting-dnsservice -e</span>
+        </p>
       </div>
 
       <InlineAlert
@@ -189,7 +249,7 @@ watch(
         稍后处理
       </button>
 
-      <template v-if="!coreServiceStatus || !coreServiceStatus.installed">
+      <template v-if="!linuxWebMode && (!coreServiceStatus || !coreServiceStatus.installed)">
         <button
           type="button"
           @click="handleInstallService"
@@ -210,7 +270,7 @@ watch(
         </button>
       </template>
 
-      <template v-else-if="!coreServiceStatus.running">
+      <template v-else-if="!linuxWebMode && !coreServiceStatus?.running">
         <button
           type="button"
           @click="handleInstallService"
@@ -231,7 +291,7 @@ watch(
         </button>
       </template>
 
-      <template v-else>
+      <template v-else-if="!linuxWebMode">
         <button
           type="button"
           @click="handleRestartService"
@@ -251,6 +311,18 @@ watch(
           <span>{{ isRetrying ? '正在连接...' : '重新尝试连接' }}</span>
         </button>
       </template>
+
+      <!-- Linux Web 控制台：仅保留重新连接，服务管理交由宿主机命令指引 -->
+      <button
+        v-else
+        type="button"
+        @click="retryConnect"
+        :disabled="isRetrying"
+        class="app-btn-primary"
+      >
+        <M3Icon name="refresh" :size="16" :class="isRetrying ? 'animate-spin' : ''" />
+        <span>{{ isRetrying ? '正在连接...' : '重新尝试连接' }}</span>
+      </button>
     </template>
   </AppModal>
 </template>

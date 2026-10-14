@@ -31,6 +31,7 @@ class IPCService {
 
   // --- 环境与连接 ---
   public isWebMode = () => isWebMode();
+  public getMeta = () => this.core.getMeta();
   public onConnectionChange = (l: (c: boolean) => void) => this.http.onConnectionChange(l);
   public onAuthRequired = (l: (r: boolean) => void) => this.http.onAuthRequired(l);
   public onEvent = (l: (e: WebSocketEvent) => void) => this.events.subscribe(l);

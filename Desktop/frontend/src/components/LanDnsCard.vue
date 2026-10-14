@@ -9,6 +9,7 @@ import AppCard from './ui/AppCard.vue';
 import CopyRow from './ui/CopyRow.vue';
 import { revertSwitch, extractSwitchValue } from '../utils/switch';
 import { useFlashMessage } from '../composables/useFlashMessage';
+import { usePlatform } from '../composables/usePlatform';
 
 const loading = ref(false);
 const toggling = ref(false);
@@ -16,10 +17,18 @@ const togglingFw = ref(false);
 const lanStatus = ref<LANStatusResponse | null>(null);
 
 const { successMessage, errorMessage, flashSuccess } = useFlashMessage(4000);
+const { isLinux } = usePlatform();
 
 const allowLAN = computed(() => Boolean(lanStatus.value?.allowLAN));
 const lanAddresses = computed(() => lanStatus.value?.lanAddresses || []);
 const firewallAllowed = computed(() => Boolean(lanStatus.value?.firewallAllowed));
+
+/** 防火墙后端副题：Windows Defender vs Linux firewalld/ufw/nftables */
+const firewallSubtitle = computed(() =>
+  isLinux.value
+    ? '防火墙端口安全规则托管（firewalld / ufw / nftables）'
+    : 'Windows Defender 端口安全规则托管'
+);
 
 async function loadData() {
   loading.value = true;
@@ -145,10 +154,10 @@ onMounted(() => {
         </div>
       </AppCard>
 
-      <!-- 2. Windows 防火墙入站状态与放行控制卡片 -->
+      <!-- 2. 防火墙入站状态与放行控制卡片（Windows Defender / firewalld·ufw·nftables） -->
       <AppCard
         title="防火墙入站放行"
-        subtitle="Windows Defender 端口安全规则托管"
+        :subtitle="firewallSubtitle"
         icon="shield"
       >
         <template #badge>

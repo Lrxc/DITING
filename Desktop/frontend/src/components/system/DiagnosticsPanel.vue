@@ -1,14 +1,26 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { ipc } from '../../api/ipc';
 import type { PortCheckResult } from '../../api/types';
 import M3Icon from '../M3Icon.vue';
 import AppCard from '../ui/AppCard.vue';
 import AppModal from '../AppModal.vue';
 import { isWebMode } from '../../utils/env';
+import { usePlatform } from '../../composables/usePlatform';
 import { useToast } from '../../composables/useToast';
 
 const webMode = isWebMode();
+const { isLinux } = usePlatform();
+
+/** 端口冲突排查与自动修复文案：Windows ICS vs Linux resolved stub */
+const portHint = computed(() =>
+  isLinux.value
+    ? '排查 systemd-resolved stub 监听或外部程序是否占用 53 端口导致无法启动'
+    : '排查 ICS 共享或外部程序是否占用 53 端口导致无法启动'
+);
+const autofixLabel = computed(() =>
+  isLinux.value ? '一键关闭 resolved stub 冲突' : '一键自动修复 ICS 冲突'
+);
 const { show: showToast } = useToast();
 
 // 端口诊断状态
@@ -98,7 +110,7 @@ async function doEmergencyRestore() {
               <span>{{ diagnosingPort ? '检测中...' : '检测端口' }}</span>
             </button>
           </div>
-          <p class="text-[11px] text-text-muted">排查 ICS 共享或外部程序是否占用 53 端口导致无法启动</p>
+          <p class="text-[11px] text-text-muted">{{ portHint }}</p>
 
           <div v-if="portResult" class="p-2.5 rounded bg-surface-card border border-surface-border text-[11px] space-y-1.5">
             <div class="font-bold" :class="portResult.available ? 'text-status-success' : 'text-status-warning'">
@@ -113,7 +125,7 @@ async function doEmergencyRestore() {
                 class="app-btn-primary app-btn-compact w-full"
               >
                 <M3Icon :name="autofixingPort ? 'refresh' : 'bolt'" :size="12" :class="autofixingPort ? 'animate-spin' : ''" />
-                <span>{{ autofixingPort ? '正在修复...' : '一键自动修复 ICS 冲突' }}</span>
+                <span>{{ autofixingPort ? '正在修复...' : autofixLabel }}</span>
               </button>
             </div>
           </div>

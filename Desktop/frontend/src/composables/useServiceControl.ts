@@ -1,6 +1,7 @@
 import { ref } from 'vue';
 import { ipc } from '../api/ipc';
 import type { CoreServiceStatus } from '../api/types';
+import { usePlatform } from './usePlatform';
 
 export type ServiceAction =
   | 'start'
@@ -40,6 +41,8 @@ export interface FetchStatusOptions {
 }
 
 export function useServiceControl() {
+  const { isLinux } = usePlatform();
+
   async function fetchStatus(options?: FetchStatusOptions | Event): Promise<CoreServiceStatus | null> {
     if (inflightPromise) {
       return inflightPromise;
@@ -102,9 +105,13 @@ export function useServiceControl() {
       await ipc.checkHealth();
       return true;
     } catch (err: any) {
-      opError.value = isUACCancelled(err)
-        ? '管理员权限授权已取消，该项操作需要管理员特权。'
-        : err.message || `${ACTION_LABELS[action]}失败`;
+      if (isUACCancelled(err)) {
+        opError.value = isLinux.value
+          ? '该操作需要 root 权限，请以 root 身份运行客户端或使用 systemctl 命令。'
+          : '管理员权限授权已取消，该项操作需要管理员特权。';
+      } else {
+        opError.value = err.message || `${ACTION_LABELS[action]}失败`;
+      }
       return false;
     } finally {
       operating.value = false;

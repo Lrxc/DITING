@@ -1,16 +1,25 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import { ipc } from '../../api/ipc';
 import M3Icon from '../M3Icon.vue';
 import AppCard from '../ui/AppCard.vue';
 import StatusBadge from '../StatusBadge.vue';
 import ToastBanner from '../ToastBanner.vue';
 import CoreServiceCard from '../CoreServiceCard.vue';
+import CopyRow from '../ui/CopyRow.vue';
 import { revertSwitch, extractSwitchValue } from '../../utils/switch';
 import { isWebMode } from '../../utils/env';
+import { usePlatform } from '../../composables/usePlatform';
 import { useToast } from '../../composables/useToast';
 
 const webMode = isWebMode();
+const { isLinux } = usePlatform();
+
+// Linux Web 控制台：服务自启由 systemd 托管，无桌面端可操作，改为说明文案
+const linuxAutostartInfo = computed(() => isLinux.value && webMode);
+const autostartSubtitle = computed(() =>
+  isLinux.value ? 'systemd 服务自启托管' : 'Windows 用户登录自启配置'
+);
 const { toast, show: showToast, dismiss } = useToast();
 const host = ref('127.0.0.1');
 const port = ref('15353');
@@ -166,14 +175,15 @@ onMounted(() => {
       <!-- 2. 后台核心服务管理卡片 -->
       <CoreServiceCard />
 
-      <!-- 3. Windows 开机自启托管卡片 -->
+      <!-- 3. 开机自启托管卡片（Windows 桌面 / Linux systemd） -->
       <AppCard
         title="开机自动启动"
-        subtitle="Windows 用户登录自启配置"
+        :subtitle="autostartSubtitle"
         icon="power_settings_new"
       >
         <template #actions>
-          <span v-if="webMode" class="text-[11px] text-text-muted bg-surface-card-sub px-2 py-0.5 rounded border border-surface-border-sub">宿主机桌面生效</span>
+          <span v-if="linuxAutostartInfo" class="text-[11px] text-text-muted bg-surface-card-sub px-2 py-0.5 rounded border border-surface-border-sub">systemd 托管</span>
+          <span v-else-if="webMode" class="text-[11px] text-text-muted bg-surface-card-sub px-2 py-0.5 rounded border border-surface-border-sub">宿主机桌面生效</span>
           <div v-else class="flex items-center gap-2">
             <span class="text-[11px] font-semibold text-text-sub hidden sm:inline">
               {{ autostart ? '自启已开启' : '未开启' }}
@@ -186,7 +196,23 @@ onMounted(() => {
           </div>
         </template>
 
-        <div class="space-y-3 mt-3 text-xs text-text-sub leading-relaxed">
+        <!-- Linux Web 控制台：systemd 托管说明（不可在此直接操作） -->
+        <div v-if="linuxAutostartInfo" class="space-y-3 mt-3 text-xs text-text-sub leading-relaxed">
+          <p>
+            宿主机上的谛听核心服务由 systemd 托管，安装时已通过 <span class="font-mono">systemctl enable</span> 注册开机自启，
+            无需依赖图形桌面登录即可启动。
+          </p>
+          <div class="app-card-sub p-3 space-y-2">
+            <div class="text-[11px] font-semibold text-text-main">查看自启状态</div>
+            <CopyRow text="systemctl is-enabled diting-dnsservice" tag="Shell" tagType="ipv4" />
+            <p class="text-[11px] text-text-muted">
+              返回 <span class="font-mono">enabled</span> 表示已加入开机自启；如需调整，请在宿主机以 root 执行
+              <span class="font-mono">systemctl enable/disable diting-dnsservice</span>。
+            </p>
+          </div>
+        </div>
+
+        <div v-else class="space-y-3 mt-3 text-xs text-text-sub leading-relaxed">
           <p>
             在 Windows 系统开机登录后自动启动桌面应用，确保 DNS 拦截、加速和物理网卡保护持续稳定运行。
           </p>
@@ -205,7 +231,12 @@ onMounted(() => {
 
         <template #footer>
           <div class="text-[11px] text-text-muted">
-            提示：若同时安装了系统后台服务，核心服务将随 Windows 启动优先就绪。
+            <template v-if="linuxAutostartInfo">
+              提示：systemd 服务自启随系统启动，先于用户登录，确保 DNS 防护不中断。
+            </template>
+            <template v-else>
+              提示：若同时安装了系统后台服务，核心服务将随 Windows 启动优先就绪。
+            </template>
           </div>
         </template>
       </AppCard>

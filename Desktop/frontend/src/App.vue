@@ -4,6 +4,7 @@ import { ipc } from './api/ipc';
 import { themeManager } from './theme/theme';
 import { NAV_ITEMS, SUB_TABS, resolveRoute, type NavTab } from './constants/navigation';
 import { isWebMode } from './utils/env';
+import { initPlatform, usePlatform } from './composables/usePlatform';
 import M3Icon from './components/M3Icon.vue';
 import NavItem from './components/NavItem.vue';
 import StatusBadge from './components/StatusBadge.vue';
@@ -17,6 +18,7 @@ import DevicesView from './views/DevicesView.vue';
 import SystemView from './views/SystemView.vue';
 
 const appVersion = __APP_VERSION__;
+const { platformLabel } = usePlatform();
 const navItems = NAV_ITEMS;
 const currentTab = ref<NavTab>('overview');
 const currentSub = ref<string>('');
@@ -139,6 +141,7 @@ function handleAuthSuccess() {
 
 onMounted(() => {
   parseRoute();
+  initPlatform();
   window.addEventListener('hashchange', parseRoute);
 
   mql = window.matchMedia('(min-width: 1024px)');
@@ -283,7 +286,7 @@ onUnmounted(() => {
         <div class="flex items-center gap-3 shrink-0">
           <!-- 环境标识 -->
           <span class="label-quiet hidden lg:inline font-mono">
-            {{ webMode ? '局域网 Web 控制台' : `Windows v${appVersion}` }}
+            {{ webMode ? '局域网 Web 控制台' : `${platformLabel || '桌面'} v${appVersion}` }}
           </span>
 
           <!-- 用户态与登出 -->

@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -117,6 +118,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/v1/portcheck", s.withAuth(s.handlePortCheck))
 	mux.HandleFunc("/api/v1/portcheck/autofix", s.withAuth(s.handlePortAutofix))
 	mux.HandleFunc("/api/v1/health", s.handleHealth)
+	mux.HandleFunc("/api/v1/meta", s.handleMeta)
 
 	// Web 远程管理与认证路由
 	mux.HandleFunc("/api/v1/auth/status", s.handleAuthStatus)
@@ -383,6 +385,15 @@ func (s *Server) handleUpstreamTest(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, Response[string]{Success: true, Data: "ok"})
+}
+
+// handleMeta 返回宿主机运行平台信息（免鉴权，供 Web 控制台在登录前判定 OS）。
+func (s *Server) handleMeta(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, Response[any]{Success: false, Error: "method not allowed"})
+		return
+	}
+	writeJSON(w, http.StatusOK, Response[MetaResponse]{Success: true, Data: MetaResponse{OS: runtime.GOOS}})
 }
 
 func writeJSON(w http.ResponseWriter, code int, payload any) {

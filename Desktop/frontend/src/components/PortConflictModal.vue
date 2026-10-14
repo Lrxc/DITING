@@ -5,6 +5,7 @@ import AppModal from './AppModal.vue';
 import InlineAlert from './ui/InlineAlert.vue';
 import M3Icon from './M3Icon.vue';
 import { useCopyFeedback } from '../composables/useCopyFeedback';
+import { usePlatform } from '../composables/usePlatform';
 
 const props = defineProps<{
   open: boolean;
@@ -23,6 +24,26 @@ const emit = defineEmits<{
 }>();
 
 const { copy, isCopied } = useCopyFeedback();
+const { isLinux } = usePlatform();
+
+/** 系统级占用实体名称：Windows ICS 服务 / Linux systemd-resolved stub */
+const systemOccupierLabel = computed(() =>
+  isLinux.value
+    ? 'systemd-resolved 本地 stub 监听 (127.0.0.53)'
+    : 'Windows 网络连接共享服务 (ICS)'
+);
+
+/** 自动修复机制说明 */
+const autofixMechanism = computed(() =>
+  isLinux.value
+    ? '谛听后台服务将写入 DNSStubListener=no 的 drop-in 配置并重启 systemd-resolved，释放 127.0.0.53:53 与 127.0.0.54:53 监听，无需手动编辑配置文件。'
+    : '谛听后台服务具备 Windows 管理员特权，可直接调用服务控制管理器 (SCM) 自动停止并禁用冲突的 Windows ICS (SharedAccess) 服务，解决后自动重试并拉起 DNS，无需手动打开管理员 CMD。'
+);
+
+/** 系统级占用的手动处置命令与指引 */
+const manualCommand = computed(() =>
+  isLinux.value ? 'sudo systemctl restart systemd-resolved' : 'sc stop SharedAccess'
+);
 
 const isAutofixAvailable = computed(() => {
   return Boolean(props.conflictResult?.canAutofix || props.conflictResult?.hasICS);
@@ -49,7 +70,7 @@ function handleClose() {
 
     <div class="space-y-4 text-xs sm:text-sm text-text-sub">
       <p class="leading-relaxed">
-        本地 DNS 加速引擎需要绑定标准端口 <span class="font-mono font-semibold text-text-main">53 (UDP/TCP)</span>。当前检测到该端口正被其他进程或 Windows 系统服务占用，导致服务无法正常启动。
+        本地 DNS 加速引擎需要绑定标准端口 <span class="font-mono font-semibold text-text-main">53 (UDP/TCP)</span>。当前检测到该端口正被其他进程或{{ isLinux ? ' systemd ' : ' Windows ' }}系统服务占用，导致服务无法正常启动。
       </p>
 
       <!-- 自动修复优先引导模块 -->
@@ -73,7 +94,7 @@ function handleClose() {
           </button>
         </div>
         <p class="text-xs text-text-sub leading-relaxed">
-          谛听后台服务具备 Windows 管理员特权，可直接调用服务控制管理器 (SCM) 自动停止并禁用冲突的 <span class="font-mono font-bold text-text-main">Windows ICS (SharedAccess)</span> 服务，解决后自动重试并拉起 DNS，无需手动打开管理员 CMD。
+          {{ autofixMechanism }}
         </p>
       </div>
 
@@ -97,7 +118,7 @@ function handleClose() {
           </button>
         </div>
         <p class="text-[11px] text-text-muted leading-relaxed">
-          若暂不需要为局域网内的其他设备提供 DNS，可一键关闭局域网共享模式，仅监听 127.0.0.1:53，直接避开系统 ICS 服务的局域网广播冲突。
+          若暂不需要为局域网内的其他设备提供 DNS，可一键关闭局域网共享模式，仅监听 127.0.0.1:53，直接避开{{ isLinux ? ' systemd-resolved stub ' : '系统 ICS 服务' }}的局域网广播冲突。
         </p>
       </div>
 
@@ -113,30 +134,34 @@ function handleClose() {
               <span class="px-2 py-0.5 rounded text-[11px] font-mono font-bold border border-status-warning/40 text-status-warning">
                 {{ item.protocol }} {{ item.localAddress }}
               </span>
-              <span>{{ item.isICS ? 'Windows 网络连接共享服务 (ICS)' : (item.processName || '未知程序') }}</span>
+              <span>{{ item.isICS ? systemOccupierLabel : (item.processName || '未知程序') }}</span>
             </div>
             <span class="text-[11px] text-text-muted font-mono">
               PID: {{ item.pid }}
             </span>
           </div>
 
-          <!-- ICS 手动排查指引备选 -->
+          <!-- 系统级占用（Windows ICS / Linux resolved stub）手动排查指引 -->
           <div v-if="item.isICS || item.serviceName === 'SharedAccess'" class="space-y-2 text-xs">
             <p class="text-text-sub leading-relaxed">
-              若希望手动操作，可在管理员 CMD 中执行以下命令停止服务：
+              {{ isLinux ? '若希望手动操作，可在宿主机（root）执行以下命令：' : '若希望手动操作，可在管理员 CMD 中执行以下命令停止服务：' }}
             </p>
             <div class="flex items-center justify-between gap-2 p-2 rounded-md bg-surface-card border border-surface-border font-mono text-[11px]">
-              <span class="text-text-main select-all">sc stop SharedAccess</span>
+              <span class="text-text-main select-all">{{ manualCommand }}</span>
               <button
                 type="button"
-                @click="copy('sc stop SharedAccess')"
+                @click="copy(manualCommand)"
                 class="app-btn-secondary app-btn-compact shrink-0"
               >
-                <M3Icon :name="isCopied('sc stop SharedAccess') ? 'check' : 'content_copy'" :size="12" />
-                <span>{{ isCopied('sc stop SharedAccess') ? '已复制' : '复制命令' }}</span>
+                <M3Icon :name="isCopied(manualCommand) ? 'check' : 'content_copy'" :size="12" />
+                <span>{{ isCopied(manualCommand) ? '已复制' : '复制命令' }}</span>
               </button>
             </div>
-            <p class="text-[11px] text-text-muted">
+            <p v-if="isLinux" class="text-[11px] text-text-muted">
+              提示：该命令会重启 systemd-resolved 并重新读取
+              <span class="font-mono">/etc/systemd/resolved.conf.d</span> 下的配置，释放 <span class="font-mono">127.0.0.53:53</span> stub 监听。
+            </p>
+            <p v-else class="text-[11px] text-text-muted">
               提示：可按 <kbd class="px-1 py-0.5 rounded bg-surface-border text-text-main font-mono">Win + R</kbd> 打开 <span class="font-mono">services.msc</span>，将 <span class="font-medium text-text-main">Internet Connection Sharing (ICS)</span> 服务启动类型设为“禁用”。
             </p>
           </div>
@@ -146,7 +171,10 @@ function handleClose() {
             <p class="text-text-sub leading-relaxed">
               外部程序 <span class="font-semibold text-text-main font-mono">{{ item.processName }}</span> 正在占用端口。
             </p>
-            <p class="text-[11px] text-text-muted leading-relaxed">
+            <p v-if="isLinux" class="text-[11px] text-text-muted leading-relaxed">
+              排查引导：可执行 <span class="font-mono text-text-main">sudo ss -lunp | grep :53</span> 依据 PID (<span class="font-mono text-text-main font-semibold">{{ item.pid }}</span>) 定位占用进程，确认后使用 <span class="font-mono text-text-main">kill</span> 结束，或修改该程序的监听端口配置。
+            </p>
+            <p v-else class="text-[11px] text-text-muted leading-relaxed">
               排查引导：可按 <kbd class="px-1 py-0.5 rounded bg-surface-border text-text-main font-mono">Ctrl + Shift + Esc</kbd> 打开任务管理器，在“详细信息”列表中根据 PID (<span class="font-mono text-text-main font-semibold">{{ item.pid }}</span>) 找到该程序并结束，或修改该程序的监听端口配置。
             </p>
           </div>

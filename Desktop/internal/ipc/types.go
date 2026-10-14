@@ -189,6 +189,11 @@ type ConfigureFirewallRequest struct {
 	Enable bool `json:"enable"`
 }
 
+// MetaResponse 描述宿主机运行平台信息（免鉴权，供 Web 控制台平台自适应）。
+type MetaResponse struct {
+	OS string `json:"os"` // 运行平台标识：windows / linux
+}
+
 // AuthStatusResponse 描述当前认证与 Web 服务概况
 type AuthStatusResponse struct {
 	Initialized         bool   `json:"initialized"`

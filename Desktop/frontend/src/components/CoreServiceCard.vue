@@ -1,16 +1,56 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { computed, onMounted } from 'vue';
 import M3Icon from './M3Icon.vue';
 import StatusBadge from './StatusBadge.vue';
 import ToastBanner from './ToastBanner.vue';
 import AppCard from './ui/AppCard.vue';
 import { useServiceControl, type ServiceAction } from '../composables/useServiceControl';
 import { isWebMode } from '../utils/env';
+import { usePlatform } from '../composables/usePlatform';
 
 const { status: serviceStatus, loading, operating, opMessage, opError, fetchStatus, run } =
   useServiceControl();
 
 const webMode = isWebMode();
+const { isLinux } = usePlatform();
+
+/** 服务卡片副题：按平台切换术语（Windows 服务 / systemd 服务） */
+const serviceSubtitle = computed(() =>
+  isLinux.value ? 'systemd 系统服务守护与开机自启' : 'Windows 系统服务守护与进程自启'
+);
+
+/** 核心程序文件名：优先取实际可执行路径的文件名，回退按平台给默认名 */
+const executableName = computed(() => {
+  const p = serviceStatus.value?.executablePath || '';
+  const base = p.split(/[\\/]/).filter(Boolean).pop();
+  if (base) return base;
+  return isLinux.value ? 'diting-service' : 'diting-service.exe';
+});
+
+/** 权限提示：Linux 无 UAC 弹窗，强调需要 root 身份 */
+const privilegeHint = computed(() => {
+  if (serviceStatus.value?.isElevated) {
+    return isLinux.value ? '已具备 root 特权' : '已具备特权无弹窗';
+  }
+  return isLinux.value ? '需以 root 身份运行' : '按需请求 UAC 提权';
+});
+
+const privilegeLabel = computed(() =>
+  serviceStatus.value?.isElevated ? (isLinux.value ? 'root 特权' : '管理员特权') : '标准用户'
+);
+
+/** 注册说明与 Web 模式横幅文案 */
+const registerHint = computed(() =>
+  isLinux.value
+    ? '注册为 systemd 服务后，开机无需登录即可守护运行。'
+    : '注册为 Windows 系统服务后，开机免登录即可守护运行。'
+);
+
+const webModeHint = computed(() =>
+  isLinux.value
+    ? '当前为局域网 Web 控制台，服务由宿主机 systemd 守护运行中。请在宿主机以 root 执行 systemctl 命令管理 diting-dnsservice。'
+    : '当前为局域网 Web 控制台，后台服务在宿主机守护运行中。Windows 服务注册请在桌面端操作。'
+);
 
 onMounted(() => {
   fetchStatus({ silent: Boolean(serviceStatus.value) });
@@ -28,7 +68,7 @@ function handleRefresh() {
 <template>
   <AppCard
     title="后台核心服务管理"
-    subtitle="Windows 系统服务守护与进程自启"
+    :subtitle="serviceSubtitle"
     icon="router"
   >
     <template #actions>
@@ -86,7 +126,7 @@ function handleRefresh() {
         <span class="text-[11px] font-semibold text-text-muted">核心程序位置</span>
         <div class="font-mono text-[11px] text-text-main truncate pt-0.5" :title="serviceStatus?.executablePath">
           <span v-if="!serviceStatus && loading" class="text-text-muted animate-pulse">扫描中...</span>
-          <span v-else>{{ serviceStatus?.executablePath ? 'diting-service.exe' : '未检测到' }}</span>
+          <span v-else>{{ serviceStatus?.executablePath ? executableName : '未检测到' }}</span>
         </div>
         <p class="text-[10px] truncate mt-1" :class="serviceStatus?.canInstall ? 'text-status-success' : 'text-status-warning'">
           {{ serviceStatus?.canInstall ? '✔ 核心组件就绪' : '⚠ 未检测到组件' }}
@@ -99,11 +139,11 @@ function handleRefresh() {
         <div class="flex items-center gap-1 pt-0.5">
           <M3Icon name="shield" :size="14" :class="serviceStatus?.isElevated ? 'text-status-success' : 'text-text-muted'" />
           <span class="text-[11px] font-bold text-text-main truncate">
-            {{ serviceStatus?.isElevated ? '管理员特权' : '标准用户' }}
+            {{ privilegeLabel }}
           </span>
         </div>
         <p class="text-[10px] text-text-muted truncate mt-1">
-          {{ serviceStatus?.isElevated ? '已具备特权无弹窗' : '按需请求 UAC 提权' }}
+          {{ privilegeHint }}
         </p>
       </div>
     </div>
@@ -119,11 +159,11 @@ function handleRefresh() {
       <div class="space-y-2 pt-1">
         <div v-if="webMode" class="w-full flex items-center gap-2 text-xs text-text-sub bg-surface-card-sub p-2.5 rounded-md border border-surface-border">
           <M3Icon name="info" :size="15" class="text-text-main shrink-0" />
-          <span>当前为局域网 Web 控制台，后台服务在宿主机守护运行中。Windows 服务注册请在桌面端操作。</span>
+          <span>{{ webModeHint }}</span>
         </div>
         <template v-else>
           <div class="flex items-center justify-between gap-3 text-[11px] text-text-muted">
-            <span>注册为 Windows 系统服务后，开机免登录即可守护运行。</span>
+            <span>{{ registerHint }}</span>
             <span v-if="!serviceStatus && loading" class="text-text-muted animate-pulse">
               正在检测服务状态...
             </span>

@@ -7,6 +7,7 @@ declare global {
     go?: {
       main?: {
         App?: {
+          GetPlatform?: () => Promise<string>;
           RunEmergencyRestore?: () => Promise<string>;
           IsAutoStartEnabled?: () => Promise<boolean>;
           SetAutoStart?: (enable: boolean) => Promise<boolean>;
@@ -92,42 +93,42 @@ export class NativeBridgeService {
     if (window.go?.main?.App?.StartCoreService) {
       return await window.go.main.App.StartCoreService();
     }
-    throw new Error('当前环境为 Web 浏览器，不支持直接控制宿主机 Windows 系统服务启动');
+    throw new Error('当前环境为 Web 浏览器，不支持直接启动宿主机系统服务，请在宿主机上手动管理后台服务');
   }
 
   public async stopCoreService(): Promise<string> {
     if (window.go?.main?.App?.StopCoreService) {
       return await window.go.main.App.StopCoreService();
     }
-    throw new Error('当前环境为 Web 浏览器，不支持直接控制宿主机 Windows 系统服务停止');
+    throw new Error('当前环境为 Web 浏览器，不支持直接停止宿主机系统服务，请在宿主机上手动管理后台服务');
   }
 
   public async restartCoreService(): Promise<string> {
     if (window.go?.main?.App?.RestartCoreService) {
       return await window.go.main.App.RestartCoreService();
     }
-    throw new Error('当前环境为 Web 浏览器，不支持直接重启宿主机 Windows 系统服务');
+    throw new Error('当前环境为 Web 浏览器，不支持直接重启宿主机系统服务，请在宿主机上手动管理后台服务');
   }
 
   public async installCoreService(): Promise<string> {
     if (window.go?.main?.App?.InstallCoreService) {
       return await window.go.main.App.InstallCoreService();
     }
-    throw new Error('当前环境为 Web 浏览器，不支持触发宿主机 Windows UAC 服务注册安装');
+    throw new Error('当前环境为 Web 浏览器，不支持注册宿主机系统服务，请在宿主机上以管理员权限安装');
   }
 
   public async installAndStartCoreService(): Promise<string> {
     if (window.go?.main?.App?.InstallAndStartCoreService) {
       return await window.go.main.App.InstallAndStartCoreService();
     }
-    throw new Error('当前环境为 Web 浏览器，不支持一键安装并启动宿主机系统服务');
+    throw new Error('当前环境为 Web 浏览器，不支持一键安装并启动宿主机系统服务，请在宿主机上以管理员权限安装');
   }
 
   public async uninstallCoreService(): Promise<string> {
     if (window.go?.main?.App?.UninstallCoreService) {
       return await window.go.main.App.UninstallCoreService();
     }
-    throw new Error('当前环境为 Web 浏览器，不支持触发宿主机 Windows UAC 服务卸载');
+    throw new Error('当前环境为 Web 浏览器，不支持卸载宿主机系统服务，请在宿主机上以管理员权限卸载');
   }
 }
 

@@ -14,6 +14,7 @@ import ToastBanner from '../ToastBanner.vue';
 import OverviewQuickCards from './OverviewQuickCards.vue';
 import { revertSwitch, extractSwitchValue } from '../../utils/switch';
 import { usePoller } from '../../composables/usePoller';
+import { usePlatform } from '../../composables/usePlatform';
 import { useToast } from '../../composables/useToast';
 import { formatUptime } from '../../utils/format';
 
@@ -28,6 +29,13 @@ const togglingTakeover = ref(false);
 const pauseBusy = ref(false);
 const errorMessage = ref('');
 const { toast: actionToast, show: showToast, dismiss: dismissToast } = useToast();
+const { isLinux } = usePlatform();
+/** 端口冲突重试提示：Linux 对应 systemd-resolved stub，Windows 对应 ICS */
+const conflictRetryHint = computed(() =>
+  isLinux.value
+    ? '53 端口仍被占用中，请确认已关闭冲突程序或关闭 systemd-resolved stub 后再重试。'
+    : '53 端口仍被占用中，请确认已关闭冲突程序或停止 ICS 服务后再重试。'
+);
 const portConflict = ref<PortCheckResult | null>(null);
 const showConflictModal = ref(false);
 const recheckError = ref('');
@@ -191,7 +199,7 @@ async function handleRetryAfterConflict() {
 
     if (!checkRes.available && !isSelfOnly) {
       portConflict.value = checkRes;
-      recheckError.value = '53 端口仍被占用中，请确认已关闭冲突程序或停止 ICS 服务后再重试。';
+      recheckError.value = conflictRetryHint.value;
       return;
     }
 

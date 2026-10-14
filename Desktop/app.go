@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"runtime"
 
 	"github.com/haoze-evolluling/diting/desktop/internal/platform"
 )
@@ -30,6 +31,12 @@ func (a *App) startup(ctx context.Context) {
 // Greet 测试方法
 func (a *App) Greet(name string) string {
 	return fmt.Sprintf("Hello %s, 来自谛听 (DITING) 桌面控制台!", name)
+}
+
+// GetPlatform 返回当前桌面客户端运行的操作系统标识（如 windows / linux），
+// 供前端做平台自适应 UI 显示。
+func (a *App) GetPlatform() string {
+	return runtime.GOOS
 }
 
 // CaptureWindow 截取当前客户端自身窗口界面并保存为 PNG 图像文件

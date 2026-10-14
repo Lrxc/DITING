@@ -20,6 +20,11 @@ export interface ApiResponse<T = any> {
   conflict?: PortCheckResult;
 }
 
+/** 宿主机平台元信息（GET /api/v1/meta，免鉴权） */
+export interface MetaResponse {
+  os: string;
+}
+
 export type UpstreamProtocol = 'PLAIN' | 'DOH' | 'DOT';
 
 export interface UpstreamInfo {

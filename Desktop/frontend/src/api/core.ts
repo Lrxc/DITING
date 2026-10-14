@@ -6,6 +6,7 @@ import type {
   TestUpstreamRequest,
   TestUpstreamResponse,
   BootstrapConfig,
+  MetaResponse,
 } from './types';
 import type { HttpTransport } from './http';
 
@@ -15,6 +16,11 @@ export class CoreApi {
 
   public getStatus(): Promise<StatusResponse> {
     return this.http.request<StatusResponse>('/api/v1/status');
+  }
+
+  /** 获取宿主机运行平台信息（免鉴权，供平台自适应 UI 使用） */
+  public getMeta(): Promise<MetaResponse> {
+    return this.http.request<MetaResponse>('/api/v1/meta');
   }
 
   public async startDNS(): Promise<void> {
