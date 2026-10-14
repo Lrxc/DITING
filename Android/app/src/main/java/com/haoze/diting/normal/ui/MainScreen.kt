@@ -4,7 +4,6 @@ import com.haoze.diting.data.RequestStatus
 import com.haoze.diting.ui.*
 import com.haoze.diting.ui.dashboard.*
 import android.widget.Toast
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -162,15 +161,6 @@ fun MainScreen(
         message?.let {
             context.showToast(it, Toast.LENGTH_SHORT)
             viewModel.clearMessage()
-        }
-    }
-
-    BackHandler(enabled = pagerState.currentPage != 0) {
-        coroutineScope.launch {
-            pagerState.animateScrollToPage(
-                page = 0,
-                animationSpec = tween(durationMillis = 280)
-            )
         }
     }
 
