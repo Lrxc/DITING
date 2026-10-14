@@ -1,4 +1,4 @@
-﻿//go:build windows
+//go:build windows
 
 package windows
 
@@ -66,10 +66,9 @@ func ConfigureFirewallPort53(ctx context.Context, executor platform.CommandExecu
 		executor = platform.NewDefaultExecutor()
 	}
 
-	// 无论开启还是关闭，先清理已存在的旧规则以确保操作幂等性
+	// 无论开启还是关闭，先清理已存在的规则以确保操作幂等性
 	_ = deleteFirewallRule(ctx, executor, FirewallRuleNameUDP)
 	_ = deleteFirewallRule(ctx, executor, FirewallRuleNameTCP)
-	_ = deleteFirewallRule(ctx, executor, "Diting DNS LAN Server") // 兼容历史单条命名
 
 	if !enable {
 		return nil

@@ -399,13 +399,15 @@ export interface ConfigureWebRequest {
   configureFirewall?: boolean;
 }
 
-export interface LoginBackgroundConfig {
+export interface LoginBgConfig {
   type: 'none' | 'url' | 'custom';
   url: string;
   opacity: number;
   blur: number;
-  updatedAt: number;
+  updatedAt?: number;
 }
+
+export type LoginBackgroundConfig = LoginBgConfig;
 
 export interface SetLoginBackgroundRequest {
   type?: 'none' | 'url' | 'custom';

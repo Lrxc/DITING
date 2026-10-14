@@ -82,9 +82,54 @@ func TestConfig_StringDuration(t *testing.T) {
 	if cfg.DNS.WriteTimeout != 2500*time.Millisecond {
 		t.Errorf("expected WriteTimeout 2500ms, got %v", cfg.DNS.WriteTimeout)
 	}
-	// 旧版配置文件缺失 querylog 键时，应自动补齐默认值（向后兼容）
+	// 缺失 querylog 键时，应自动补齐默认值
 	if !cfg.QueryLog.Enabled || cfg.QueryLog.MaxEntries == 0 || cfg.QueryLog.DataDir == "" {
-		t.Errorf("expected query log defaults backfilled for legacy config: %+v", cfg.QueryLog)
+		t.Errorf("expected query log defaults backfilled for config: %+v", cfg.QueryLog)
+	}
+}
+
+func TestCurrentConfigStructure(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "config_full.json")
+
+	cfg := DefaultConfig()
+	// 定制当前版本代表性字段
+	cfg.DNS.BlockECH = true
+	cfg.DNS.BlockIPv6 = true
+	cfg.DNS.EDNSPadding = 256
+	cfg.Cache.PrefetchEnabled = true
+	cfg.Filter.FilterResponse = true
+	cfg.Filter.AllowlistOnly = true
+	cfg.SafeSearch.Enabled = true
+	cfg.SafeSearch.Disabled = []string{"bing"}
+	cfg.Web.Background.Type = "url"
+	cfg.Web.Background.URL = "https://example.com/bg.png"
+	cfg.Web.Background.Opacity = 60
+	cfg.Web.Background.Blur = 8
+
+	if err := SaveConfig(cfgPath, cfg); err != nil {
+		t.Fatalf("SaveConfig failed: %v", err)
+	}
+
+	loaded, err := LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	if !loaded.DNS.BlockECH || !loaded.DNS.BlockIPv6 || loaded.DNS.EDNSPadding != 256 {
+		t.Errorf("DNS config mismatch: %+v", loaded.DNS)
+	}
+	if !loaded.Cache.PrefetchEnabled {
+		t.Errorf("Cache prefetch not preserved")
+	}
+	if !loaded.Filter.FilterResponse || !loaded.Filter.AllowlistOnly {
+		t.Errorf("Filter config mismatch: %+v", loaded.Filter)
+	}
+	if !loaded.SafeSearch.Enabled || len(loaded.SafeSearch.Disabled) != 1 || loaded.SafeSearch.Disabled[0] != "bing" {
+		t.Errorf("SafeSearch config mismatch: %+v", loaded.SafeSearch)
+	}
+	if loaded.Web.Background.Type != "url" || loaded.Web.Background.Opacity != 60 || loaded.Web.Background.Blur != 8 {
+		t.Errorf("Web background mismatch: %+v", loaded.Web.Background)
 	}
 }
 

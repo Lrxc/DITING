@@ -65,57 +65,6 @@ export const SUB_TABS: Record<NavTab, readonly SubTabDef[]> = {
   ],
 };
 
-/** 旧大类 id → 新大类 id（历史书签与旧链接重定向） */
-export const LEGACY_TAB_MAP: Record<string, NavTab> = {
-  dashboard: 'overview',
-  logs: 'overview',
-  network: 'devices',
-  accel: 'resolve',
-  rules: 'protect',
-};
-
-/** 旧大类在无小类时的默认小类（logs 原属实时查询语境） */
-const LEGACY_TAB_DEFAULT_SUB: Record<string, string> = {
-  logs: 'queries',
-};
-
-/** 旧小类 id → 所属新大类（用于 #/upstream、#/cache 这类仅含小类的旧链接） */
-const LEGACY_SUB_OWNER: Record<string, NavTab> = {
-  status: 'overview',
-  queries: 'overview',
-  history: 'overview',
-  stats: 'overview',
-  upstream: 'resolve',
-  cache: 'resolve',
-  rewrite: 'resolve',
-  dns64: 'resolve',
-  lists: 'protect',
-  custom: 'protect',
-  test: 'protect',
-  config: 'protect',
-  advanced: 'protect',
-  schedule: 'protect',
-  adapters: 'devices',
-  lan: 'devices',
-  clients: 'devices',
-  privacy: 'devices',
-  settings: 'system',
-};
-
-/** 旧「大类/小类」组合 → 新「大类/小类」（仅记录发生跨类迁移的组合） */
-const LEGACY_ROUTE_MAP: Record<string, string> = {
-  'logs/queries': 'overview/queries',
-  'network/adapters': 'devices/adapters',
-  'network/upstream': 'resolve/upstream',
-  'network/lan': 'devices/lan',
-  'network/clients': 'devices/clients',
-  'network/dns64': 'resolve/dns64',
-  'accel/cache': 'resolve/cache',
-  'rules/rewrite': 'resolve/rewrite',
-  'rules/privacy': 'devices/privacy',
-  'system/settings': 'system/appearance',
-};
-
 export function isValidTab(value: string): value is NavTab {
   return (VALID_TABS as readonly string[]).includes(value);
 }
@@ -125,52 +74,19 @@ export function defaultSub(tab: NavTab): string {
   return SUB_TABS[tab][0]?.id ?? '';
 }
 
-function pickSub(tab: NavTab, sub: string): string {
+export function pickSub(tab: NavTab, sub: string): string {
   const subs = SUB_TABS[tab];
   return sub && subs.some((s) => s.id === sub) ? sub : defaultSub(tab);
 }
 
 /**
- * 归一化任意「大类 + 小类」到当前有效路由。
- * 处理顺序：旧组合路由 → 当前大类 id → 旧大类 id → 仅含小类的旧链接。
+ * 校验并解析「大类 + 小类」路由，统一使用当前版本的导航配置结构。
  * 无法识别时返回 null（由调用方保留默认分类）。
  */
 export function resolveRoute(rawTab: string, rawSub = ''): { tab: NavTab; sub: string } | null {
   const t = (rawTab || '').toLowerCase().trim();
   const s = (rawSub || '').toLowerCase().trim();
-  if (!t) return null;
+  if (!t || !isValidTab(t)) return null;
 
-  // 1) 旧「大类/小类」组合（可跨大类迁移归属）
-  if (s) {
-    const mapped = LEGACY_ROUTE_MAP[`${t}/${s}`];
-    if (mapped) {
-      const [mappedTab, mappedSub] = mapped.split('/');
-      return { tab: mappedTab as NavTab, sub: mappedSub };
-    }
-  }
-
-  // 2) 当前有效大类 id
-  if (isValidTab(t)) {
-    return { tab: t, sub: pickSub(t, s) };
-  }
-
-  // 3) 旧大类 id
-  const legacyTab = LEGACY_TAB_MAP[t];
-  if (legacyTab) {
-    const wanted = s || LEGACY_TAB_DEFAULT_SUB[t] || '';
-    return { tab: legacyTab, sub: pickSub(legacyTab, wanted) };
-  }
-
-  // 4) 仅含小类的旧单段链接（如 #/upstream、#/settings）
-  if (!s) {
-    const owner = LEGACY_SUB_OWNER[t];
-    if (owner) return { tab: owner, sub: pickSub(owner, t) };
-  }
-
-  return null;
-}
-
-/** 归一化任意标签值到当前有效的大类 id（含旧 id 重定向） */
-export function normalizeTab(value: string): NavTab | null {
-  return resolveRoute(value)?.tab ?? null;
+  return { tab: t, sub: pickSub(t, s) };
 }

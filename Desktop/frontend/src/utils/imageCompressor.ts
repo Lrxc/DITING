@@ -8,13 +8,8 @@ export const BG_STORAGE_KEY_URL = 'diting_login_custom_bg';
 export const BG_STORAGE_KEY_OPACITY = 'diting_login_bg_opacity';
 export const BG_STORAGE_KEY_BLUR = 'diting_login_bg_blur';
 
-export interface LoginBgConfig {
-  type: 'none' | 'url' | 'custom';
-  url: string;
-  opacity: number; // 0 - 100
-  blur: number; // 0 - 20 px
-  updatedAt?: number;
-}
+import type { LoginBgConfig } from '../api/types';
+export type { LoginBgConfig };
 
 
 /**
