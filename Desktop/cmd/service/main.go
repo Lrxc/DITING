@@ -79,6 +79,9 @@ func (p *program) Start(s service.Service) error {
 
 func (p *program) run() error {
 	// 1. 加载配置
+	if p.configPath == "" {
+		p.configPath = config.GetDefaultConfigPath()
+	}
 	cfg, err := config.LoadConfig(p.configPath)
 	if err != nil {
 		log.Printf("[配置] 加载配置失败，使用默认配置: %v\n", err)

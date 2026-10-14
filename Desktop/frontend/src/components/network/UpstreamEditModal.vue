@@ -71,7 +71,7 @@ watch(
         formProtocol.value = item.protocol;
         formServer.value = item.server;
         formUrl.value = item.url || '';
-        formWeight.value = item.weight || 1;
+        formWeight.value = item.weight ?? 1;
 
         let matched = false;
         for (const group of DNS_PRESET_PROVIDERS) {

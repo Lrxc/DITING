@@ -146,6 +146,15 @@ func (m *mockController) ConfigureUpstream(ctx context.Context, req ConfigureUps
 	return nil
 }
 
+func (m *mockController) GetUpstreamConfig(ctx context.Context) (*core.ResolverConfig, error) {
+	return &core.ResolverConfig{
+		Mode: "primary_backup",
+		Providers: []core.ProviderConfig{
+			{ID: "mock-1", Protocol: core.ProtocolPlain, Server: "1.1.1.1:53", Weight: 1},
+		},
+	}, nil
+}
+
 func (m *mockController) TestUpstream(ctx context.Context, req TestUpstreamRequest) (*TestUpstreamResponse, error) {
 	return &TestUpstreamResponse{Success: true, LatencyMs: 12.5}, nil
 }

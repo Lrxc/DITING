@@ -62,27 +62,54 @@ async function loadData(forceSyncProviders = false) {
     currentMode.value = res.dns.mode.toLowerCase() || 'primary_backup';
     upstreams.value = res.dns.upstreams || [];
 
-    if ((providers.value.length === 0 || forceSyncProviders) && res.dns.upstreams) {
-      providers.value = res.dns.upstreams.map((u) => ({
-        id: u.id,
-        protocol: u.protocol,
-        server: u.server,
-        url: u.url || (u.protocol === 'DOH' ? `https://${u.server}/dns-query` : ''),
-        weight: u.weight || 1,
-      }));
-    }
-
-    if (res.dns.bootstrap) {
-      bootstrapConfig.value = {
-        enabled: res.dns.bootstrap.enabled,
-        servers: res.dns.bootstrap.servers || [],
-      };
-    }
-
-    if (res.dns.conditionalRoutes) {
-      conditionalRoutes.value = { ...res.dns.conditionalRoutes };
-    } else {
-      conditionalRoutes.value = {};
+    // 优先从权威上游配置端点读取 providers 与策略
+    try {
+      const upCfg = await ipc.getUpstreamConfig();
+      if (upCfg) {
+        if (upCfg.mode) {
+          currentMode.value = upCfg.mode.toLowerCase();
+        }
+        if ((providers.value.length === 0 || forceSyncProviders) && upCfg.providers) {
+          providers.value = upCfg.providers.map((u) => ({
+            id: u.id,
+            protocol: u.protocol,
+            server: u.server,
+            url: u.url || (u.protocol === 'DOH' ? `https://${u.server}/dns-query` : ''),
+            weight: u.weight ?? 1,
+          }));
+        }
+        if (upCfg.bootstrap) {
+          bootstrapConfig.value = {
+            enabled: upCfg.bootstrap.enabled,
+            servers: upCfg.bootstrap.servers || [],
+          };
+        }
+        if (upCfg.conditionalRoutes) {
+          conditionalRoutes.value = { ...upCfg.conditionalRoutes };
+        }
+      }
+    } catch {
+      // 若权威端点不可达，回退至 status 视图
+      if ((providers.value.length === 0 || forceSyncProviders) && res.dns.upstreams) {
+        providers.value = res.dns.upstreams.map((u) => ({
+          id: u.id,
+          protocol: u.protocol,
+          server: u.server,
+          url: u.url || (u.protocol === 'DOH' ? `https://${u.server}/dns-query` : ''),
+          weight: u.weight ?? 1,
+        }));
+      }
+      if (res.dns.bootstrap) {
+        bootstrapConfig.value = {
+          enabled: res.dns.bootstrap.enabled,
+          servers: res.dns.bootstrap.servers || [],
+        };
+      }
+      if (res.dns.conditionalRoutes) {
+        conditionalRoutes.value = { ...res.dns.conditionalRoutes };
+      } else {
+        conditionalRoutes.value = {};
+      }
     }
   } catch (err: any) {
     errorMessage.value = err.message || '获取 DNS 配置失败';
@@ -118,7 +145,7 @@ async function saveConfig() {
       conditionalRoutes: conditionalRoutes.value,
     });
     successMessage.value = 'DNS 服务器配置已更新并即时生效！';
-    await loadData();
+    await loadData(true);
     setTimeout(() => {
       successMessage.value = '';
     }, 3000);
@@ -330,7 +357,7 @@ onMounted(() => {
           v-for="(node, idx) in upstreams"
           :key="node.id"
           :title="node.id"
-          :subtitle="'权重: ' + (node.weight || 1)"
+          :subtitle="'权重: ' + (node.weight ?? 1)"
           icon="dns"
         >
           <template #badge>

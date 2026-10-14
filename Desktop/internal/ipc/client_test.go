@@ -1,4 +1,4 @@
-﻿package ipc
+package ipc
 
 import (
 	"bytes"
@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/haoze-evolluling/diting/desktop/internal/core"
 	"github.com/haoze-evolluling/diting/desktop/internal/platform"
 )
 
@@ -173,6 +174,18 @@ func (c *Client) ConfigureUpstream(ctx context.Context, req ConfigureUpstreamReq
 		return fmt.Errorf("配置上游失败: %s", resp.Error)
 	}
 	return nil
+}
+
+// GetUpstreamConfig 获取权威上游解析器配置
+func (c *Client) GetUpstreamConfig(ctx context.Context) (*core.ResolverConfig, error) {
+	var resp Response[*core.ResolverConfig]
+	if err := c.doRequest(ctx, http.MethodGet, "/api/v1/upstream/configure", nil, &resp); err != nil {
+		return nil, err
+	}
+	if !resp.Success {
+		return nil, fmt.Errorf("获取上游配置失败: %s", resp.Error)
+	}
+	return resp.Data, nil
 }
 
 // ConfigureBootstrap 动态配置 Bootstrap 引导解析器

@@ -20,6 +20,7 @@ type ServiceController interface {
 	AutofixPortConflicts(ctx context.Context, startDNS bool) (*platform.PortCheckResult, error)
 	GetAdapters(ctx context.Context) ([]platform.AdapterInfo, error)
 	ConfigureUpstream(ctx context.Context, req ConfigureUpstreamRequest) error
+	GetUpstreamConfig(ctx context.Context) (*core.ResolverConfig, error)
 	TestUpstream(ctx context.Context, req TestUpstreamRequest) (*TestUpstreamResponse, error)
 	SetAdapterTakeover(ctx context.Context, req AdapterTakeoverRequest) error
 	GetCacheStats(ctx context.Context) (*core.CacheStats, error)
