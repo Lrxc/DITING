@@ -352,3 +352,69 @@ func TestMode_ValidationAndCanonical(t *testing.T) {
 	}
 }
 
+func TestScheduler_SmartPrediction_NilStatsAndWeight(t *testing.T) {
+	rawQuery := makeTestDNSQuery("weight.test.com")
+
+	executor := func(ctx context.Context, p *ConfiguredProvider, q []byte) ([]byte, error) {
+		return makeTestDNSResponse(q, dns.RcodeSuccess, "1.2.3.4"), nil
+	}
+	scheduler := NewScheduler(executor)
+
+	// 1. 测试 nil stats 节点不会以 0 延迟错误击败已测得低延迟节点 (10ms)
+	pFast := &ConfiguredProvider{ID: "fast", Stats: NewProviderStats(), Weight: 1}
+	pFast.Stats.RecordSuccess(10 * time.Millisecond)
+	pNilStats := &ConfiguredProvider{ID: "untested-nil", Stats: nil, Weight: 1}
+
+	// 传入顺序：pNilStats 在前，pFast 在后
+	candidates := []*ConfiguredProvider{pNilStats, pFast}
+	// 在 smart_prediction 下，pFast 得分 (10ms) 应优于未测试的 pNilStats (默认 50ms)
+	resp, err := scheduler.Resolve(context.Background(), ModeSmartPrediction, candidates, rawQuery)
+	if err != nil {
+		t.Fatalf("resolve failed: %v", err)
+	}
+	if resp == nil {
+		t.Fatalf("expected response")
+	}
+
+	// 2. 测试权重加权：延迟相近时，权重高者具有更高调度优先级
+	calledID := ""
+	weighedExec := func(ctx context.Context, p *ConfiguredProvider, q []byte) ([]byte, error) {
+		if calledID == "" {
+			calledID = p.ID
+		}
+		return makeTestDNSResponse(q, dns.RcodeSuccess, "1.2.3.4"), nil
+	}
+	schedWeight := NewScheduler(weighedExec)
+
+	pW1 := &ConfiguredProvider{ID: "weight-1", Stats: NewProviderStats(), Weight: 1}
+	pW1.Stats.RecordSuccess(20 * time.Millisecond) // 加权得分 20ms
+
+	pW3 := &ConfiguredProvider{ID: "weight-3", Stats: NewProviderStats(), Weight: 3}
+	pW3.Stats.RecordSuccess(20 * time.Millisecond) // 加权得分 20ms / 3 ≈ 6.6ms
+
+	// 将 pW1 排在前，pW3 排在后
+	_, err = schedWeight.Resolve(context.Background(), ModeSmartPrediction, []*ConfiguredProvider{pW1, pW3}, rawQuery)
+	if err != nil {
+		t.Fatalf("resolve failed: %v", err)
+	}
+	if calledID != "weight-3" {
+		t.Fatalf("expected high-weight provider weight-3 to be selected first, got %s", calledID)
+	}
+}
+
+func TestProtocol_Validation(t *testing.T) {
+	valid := []string{"PLAIN", "plain", "UDP", "udp", "TCP", "tcp", "DOH", "doh", "HTTPS", "https", "DOT", "dot", "TLS", "tls", ""}
+	for _, p := range valid {
+		if !IsValidProtocol(p) {
+			t.Errorf("expected protocol %q to be valid", p)
+		}
+	}
+
+	invalid := []string{"FTP", "invalid", "DHO", "HTTP", "ws"}
+	for _, p := range invalid {
+		if IsValidProtocol(p) {
+			t.Errorf("expected protocol %q to be invalid", p)
+		}
+	}
+}
+

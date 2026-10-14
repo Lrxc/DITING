@@ -203,14 +203,27 @@ func (s *Scheduler) resolveSmartPrediction(ctx context.Context, providers []*Con
 	candidates := make([]*ConfiguredProvider, n)
 	copy(candidates, providers)
 	sort.SliceStable(candidates, func(i, j int) bool {
-		var scoreI, scoreJ time.Duration
-		if candidates[i].Stats != nil {
+		scoreI := defaultStatsEWMA
+		if candidates[i] != nil && candidates[i].Stats != nil {
 			scoreI = candidates[i].Stats.Score()
 		}
-		if candidates[j].Stats != nil {
+		scoreJ := defaultStatsEWMA
+		if candidates[j] != nil && candidates[j].Stats != nil {
 			scoreJ = candidates[j].Stats.Score()
 		}
-		return scoreI < scoreJ
+
+		wI := 1
+		if candidates[i] != nil && candidates[i].Weight > 0 {
+			wI = candidates[i].Weight
+		}
+		wJ := 1
+		if candidates[j] != nil && candidates[j].Weight > 0 {
+			wJ = candidates[j].Weight
+		}
+
+		weightedScoreI := scoreI / time.Duration(wI)
+		weightedScoreJ := scoreJ / time.Duration(wJ)
+		return weightedScoreI < weightedScoreJ
 	})
 
 	return s.resolvePrimaryBackup(ctx, candidates, rawQuery)

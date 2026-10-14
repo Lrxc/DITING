@@ -24,6 +24,10 @@ func (p *program) ConfigureUpstream(ctx context.Context, req ipc.ConfigureUpstre
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	if p.cfg == nil {
+		p.cfg = config.DefaultConfig()
+	}
+
 	// 基础校验：必须包含至少一个可配置字段
 	if req.Mode == "" && req.Providers == nil && req.Bootstrap == nil && req.ConditionalRoutes == nil {
 		return fmt.Errorf("未包含任何有效的上游配置项")
@@ -56,12 +60,20 @@ func (p *program) ConfigureUpstream(ctx context.Context, req ipc.ConfigureUpstre
 			}
 			seenIDs[id] = true
 
+			if !core.IsValidProtocol(string(prov.Protocol)) {
+				return fmt.Errorf("上游 %s: 不支持的解析协议 %q", id, prov.Protocol)
+			}
 			proto := core.ParseProtocol(string(prov.Protocol))
+			prov.Protocol = proto
+
 			switch proto {
 			case core.ProtocolDoH:
 				u, err := url.ParseRequestURI(prov.URL)
 				if err != nil || u.Scheme != "https" || u.Host == "" {
 					return fmt.Errorf("上游 %s: 非法的 DoH URL %q", id, prov.URL)
+				}
+				if strings.TrimSpace(prov.Server) == "" {
+					prov.Server = u.Host
 				}
 			case core.ProtocolDoT:
 				if strings.TrimSpace(prov.Server) == "" {
@@ -115,6 +127,9 @@ func (p *program) GetUpstreamConfig(ctx context.Context) (*core.ResolverConfig, 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	if p.cfg == nil {
+		return &core.ResolverConfig{}, nil
+	}
 	cfg := p.cfg.Upstream
 	return &cfg, nil
 }

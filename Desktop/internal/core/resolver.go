@@ -19,6 +19,16 @@ const (
 	ProtocolDoT   DNSProtocol = "DOT"
 )
 
+// IsValidProtocol 校验上游传输协议字符串是否受支持
+func IsValidProtocol(s string) bool {
+	switch strings.ToUpper(strings.TrimSpace(s)) {
+	case "PLAIN", "UDP", "TCP", "DOH", "HTTPS", "DOT", "TLS", "":
+		return true
+	default:
+		return false
+	}
+}
+
 // ParseProtocol 解析协议字符串
 func ParseProtocol(s string) DNSProtocol {
 	switch strings.ToUpper(strings.TrimSpace(s)) {
@@ -105,19 +115,36 @@ func (r *CoreResolver) Configure(cfg ResolverConfig) error {
 
 	mode := CanonicalMode(cfg.Mode)
 
+	// 捕获已有节点的统计指标，使动态更新配置时平滑保留健康与延迟历史
+	r.mu.RLock()
+	oldStats := make(map[string]*ProviderStats, len(r.providers))
+	for _, oldP := range r.providers {
+		if oldP != nil && oldP.ID != "" && oldP.Stats != nil {
+			oldStats[oldP.ID] = oldP.Stats
+		}
+	}
+	r.mu.RUnlock()
+
 	providers := make([]*ConfiguredProvider, 0, len(cfg.Providers))
 	for i, p := range cfg.Providers {
+		if !IsValidProtocol(string(p.Protocol)) {
+			return fmt.Errorf("provider %s: unsupported protocol %q", p.ID, p.Protocol)
+		}
 		proto := ParseProtocol(string(p.Protocol))
 		if p.ID == "" {
 			p.ID = fmt.Sprintf("provider-%d", i+1)
 		}
 
+		server := strings.TrimSpace(p.Server)
 		if proto == ProtocolDoH {
 			u, err := url.ParseRequestURI(p.URL)
 			if err != nil || u.Scheme != "https" || u.Host == "" {
 				return fmt.Errorf("provider %s: invalid DoH URL %q", p.ID, p.URL)
 			}
-		} else if strings.TrimSpace(p.Server) == "" {
+			if server == "" {
+				server = u.Host
+			}
+		} else if server == "" {
 			return fmt.Errorf("provider %s: empty server address", p.ID)
 		}
 
@@ -126,13 +153,18 @@ func (r *CoreResolver) Configure(cfg ResolverConfig) error {
 			weight = 1
 		}
 
+		stats := oldStats[p.ID]
+		if stats == nil {
+			stats = NewProviderStats()
+		}
+
 		providers = append(providers, &ConfiguredProvider{
 			ID:       p.ID,
 			Protocol: proto,
-			Server:   p.Server,
+			Server:   server,
 			URL:      p.URL,
 			Weight:   weight,
-			Stats:    NewProviderStats(),
+			Stats:    stats,
 		})
 	}
 

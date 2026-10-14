@@ -357,7 +357,7 @@ onMounted(() => {
           v-for="(node, idx) in upstreams"
           :key="node.id"
           :title="node.id"
-          :subtitle="'权重: ' + (node.weight || 1)"
+          :subtitle="'权重: ' + (node.weight ?? 1)"
           icon="dns"
         >
           <template #badge>
