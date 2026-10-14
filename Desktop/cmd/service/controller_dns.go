@@ -350,17 +350,44 @@ func (p *program) GetStatus(ctx context.Context) (*ipc.StatusResponse, error) {
 				Protocol:     string(stat.Protocol),
 				Server:       stat.Server,
 				URL:          stat.URL,
+				Weight:       stat.Weight,
 				Active:       stat.IsHealthy,
 				SuccessCount: stat.SuccessCount,
 				FailureCount: stat.FailureCount,
 				AvgLatencyMs: stat.AvgLatencyMs,
 			})
 		}
+	} else if p.cfg != nil {
+		for _, prov := range p.cfg.Upstream.Providers {
+			w := prov.Weight
+			if w <= 0 {
+				w = 1
+			}
+			upstreams = append(upstreams, ipc.UpstreamInfo{
+				ID:       prov.ID,
+				Protocol: string(prov.Protocol),
+				Server:   prov.Server,
+				URL:      prov.URL,
+				Weight:   w,
+				Active:   true,
+			})
+		}
 	}
 
-	takenAdapters := p.takeoverMgr.GetTakenOverAdapters()
+	var takenAdapters []platform.AdapterState
+	takeoverActive := false
+	if p.takeoverMgr != nil {
+		takenAdapters = p.takeoverMgr.GetTakenOverAdapters()
+		takeoverActive = p.takeoverMgr.IsTakeoverActive()
+	}
 	lanAddrs, _ := platform.GetLANAddresses()
 	effUDP, _ := p.cfg.DNS.EffectiveListenAddresses()
+
+	var metricsSnap ipc.MetricsStatus
+	if p.metrics != nil {
+		metricsSnap = p.metrics.Snapshot()
+	}
+
 	return &ipc.StatusResponse{
 		Version:       Version,
 		PID:           os.Getpid(),
@@ -382,10 +409,10 @@ func (p *program) GetStatus(ctx context.Context) (*ipc.StatusResponse, error) {
 			EDNSPadding:       p.cfg.DNS.EDNSPadding,
 		},
 		Takeover: ipc.TakeoverStatus{
-			Active:   p.takeoverMgr.IsTakeoverActive(),
+			Active:   takeoverActive,
 			Adapters: takenAdapters,
 		},
-		Metrics:    p.metrics.Snapshot(),
+		Metrics:    metricsSnap,
 		Cache:      p.getCacheStatsSnapshot(),
 		Filter:     p.getFilterStatsSnapshot(),
 		Hosts:      p.cfg.Hosts,

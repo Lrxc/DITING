@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/haoze-evolluling/diting/desktop/internal/core"
 	"github.com/haoze-evolluling/diting/desktop/internal/platform"
 )
 
@@ -71,6 +72,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/v1/status", s.withAuth(s.handleStatus))
 	mux.HandleFunc("/api/v1/adapters", s.withAuth(s.handleAdapters))
 	mux.HandleFunc("/api/v1/takeover/adapter", s.withAuth(s.handleAdapterTakeover))
+	mux.HandleFunc("/api/v1/upstream", s.withAuth(s.handleUpstreamConfigure))
 	mux.HandleFunc("/api/v1/upstream/configure", s.withAuth(s.handleUpstreamConfigure))
 	mux.HandleFunc("/api/v1/upstream/test", s.withAuth(s.handleUpstreamTest))
 	mux.HandleFunc("/api/v1/bootstrap/configure", s.withAuth(s.handleBootstrapConfigure))
@@ -333,21 +335,32 @@ func (s *Server) handleAdapterTakeover(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUpstreamConfigure(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, Response[any]{Success: false, Error: "method not allowed"})
+	if r.Method == http.MethodGet {
+		cfg, err := s.controller.GetUpstreamConfig(r.Context())
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, Response[any]{Success: false, Error: err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, Response[*core.ResolverConfig]{Success: true, Data: cfg})
 		return
 	}
-	var req ConfigureUpstreamRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, Response[any]{Success: false, Error: err.Error()})
+
+	if r.Method == http.MethodPost {
+		var req ConfigureUpstreamRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, Response[any]{Success: false, Error: err.Error()})
+			return
+		}
+		if err := s.controller.ConfigureUpstream(r.Context(), req); err != nil {
+			writeJSON(w, http.StatusBadRequest, Response[any]{Success: false, Error: err.Error()})
+			return
+		}
+		s.Broadcast(Event{Type: "upstream", Timestamp: time.Now().UnixMilli(), Data: "configured"})
+		writeJSON(w, http.StatusOK, Response[any]{Success: true, Message: "上游配置已成功更新"})
 		return
 	}
-	if err := s.controller.ConfigureUpstream(r.Context(), req); err != nil {
-		writeJSON(w, http.StatusInternalServerError, Response[any]{Success: false, Error: err.Error()})
-		return
-	}
-	s.Broadcast(Event{Type: "upstream", Timestamp: time.Now().UnixMilli(), Data: "configured"})
-	writeJSON(w, http.StatusOK, Response[any]{Success: true, Message: "上游配置已成功更新"})
+
+	writeJSON(w, http.StatusMethodNotAllowed, Response[any]{Success: false, Error: "只支持 GET / POST 请求"})
 }
 
 func (s *Server) handleUpstreamTest(w http.ResponseWriter, r *http.Request) {

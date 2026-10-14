@@ -104,10 +104,6 @@ func (r *CoreResolver) Configure(cfg ResolverConfig) error {
 	}
 
 	mode := CanonicalMode(cfg.Mode)
-	if mode == ModeSingle && len(cfg.Providers) != 1 {
-		// 单节点模式若传入多个提供者，使用第一个
-		cfg.Providers = cfg.Providers[:1]
-	}
 
 	providers := make([]*ConfiguredProvider, 0, len(cfg.Providers))
 	for i, p := range cfg.Providers {
@@ -125,11 +121,17 @@ func (r *CoreResolver) Configure(cfg ResolverConfig) error {
 			return fmt.Errorf("provider %s: empty server address", p.ID)
 		}
 
+		weight := p.Weight
+		if weight <= 0 {
+			weight = 1
+		}
+
 		providers = append(providers, &ConfiguredProvider{
 			ID:       p.ID,
 			Protocol: proto,
 			Server:   p.Server,
 			URL:      p.URL,
+			Weight:   weight,
 			Stats:    NewProviderStats(),
 		})
 	}
@@ -328,6 +330,7 @@ type UpstreamStatSnapshot struct {
 	Protocol     DNSProtocol
 	Server       string
 	URL          string
+	Weight       int
 	SuccessCount uint64
 	FailureCount uint64
 	AvgLatencyMs float64
@@ -353,6 +356,7 @@ func (r *CoreResolver) GetProviderStats() []UpstreamStatSnapshot {
 			Protocol:     p.Protocol,
 			Server:       p.Server,
 			URL:          p.URL,
+			Weight:       p.Weight,
 			SuccessCount: succ,
 			FailureCount: fail,
 			AvgLatencyMs: float64(ewmaRTT.Nanoseconds()) / 1e6,

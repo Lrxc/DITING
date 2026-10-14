@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -18,15 +19,31 @@ const (
 	ModePrimaryBackup = "primary_backup"
 	// ModeParallelRace 并发竞速策略
 	ModeParallelRace = "parallel_race"
+	// ModeSmartPrediction 智能预测优选策略
+	ModeSmartPrediction = "smart_prediction"
 )
+
+// IsValidMode 校验调度模式是否合法
+func IsValidMode(mode string) bool {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "single", "primary_backup", "backup", "parallel_race", "race", "fastest", "smart_prediction", "prediction", "smart", "load_balance":
+		return true
+	default:
+		return false
+	}
+}
 
 // CanonicalMode 规整调度模式名称
 func CanonicalMode(mode string) string {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case "primary_backup", "backup":
 		return ModePrimaryBackup
-	case "parallel_race", "race":
+	case "parallel_race", "race", "fastest":
 		return ModeParallelRace
+	case "smart_prediction", "prediction", "smart", "load_balance":
+		return ModeSmartPrediction
+	case "single":
+		return ModeSingle
 	default:
 		return ModeSingle
 	}
@@ -130,6 +147,7 @@ type ConfiguredProvider struct {
 	Protocol DNSProtocol
 	Server   string
 	URL      string
+	Weight   int
 	Stats    *ProviderStats
 }
 
@@ -160,6 +178,8 @@ func (s *Scheduler) Resolve(ctx context.Context, mode string, providers []*Confi
 		return s.resolvePrimaryBackup(ctx, providers, rawQuery)
 	case ModeParallelRace:
 		return s.resolveParallelRace(ctx, providers, rawQuery)
+	case ModeSmartPrediction:
+		return s.resolveSmartPrediction(ctx, providers, rawQuery)
 	default:
 		return s.resolveSingle(ctx, providers, rawQuery)
 	}
@@ -172,6 +192,28 @@ func (s *Scheduler) resolveSingle(ctx context.Context, providers []*ConfiguredPr
 		return nil, fmt.Errorf("upstream %s failed: %w", p.ID, err)
 	}
 	return resp, nil
+}
+
+func (s *Scheduler) resolveSmartPrediction(ctx context.Context, providers []*ConfiguredProvider, rawQuery []byte) ([]byte, error) {
+	n := len(providers)
+	if n == 1 {
+		return s.resolveSingle(ctx, providers, rawQuery)
+	}
+
+	candidates := make([]*ConfiguredProvider, n)
+	copy(candidates, providers)
+	sort.SliceStable(candidates, func(i, j int) bool {
+		var scoreI, scoreJ time.Duration
+		if candidates[i].Stats != nil {
+			scoreI = candidates[i].Stats.Score()
+		}
+		if candidates[j].Stats != nil {
+			scoreJ = candidates[j].Stats.Score()
+		}
+		return scoreI < scoreJ
+	})
+
+	return s.resolvePrimaryBackup(ctx, candidates, rawQuery)
 }
 
 func (s *Scheduler) resolvePrimaryBackup(ctx context.Context, providers []*ConfiguredProvider, rawQuery []byte) ([]byte, error) {

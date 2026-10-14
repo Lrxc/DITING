@@ -64,6 +64,10 @@ export class CoreApi {
     });
   }
 
+  public getUpstreamConfig(): Promise<UpstreamConfigureRequest> {
+    return this.http.request<UpstreamConfigureRequest>('/api/v1/upstream/configure');
+  }
+
   public async configureUpstream(req: UpstreamConfigureRequest): Promise<void> {
     await this.http.request<void>('/api/v1/upstream/configure', {
       method: 'POST',

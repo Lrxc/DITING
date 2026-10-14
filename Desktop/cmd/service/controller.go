@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -23,32 +24,99 @@ func (p *program) ConfigureUpstream(ctx context.Context, req ipc.ConfigureUpstre
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	// 基础校验：必须包含至少一个可配置字段
+	if req.Mode == "" && req.Providers == nil && req.Bootstrap == nil && req.ConditionalRoutes == nil {
+		return fmt.Errorf("未包含任何有效的上游配置项")
+	}
+
 	cfg := p.cfg.Upstream
+
 	if req.Mode != "" {
+		if !core.IsValidMode(req.Mode) {
+			return fmt.Errorf("不支持的上游调度模式: %s", req.Mode)
+		}
 		cfg.Mode = req.Mode
 	}
-	if len(req.Providers) > 0 {
-		cfg.Providers = req.Providers
+
+	if req.Providers != nil {
+		if len(req.Providers) == 0 {
+			return fmt.Errorf("至少需要配置一个上游 DNS 服务器")
+		}
+
+		seenIDs := make(map[string]bool, len(req.Providers))
+		validatedProviders := make([]core.ProviderConfig, len(req.Providers))
+		for i, prov := range req.Providers {
+			id := strings.TrimSpace(prov.ID)
+			if id == "" {
+				id = fmt.Sprintf("provider-%d", i+1)
+				prov.ID = id
+			}
+			if seenIDs[id] {
+				return fmt.Errorf("上游服务器 ID 重复: %s", id)
+			}
+			seenIDs[id] = true
+
+			proto := core.ParseProtocol(string(prov.Protocol))
+			switch proto {
+			case core.ProtocolDoH:
+				u, err := url.ParseRequestURI(prov.URL)
+				if err != nil || u.Scheme != "https" || u.Host == "" {
+					return fmt.Errorf("上游 %s: 非法的 DoH URL %q", id, prov.URL)
+				}
+			case core.ProtocolDoT:
+				if strings.TrimSpace(prov.Server) == "" {
+					return fmt.Errorf("上游 %s: DoT 服务器地址不能为空", id)
+				}
+			default:
+				if strings.TrimSpace(prov.Server) == "" {
+					return fmt.Errorf("上游 %s: 服务器地址不能为空", id)
+				}
+			}
+			if prov.Weight <= 0 {
+				prov.Weight = 1
+			}
+			validatedProviders[i] = prov
+		}
+		cfg.Providers = validatedProviders
 	}
+
 	if req.Bootstrap != nil {
 		if err := core.ValidateBootstrapConfig(*req.Bootstrap); err != nil {
 			return err
 		}
 		cfg.Bootstrap = *req.Bootstrap
 	}
+
 	if req.ConditionalRoutes != nil {
 		cfg.ConditionalRoutes = req.ConditionalRoutes
 	}
+
 	if p.resolver != nil {
 		if err := p.resolver.Configure(cfg); err != nil {
 			return err
 		}
 	}
+
 	p.cfg.Upstream = cfg
-	if p.configPath != "" {
-		_ = config.SaveConfig(p.configPath, p.cfg)
+
+	savePath := p.configPath
+	if savePath == "" {
+		savePath = config.GetDefaultConfigPath()
 	}
+	if err := config.SaveConfig(savePath, p.cfg); err != nil {
+		return fmt.Errorf("保存配置失败: %w", err)
+	}
+
 	return nil
+}
+
+// GetUpstreamConfig 实现 ServiceController 接口
+func (p *program) GetUpstreamConfig(ctx context.Context) (*core.ResolverConfig, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	cfg := p.cfg.Upstream
+	return &cfg, nil
 }
 
 // TestUpstream 实现 ServiceController 接口

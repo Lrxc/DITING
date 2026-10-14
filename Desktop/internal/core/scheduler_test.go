@@ -276,3 +276,79 @@ func TestScheduler_ParallelRace_ContextCanceledNoPenalty(t *testing.T) {
 		t.Fatalf("expected canceled provider to not have failure recorded, got: %d", pSlow.Stats.failureCount)
 	}
 }
+
+func TestScheduler_SmartPrediction(t *testing.T) {
+	rawQuery := makeTestDNSQuery("smart.test.com")
+
+	p1Calls, p2Calls := 0, 0
+	executor := func(ctx context.Context, p *ConfiguredProvider, q []byte) ([]byte, error) {
+		if p.ID == "fast-healthy" {
+			p1Calls++
+			return makeTestDNSResponse(q, dns.RcodeSuccess, "1.1.1.1"), nil
+		}
+		if p.ID == "slow-penalized" {
+			p2Calls++
+			return makeTestDNSResponse(q, dns.RcodeSuccess, "2.2.2.2"), nil
+		}
+		return nil, fmt.Errorf("unknown provider")
+	}
+
+	scheduler := NewScheduler(executor)
+
+	pFast := &ConfiguredProvider{
+		ID:    "fast-healthy",
+		Stats: NewProviderStats(),
+	}
+	pSlow := &ConfiguredProvider{
+		ID:    "slow-penalized",
+		Stats: NewProviderStats(),
+	}
+
+	// 记录 pFast 极低延迟，pSlow 多次失败被惩罚
+	pFast.Stats.RecordSuccess(10 * time.Millisecond)
+	pSlow.Stats.RecordFailure()
+	pSlow.Stats.RecordFailure()
+
+	// 此时 pFast 得分显著优于 pSlow，应该优先调度 pFast
+	resp, err := scheduler.Resolve(context.Background(), ModeSmartPrediction, []*ConfiguredProvider{pSlow, pFast}, rawQuery)
+	if err != nil {
+		t.Fatalf("smart prediction resolve failed: %v", err)
+	}
+	if p1Calls != 1 || p2Calls != 0 {
+		t.Fatalf("expected only fast-healthy called, got pFast=%d, pSlow=%d", p1Calls, p2Calls)
+	}
+
+	var respMsg dns.Msg
+	if err := respMsg.Unpack(resp); err != nil || len(respMsg.Answer) != 1 {
+		t.Fatalf("unexpected smart prediction answer")
+	}
+}
+
+func TestMode_ValidationAndCanonical(t *testing.T) {
+	validModes := []string{
+		"single", "SINGLE",
+		"primary_backup", "PRIMARY_BACKUP", "backup",
+		"parallel_race", "PARALLEL_RACE", "race", "fastest",
+		"smart_prediction", "SMART_PREDICTION", "prediction", "smart", "load_balance", "LOAD_BALANCE",
+	}
+	for _, m := range validModes {
+		if !IsValidMode(m) {
+			t.Errorf("expected %q to be valid mode", m)
+		}
+	}
+
+	invalidModes := []string{"", "invalid", "random_mode", "foo_bar"}
+	for _, m := range invalidModes {
+		if IsValidMode(m) {
+			t.Errorf("expected %q to be invalid mode", m)
+		}
+	}
+
+	if CanonicalMode("SMART_PREDICTION") != ModeSmartPrediction {
+		t.Errorf("expected %s, got %s", ModeSmartPrediction, CanonicalMode("SMART_PREDICTION"))
+	}
+	if CanonicalMode("LOAD_BALANCE") != ModeSmartPrediction {
+		t.Errorf("expected %s, got %s", ModeSmartPrediction, CanonicalMode("LOAD_BALANCE"))
+	}
+}
+
