@@ -51,6 +51,10 @@ class AppTrafficStatsViewModel(application: Application) : AndroidViewModel(appl
     /** Blocked request counts per package for the selected time range, sourced from DNS and HTTPS logs. */
     @Volatile
     private var blockedCountsByPackage: Map<String, Int> = emptyMap()
+
+    /** All recorded requests per package for the same range, used for the blocked ratio. */
+    @Volatile
+    private var totalRequestCountsByPackage: Map<String, Int> = emptyMap()
     private var blockedCountsJob: Job? = null
 
     private var isScreenActive = false
@@ -169,12 +173,7 @@ class AppTrafficStatsViewModel(application: Application) : AndroidViewModel(appl
                 sessionTxBytes = liveItem?.sessionTxBytes ?: 0L,
                 sessionRxBytes = liveItem?.sessionRxBytes ?: 0L,
                 totalHistoryTxBytes = totalHistTx,
-                totalHistoryRxBytes = totalHistRx,
-                blockedRecords = loadAppBlockedRecords(
-                    db = db,
-                    packageName = packageName,
-                    since = blockedRangeStartMillis(_uiState.value.selectedTimeRange)
-                )
+                totalHistoryRxBytes = totalHistRx
             )
             _uiState.update { it.copy(selectedAppDetail = detail) }
         }
@@ -245,6 +244,20 @@ class AppTrafficStatsViewModel(application: Application) : AndroidViewModel(appl
                 counts[row.packageName] = (counts[row.packageName] ?: 0) + row.hits
             }
             blockedCountsByPackage = counts
+
+            val totals = HashMap<String, Int>()
+            runCatching {
+                db.dnsLogDao().requestCountByPackage(since)
+            }.getOrNull()?.forEach { row ->
+                totals[row.packageName] = (totals[row.packageName] ?: 0) + row.hits
+            }
+            runCatching {
+                db.httpRequestLogDao().requestCountByPackage(since)
+            }.getOrNull()?.forEach { row ->
+                totals[row.packageName] = (totals[row.packageName] ?: 0) + row.hits
+            }
+            totalRequestCountsByPackage = totals
+
             withContext(Dispatchers.Main) {
                 recomputeAppList()
             }
@@ -374,13 +387,15 @@ class AppTrafficStatsViewModel(application: Application) : AndroidViewModel(appl
             }
         }
 
-        // Merge blocked request counts, and surface apps that were blocked during the
-        // selected range even when they produced no measurable traffic.
-        for ((pkg, blocked) in blockedCountsByPackage) {
-            if (blocked <= 0) continue
+        // Merge blocked/total request counts, and surface apps that only appear in the request
+        // logs (fully blocked, or no measurable traffic) so the blocked ratio is complete.
+        for (pkg in blockedCountsByPackage.keys + totalRequestCountsByPackage.keys) {
+            val blocked = blockedCountsByPackage[pkg] ?: 0
+            val total = totalRequestCountsByPackage[pkg] ?: 0
+            if (blocked <= 0 && total <= 0) continue
             val existing = computedMap[pkg]
             if (existing != null) {
-                computedMap[pkg] = existing.copy(blockedCount = blocked)
+                computedMap[pkg] = existing.copy(blockedCount = blocked, totalRequestCount = total)
             } else {
                 val live = liveMap[pkg]
                 computedMap[pkg] = AppTrafficUiItem(
@@ -394,7 +409,8 @@ class AppTrafficStatsViewModel(application: Application) : AndroidViewModel(appl
                     currentTxSpeedBps = live?.currentTxSpeedBps ?: 0L,
                     currentRxSpeedBps = live?.currentRxSpeedBps ?: 0L,
                     currentTotalSpeedBps = live?.currentTotalSpeedBps ?: 0L,
-                    blockedCount = blocked
+                    blockedCount = blocked,
+                    totalRequestCount = total
                 )
             }
         }
@@ -427,8 +443,6 @@ class AppTrafficStatsViewModel(application: Application) : AndroidViewModel(appl
 
         val sorted = when (currentState.selectedSortMode) {
             TrafficSortMode.TOTAL_TRAFFIC -> filtered.sortedByDescending { it.totalBytes }
-            TrafficSortMode.DOWNLOAD -> filtered.sortedByDescending { it.rxBytes }
-            TrafficSortMode.UPLOAD -> filtered.sortedByDescending { it.txBytes }
             TrafficSortMode.REALTIME_SPEED -> filtered.sortedByDescending { it.currentTotalSpeedBps }
             TrafficSortMode.BLOCKED -> filtered.sortedWith(
                 compareByDescending<AppTrafficUiItem> { it.blockedCount }.thenByDescending { it.totalBytes }
@@ -451,8 +465,6 @@ class AppTrafficStatsViewModel(application: Application) : AndroidViewModel(appl
      */
     private fun progressMetric(mode: TrafficSortMode): (AppTrafficUiItem) -> Long = when (mode) {
         TrafficSortMode.TOTAL_TRAFFIC -> { item -> item.totalBytes }
-        TrafficSortMode.DOWNLOAD -> { item -> item.rxBytes }
-        TrafficSortMode.UPLOAD -> { item -> item.txBytes }
         TrafficSortMode.REALTIME_SPEED -> { item -> item.currentTotalSpeedBps }
         TrafficSortMode.BLOCKED -> { item -> item.blockedCount.toLong() }
     }

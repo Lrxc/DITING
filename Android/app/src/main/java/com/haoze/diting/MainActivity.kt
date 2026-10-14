@@ -15,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
+import com.haoze.diting.data.RequestStatus
 import com.haoze.diting.express.ExpressModeLauncher
 import com.haoze.diting.main.MainModeDispatcher
 import com.haoze.diting.main.MainNavigationCoordinator
@@ -153,6 +154,14 @@ class MainActivity : AppLocalizedActivity() {
                                         Routes.DNS_LOGS,
                                         dataset = null,
                                         requestStatus = status
+                                    )
+                                },
+                                onNavigateToBlockedLogs = { packageName ->
+                                    navigationCoordinator.launchLogRoute(
+                                        Routes.DNS_LOGS,
+                                        dataset = null,
+                                        requestStatus = RequestStatus.BLOCKED,
+                                        requestQuery = packageName
                                     )
                                 },
                                 onNavigateToModeSelection = {

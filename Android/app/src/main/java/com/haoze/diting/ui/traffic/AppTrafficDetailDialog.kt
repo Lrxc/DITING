@@ -6,13 +6,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -31,14 +27,12 @@ import com.haoze.diting.ui.components.AppAlertDialog
 import com.haoze.diting.ui.components.AppDialogButton
 import com.haoze.diting.ui.components.SettingsCornerShape
 import com.haoze.diting.ui.localizedText
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 @Composable
 internal fun AppTrafficDetailDialog(
     detail: AppDetailTrafficState,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onNavigateToBlockedLogs: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     val colors = MaterialTheme.colorScheme
@@ -114,62 +108,16 @@ internal fun AppTrafficDetailDialog(
                     }
                 }
 
-                Text(
-                    text = localizedText("拦截记录"),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                if (detail.blockedRecords.isEmpty()) {
-                    Text(
-                        text = localizedText("所选时段内暂无拦截记录"),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.onSurfaceVariant
-                    )
-                } else {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                    ) {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(detail.blockedRecords) { record ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = record.target,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = colors.onSurface,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = formatBlockedRecordTime(record.timestamp),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = colors.onSurfaceVariant.copy(alpha = 0.8f)
-                                        )
-                                    }
-                                    Text(
-                                        text = record.source,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = if (record.source == "HTTPS") colors.error else colors.primary
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
             }
         },
         confirmButton = {
             AppDialogButton(label = "关闭", onClick = onDismiss)
+        },
+        dismissButton = {
+            AppDialogButton(
+                label = "查看拦截记录",
+                onClick = { onNavigateToBlockedLogs(detail.packageName) }
+            )
         }
     )
 }
@@ -210,10 +158,3 @@ private fun DetailMetricRow(
         }
     }
 }
-
-private val blockedRecordTimeFormatter = ThreadLocal.withInitial {
-    SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault())
-}
-
-private fun formatBlockedRecordTime(timestamp: Long): String =
-    blockedRecordTimeFormatter.get()?.format(Date(timestamp)).orEmpty()

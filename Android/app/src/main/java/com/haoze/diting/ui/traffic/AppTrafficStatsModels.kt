@@ -10,8 +10,6 @@ enum class TrafficTimeRange(val displayName: String) {
 
 enum class TrafficSortMode(val displayName: String) {
     TOTAL_TRAFFIC("按总流量"),
-    DOWNLOAD("按下载流量"),
-    UPLOAD("按上传流量"),
     REALTIME_SPEED("按实时网速"),
     BLOCKED("按拦截数量")
 }
@@ -28,14 +26,9 @@ data class AppTrafficUiItem(
     val currentRxSpeedBps: Long,
     val currentTotalSpeedBps: Long,
     /** Requests blocked by filtering rules during the selected time range (DNS + HTTPS). */
-    val blockedCount: Int = 0
-)
-
-/** One blocked DNS/HTTPS request attributed to an app, listed in the app detail sheet. */
-data class AppBlockedRecord(
-    val timestamp: Long,
-    val source: String,
-    val target: String
+    val blockedCount: Int = 0,
+    /** All requests recorded for this app during the selected time range (DNS + HTTPS). */
+    val totalRequestCount: Int = 0
 )
 
 data class AppDetailTrafficState(
@@ -47,8 +40,7 @@ data class AppDetailTrafficState(
     val sessionTxBytes: Long,
     val sessionRxBytes: Long,
     val totalHistoryTxBytes: Long,
-    val totalHistoryRxBytes: Long,
-    val blockedRecords: List<AppBlockedRecord> = emptyList()
+    val totalHistoryRxBytes: Long
 )
 
 data class AppTrafficStatsUiState(

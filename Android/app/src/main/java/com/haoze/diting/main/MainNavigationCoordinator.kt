@@ -75,10 +75,17 @@ class MainNavigationCoordinator(
     fun launchLogRoute(
         route: String,
         dataset: RuleDataset? = null,
-        requestStatus: RequestStatus? = null
+        requestStatus: RequestStatus? = null,
+        requestQuery: String? = null
     ) {
         activity.startActivity(
-            LogRouteActivity.createIntent(activity, route, requestStatus = requestStatus, dataset = dataset)
+            LogRouteActivity.createIntent(
+                activity,
+                route,
+                requestStatus = requestStatus,
+                requestQuery = requestQuery,
+                dataset = dataset
+            )
         )
     }
 

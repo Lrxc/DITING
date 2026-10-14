@@ -95,16 +95,18 @@ fun RequestLogScreen(
     onBack: () -> Unit,
     initialSource: RequestSource = RequestSource.ALL,
     initialStatus: RequestStatus = RequestStatus.ALL,
+    initialQuery: String = "",
     onRuntimeDnsSettingsChanged: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val database = remember(context) { AppDatabase.getInstance(context) }
     val viewModel: RequestLogViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
-        key = "RequestLogViewModel_${initialSource.name}_${initialStatus.name}",
+        key = "RequestLogViewModel_${initialSource.name}_${initialStatus.name}_${initialQuery.hashCode()}",
         factory = RequestLogViewModel.factory(
             application = context.applicationContext as Application,
             initialSource = initialSource,
-            initialStatus = initialStatus
+            initialStatus = initialStatus,
+            initialQuery = initialQuery
         )
     )
     LaunchedEffect(initialSource, initialStatus) {

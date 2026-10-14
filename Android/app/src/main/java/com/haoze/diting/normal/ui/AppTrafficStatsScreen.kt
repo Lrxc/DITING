@@ -53,7 +53,8 @@ fun AppTrafficStatsScreen(
     onBack: () -> Unit = {},
     viewModel: AppTrafficStatsViewModel = viewModel(),
     showBackIcon: Boolean = true,
-    contentBottomPadding: androidx.compose.ui.unit.Dp = 0.dp
+    contentBottomPadding: androidx.compose.ui.unit.Dp = 0.dp,
+    onNavigateToBlockedLogs: (String) -> Unit = {}
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, viewModel) {
@@ -77,7 +78,7 @@ fun AppTrafficStatsScreen(
     val colors = MaterialTheme.colorScheme
 
     SettingsScaffold(
-        title = localizedText("应用流量统计"),
+        title = localizedText("应用统计"),
         onBack = onBack,
         showBackIcon = showBackIcon,
         containerColor = if (!showBackIcon) Color.Transparent else MaterialTheme.colorScheme.background,
@@ -225,7 +226,8 @@ fun AppTrafficStatsScreen(
     uiState.selectedAppDetail?.let { detail ->
         AppTrafficDetailDialog(
             detail = detail,
-            onDismiss = { viewModel.selectAppDetail(null) }
+            onDismiss = { viewModel.selectAppDetail(null) },
+            onNavigateToBlockedLogs = onNavigateToBlockedLogs
         )
     }
 }

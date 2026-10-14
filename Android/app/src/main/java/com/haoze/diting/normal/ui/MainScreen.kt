@@ -104,6 +104,7 @@ fun MainScreen(
     onNavigateToAgentApiSettings: () -> Unit = {},
     onNavigateToLogRoute: (String) -> Unit = { onNavigateToLogs() },
     onNavigateToRequestLogs: (RequestStatus?) -> Unit = {},
+    onNavigateToBlockedLogs: (String) -> Unit = {},
     onNavigateToSettingsRoute: (String) -> Unit = { onNavigateToSettings() },
     onNavigateToModeSelection: () -> Unit = {},
     resetToHomeTrigger: Long = 0L,
@@ -307,7 +308,8 @@ fun MainScreen(
                     AppTrafficStatsScreen(
                         onBack = {},
                         showBackIcon = false,
-                        contentBottomPadding = 108.dp
+                        contentBottomPadding = 108.dp,
+                        onNavigateToBlockedLogs = onNavigateToBlockedLogs
                     )
                 }
                 BottomBarDestination.NETWORK_TOOLS -> {

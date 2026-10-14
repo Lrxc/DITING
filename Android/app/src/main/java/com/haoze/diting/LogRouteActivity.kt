@@ -41,6 +41,9 @@ class LogRouteActivity : AppLocalizedActivity() {
             runCatching { RequestStatus.valueOf(value) }.getOrNull()
         }
 
+    private val requestedRequestQuery: String?
+        get() = intent.getStringExtra(EXTRA_REQUEST_QUERY)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -90,6 +93,20 @@ class LogRouteActivity : AppLocalizedActivity() {
         startActivity(createIntent(this, nextRoute, dataset = dataset))
     }
 
+    private fun openRequestLogs(requestStatus: RequestStatus?, requestQuery: String?) {
+        if (childLaunchInProgress || route == Routes.DNS_LOGS) return
+        childLaunchInProgress = true
+        startActivity(
+            createIntent(
+                this,
+                Routes.DNS_LOGS,
+                requestStatus = requestStatus,
+                requestQuery = requestQuery,
+                dataset = dataset
+            )
+        )
+    }
+
     @androidx.compose.runtime.Composable
     private fun LogRouteContent(
         route: String,
@@ -100,12 +117,11 @@ class LogRouteActivity : AppLocalizedActivity() {
         val onNavigateToDnsLogs = { onNavigate(Routes.DNS_LOGS) }
         // Dashboard stat cards open the request log pre-filtered by the tapped status.
         val onNavigateToRequestLogs: (RequestStatus?) -> Unit = { status ->
-            if (!childLaunchInProgress && route != Routes.DNS_LOGS) {
-                childLaunchInProgress = true
-                startActivity(
-                    createIntent(this, Routes.DNS_LOGS, requestStatus = status, dataset = dataset)
-                )
-            }
+            openRequestLogs(status, null)
+        }
+        // App stats detail sheet: jump to this app's blocked requests (search by package name).
+        val onNavigateToBlockedLogs: (String) -> Unit = { packageName ->
+            openRequestLogs(RequestStatus.BLOCKED, packageName)
         }
         val onNavigateToDnsCache = { onNavigate(Routes.DNS_CACHE) }
         val onNavigateToRaceStats = { onNavigate(Routes.RACE_STATS) }
@@ -129,6 +145,7 @@ class LogRouteActivity : AppLocalizedActivity() {
                         onBack = onBack,
                         initialSource = requestedRequestSource ?: if (route == Routes.HTTP_REQUEST_LOGS) RequestSource.HTTPS else RequestSource.ALL,
                         initialStatus = requestedRequestStatus ?: RequestStatus.ALL,
+                        initialQuery = requestedRequestQuery.orEmpty(),
                         onRuntimeDnsSettingsChanged = onRuntimeDnsSettingsChanged
                     )
                 }
@@ -138,7 +155,10 @@ class LogRouteActivity : AppLocalizedActivity() {
             Routes.BOOTSTRAP_STATS -> BootstrapStatsScreen(onBack = onBack, dataset = dataset)
             Routes.SUBSCRIPTION_INTERCEPTION_STATS -> SubscriptionInterceptionStatsScreen(onBack = onBack, dataset = dataset)
             Routes.PROVIDER_HEALTH -> ProviderHealthScreen(onBack = onBack, dataset = dataset)
-            Routes.APP_TRAFFIC_STATS -> com.haoze.diting.normal.ui.AppTrafficStatsScreen(onBack = onBack)
+            Routes.APP_TRAFFIC_STATS -> com.haoze.diting.normal.ui.AppTrafficStatsScreen(
+                onBack = onBack,
+                onNavigateToBlockedLogs = onNavigateToBlockedLogs
+            )
             else -> {
                 if (isExpressMode) {
                     com.haoze.diting.express.ui.ExpressLogDashboardScreen(
@@ -171,6 +191,7 @@ class LogRouteActivity : AppLocalizedActivity() {
         const val EXTRA_ROUTE = "log_route"
         const val EXTRA_REQUEST_SOURCE = "log_request_source"
         const val EXTRA_REQUEST_STATUS = "log_request_status"
+        const val EXTRA_REQUEST_QUERY = "log_request_query"
         const val EXTRA_DATASET = "log_dataset"
 
         fun createIntent(
@@ -178,6 +199,7 @@ class LogRouteActivity : AppLocalizedActivity() {
             route: String,
             requestSource: RequestSource? = null,
             requestStatus: RequestStatus? = null,
+            requestQuery: String? = null,
             dataset: RuleDataset? = null
         ): Intent =
             Intent(context, LogRouteActivity::class.java)
@@ -185,6 +207,7 @@ class LogRouteActivity : AppLocalizedActivity() {
                 .apply {
                     requestSource?.let { putExtra(EXTRA_REQUEST_SOURCE, it.name) }
                     requestStatus?.let { putExtra(EXTRA_REQUEST_STATUS, it.name) }
+                    requestQuery?.let { putExtra(EXTRA_REQUEST_QUERY, it) }
                     dataset?.let { putExtra(EXTRA_DATASET, it.name) }
                 }
     }

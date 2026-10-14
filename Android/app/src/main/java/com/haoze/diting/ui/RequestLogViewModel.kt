@@ -42,6 +42,7 @@ class RequestLogViewModel @JvmOverloads constructor(
     application: Application,
     initialSource: RequestSource = RequestSource.ALL,
     initialStatus: RequestStatus = RequestStatus.ALL,
+    initialQuery: String = "",
     dataset: RuleDataset = RuleDataset.NORMAL
 ) : AndroidViewModel(application) {
     private val repository = if (dataset == RuleDataset.EXPRESS) {
@@ -61,7 +62,14 @@ class RequestLogViewModel @JvmOverloads constructor(
         AppDatabase.getInstance(application).subscriptionDao()
     }
     private var subscriptionNames: Map<Long, String> = emptyMap()
-    private val _state = MutableStateFlow(RequestLogUiState(source = initialSource, status = initialStatus))
+    private val _state = MutableStateFlow(
+        RequestLogUiState(
+            source = initialSource,
+            status = initialStatus,
+            query = initialQuery,
+            searching = initialQuery.isNotEmpty()
+        )
+    )
     val state: StateFlow<RequestLogUiState> = _state.asStateFlow()
     private var limit = PAGE_SIZE
     private var searchJob: Job? = null
@@ -195,11 +203,18 @@ class RequestLogViewModel @JvmOverloads constructor(
             application: Application,
             initialSource: RequestSource = RequestSource.ALL,
             initialStatus: RequestStatus = RequestStatus.ALL,
+            initialQuery: String = "",
             dataset: RuleDataset = RuleDataset.NORMAL
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return RequestLogViewModel(application, initialSource, initialStatus, dataset) as T
+                return RequestLogViewModel(
+                    application,
+                    initialSource,
+                    initialStatus,
+                    initialQuery,
+                    dataset
+                ) as T
             }
         }
     }

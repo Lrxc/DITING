@@ -28,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -36,7 +37,9 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import com.haoze.diting.ui.components.SettingsCornerShape
 import com.haoze.diting.ui.dashboard.formatCount
-import com.haoze.diting.ui.localizedText
+
+/** Green for the request total shown beside the blocked count; no theme role fits it. */
+private val BlockedTotalColor = Color(0xFF4CAF50)
 
 @Composable
 internal fun AppTrafficRankItem(
@@ -49,14 +52,12 @@ internal fun AppTrafficRankItem(
     val animatedProgress by animateFloatAsState(targetValue = item.percentage, label = "progress")
 
     // The headline value follows the active sort mode so it matches what the bar and order show.
+    // The blocked mode renders its own two-tone ratio instead of a single string.
     val headlineText = when (sortMode) {
         TrafficSortMode.TOTAL_TRAFFIC -> formatBytes(item.totalBytes)
-        TrafficSortMode.DOWNLOAD -> formatBytes(item.rxBytes)
-        TrafficSortMode.UPLOAD -> formatBytes(item.txBytes)
         TrafficSortMode.REALTIME_SPEED -> formatSpeed(item.currentTotalSpeedBps)
-        TrafficSortMode.BLOCKED -> localizedText("拦截 " + formatCount(item.blockedCount) + " 次")
+        TrafficSortMode.BLOCKED -> null
     }
-    val headlineColor = if (sortMode == TrafficSortMode.BLOCKED) colors.error else colors.onSurface
 
     val appIcon = remember(item.packageName) {
         runCatching { context.packageManager.getApplicationIcon(item.packageName) }.getOrNull()
@@ -126,18 +127,39 @@ internal fun AppTrafficRankItem(
                 }
 
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = headlineText,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = headlineColor
-                    )
-                    if (item.currentTotalSpeedBps > 0) {
+                    if (sortMode == TrafficSortMode.BLOCKED) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "block ",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.error
+                            )
+                            Text(
+                                text = formatCount(item.blockedCount),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.error
+                            )
+                            Text(
+                                text = "/",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.onSurfaceVariant
+                            )
+                            Text(
+                                text = formatCount(item.totalRequestCount),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = BlockedTotalColor
+                            )
+                        }
+                    } else if (headlineText != null) {
                         Text(
-                            text = "↓ " + formatSpeed(item.currentRxSpeedBps),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = colors.primary,
-                            fontWeight = FontWeight.SemiBold
+                            text = headlineText,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.onSurface
                         )
                     }
                 }
@@ -153,24 +175,6 @@ internal fun AppTrafficRankItem(
                 trackColor = colors.surfaceVariant
             )
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "↓ " + formatBytes(item.rxBytes) + "   ↑ " + formatBytes(item.txBytes),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = colors.onSurfaceVariant
-                )
-                if (item.currentTxSpeedBps > 0) {
-                    Text(
-                        text = "↑ " + formatSpeed(item.currentTxSpeedBps),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colors.tertiary
-                    )
-                }
-            }
         }
     }
 }

@@ -60,19 +60,13 @@ interface DnsLogDao {
     ): List<PackageBlockedStatRow>
 
     @Query("""
-        SELECT * FROM dns_log
-        WHERE packageName = :packageName
-            AND result = :blockedResult
-            AND timestamp >= :since
-        ORDER BY timestamp DESC
-        LIMIT :limit
+        SELECT packageName AS packageName, COUNT(*) AS hits
+        FROM dns_log
+        WHERE timestamp >= :since
+            AND packageName IS NOT NULL
+        GROUP BY packageName
     """)
-    suspend fun blockedLogsByPackage(
-        packageName: String,
-        since: Long,
-        blockedResult: String,
-        limit: Int
-    ): List<DnsLogEntity>
+    suspend fun requestCountByPackage(since: Long): List<PackageBlockedStatRow>
 }
 
 data class DailyStatRow(
