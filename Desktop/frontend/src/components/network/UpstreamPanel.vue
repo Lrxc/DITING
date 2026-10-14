@@ -70,7 +70,7 @@ async function loadData(forceSyncProviders = false) {
           currentMode.value = upCfg.mode.toLowerCase();
         }
         if ((providers.value.length === 0 || forceSyncProviders) && upCfg.providers) {
-          providers.value = upCfg.providers.map((u) => ({
+          providers.value = upCfg.providers.map((u: ProviderConfig) => ({
             id: u.id,
             protocol: u.protocol,
             server: u.server,

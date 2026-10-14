@@ -64,6 +64,7 @@ class IPCService {
   public autofixPortConflicts = (startDNS = false) => this.core.autofixPortConflicts(startDNS);
 
   // --- 上游与 Bootstrap ---
+  public getUpstreamConfig = () => this.core.getUpstreamConfig();
   public configureUpstream = (req: Parameters<CoreApi['configureUpstream']>[0]) => this.core.configureUpstream(req);
   public testUpstream = (req: Parameters<CoreApi['testUpstream']>[0]) => this.core.testUpstream(req);
   public configureBootstrap = (cfg: Parameters<CoreApi['configureBootstrap']>[0]) => this.core.configureBootstrap(cfg);
