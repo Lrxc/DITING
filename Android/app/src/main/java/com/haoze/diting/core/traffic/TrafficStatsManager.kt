@@ -17,6 +17,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.max
@@ -54,6 +55,12 @@ object TrafficStatsManager {
 
     private val detailedSubscribersCount = AtomicInteger(0)
 
+    /**
+     * Guards [dbSyncer]'s one-shot restore of today's totals. Without it a fresh process
+     * (app killed, service not restarted yet) would report 0 for today.
+     */
+    private val todayLoadStarted = AtomicBoolean(false)
+
     private val appResolver = TrafficAppResolver()
     private val speedEstimator = TrafficSpeedEstimator()
     private val dbSyncer = TrafficDatabaseSyncer()
@@ -72,6 +79,21 @@ object TrafficStatsManager {
 
     fun unregisterDetailedConsumer() {
         detailedSubscribersCount.decrementAndGet()
+    }
+
+    /**
+     * Restores today's persisted totals early, for UI that renders before the VPN service
+     * (re)starts. Idempotent: the DB read happens at most once per process, so it can never
+     * overwrite deltas recorded in the meantime.
+     */
+    fun ensureTodayLoaded(context: Context) {
+        val appContext = context.applicationContext
+        applicationContext = appContext
+        if (!todayLoadStarted.compareAndSet(false, true)) return
+        scope.launch(Dispatchers.IO) {
+            dbSyncer.initTodayFromDb(appContext)
+            publishSnapshot()
+        }
     }
 
     fun getAppStatsList(): List<AppTrafficItem> = buildAppStatsList()
@@ -105,7 +127,11 @@ object TrafficStatsManager {
             if (!isGoTunnelActive) {
                 kernelSampler.initBaseline(appResolver.getAllAppInfos())
             }
-            dbSyncer.initTodayFromDb(appContext)
+            // Skip if the totals were already restored (e.g. the dashboard opened first):
+            // re-reading would roll back deltas accumulated since that restore.
+            if (todayLoadStarted.compareAndSet(false, true)) {
+                dbSyncer.initTodayFromDb(appContext)
+            }
 
             publishSnapshot()
         }

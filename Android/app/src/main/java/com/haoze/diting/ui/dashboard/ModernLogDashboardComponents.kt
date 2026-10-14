@@ -27,6 +27,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,6 +37,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -491,6 +493,13 @@ fun ErrorBanner(message: String) {
 fun TrafficMonitorDashboardCard(onClick: () -> Unit) {
     val trafficSnapshot by TrafficStatsManager.uiSnapshot.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
+    // Today's totals live in process memory and are restored from the DB by the VPN service.
+    // If this card renders first (app restarted, service not up yet) ask for that restore now,
+    // otherwise it would keep showing 0 until the service restarts.
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        TrafficStatsManager.ensureTodayLoaded(context)
+    }
 
     DashboardCard(
         modifier = Modifier
