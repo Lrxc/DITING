@@ -104,11 +104,17 @@ func normalizeConfig(cfg *Config) {
 	if cfg.DNS.WriteTimeout <= 0 {
 		cfg.DNS.WriteTimeout = 5 * time.Second
 	}
+	if cfg.DNS.EDNSPadding < 0 {
+		cfg.DNS.EDNSPadding = 0
+	}
 	if cfg.IPC.ListenAddress == "" {
 		cfg.IPC.ListenAddress = "127.0.0.1:15353"
 	}
 	if cfg.Upstream.Mode == "" {
 		cfg.Upstream.Mode = core.ModePrimaryBackup
+	}
+	if cfg.Upstream.EDNSPadding < 0 {
+		cfg.Upstream.EDNSPadding = 0
 	}
 	if len(cfg.Upstream.Bootstrap.Servers) == 0 && cfg.Upstream.Bootstrap.Enabled {
 		cfg.Upstream.Bootstrap.Servers = []core.BootstrapServer{
@@ -134,6 +140,7 @@ func normalizeConfig(cfg *Config) {
 	}
 	core.NormalizeCacheConfig(&cfg.Cache)
 	core.NormalizeFilterConfig(&cfg.Filter)
+	core.NormalizeRewriteConfig(&cfg.Rewrite)
 	core.NormalizeSafeSearchConfig(&cfg.SafeSearch)
 	_ = cfg.Client.Normalize()
 	querylog.NormalizeQueryLogConfig(&cfg.QueryLog)

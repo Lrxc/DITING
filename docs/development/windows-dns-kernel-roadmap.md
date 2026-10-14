@@ -405,8 +405,8 @@ Desktop/
 | 设备 `devices` | 管谁 | 网卡接管 · 局域网 DNS · 设备管理 · 安全隐私 |
 | 系统 `system` | 配本体 | 外观主题 · 服务与连接 · 局域网控制台 · 诊断与修复 |
 
-- **唯一事实源**：`Desktop/frontend/src/constants/navigation.ts` 定义 `NavTab` / `NAV_ITEMS` / `SUB_TABS` 及兼容层 `resolveRoute()`。
-- **兼容性**：旧大类 id（`network` / `accel` / `rules` / `logs` / `dashboard`）与旧「大类/小类」组合（如 `#/network/upstream`、`#/rules/rewrite`、`#/system/settings`）均通过 `resolveRoute()` 自动重定向，历史书签与分享链接不失效。
+- **唯一事实源**：`Desktop/frontend/src/constants/navigation.ts` 定义 `NavTab` / `NAV_ITEMS` / `SUB_TABS` 与路由解析 `resolveRoute()`。
+- **体系收敛**：移除针对老旧版本的历史重定向映射，统一收敛至当前五分类导航体系（`overview` / `resolve` / `protect` / `devices` / `system`），代码逻辑扁平清晰。
 - **同步改造**：维护台截图工具 `maintenance/core/ui_capturer.py` 与 `maintenance/web/index.html` 的标签下拉同步更新为全量新 slug（顺带补全此前遗漏的小类）。
 - **分类区 UI 统一**：`SegmentedTabs.vue` 改为墨底激活 + 滑动朱砂指示条 + 左右方向键切换 + 窄屏隐藏滚动条；`NavItem.vue` 激活态朱砂竖条加宽并着色图标，过渡统一 140ms，符合「墨·朱」设计规范。
 

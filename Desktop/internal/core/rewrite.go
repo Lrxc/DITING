@@ -38,6 +38,19 @@ func DefaultRewriteConfig() RewriteConfig {
 	}
 }
 
+// NormalizeRewriteConfig 校验与修补重写配置默认值
+func NormalizeRewriteConfig(cfg *RewriteConfig) {
+	if cfg == nil {
+		return
+	}
+	if cfg.TTL == 0 {
+		cfg.TTL = DefaultRewriteTTL
+	}
+	if cfg.Rules == nil {
+		cfg.Rules = []RewriteRule{}
+	}
+}
+
 // compiledRule 内部编译后的快速检索结构体
 type compiledRule struct {
 	domain     string

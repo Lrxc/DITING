@@ -240,13 +240,6 @@ func TestBootstrap_TruncatedFallbackTCP(t *testing.T) {
 	var err error
 	var addr string
 
-	var discardedTCP []net.Listener
-	defer func() {
-		for _, l := range discardedTCP {
-			_ = l.Close()
-		}
-	}()
-
 	for attempt := 0; attempt < 50; attempt++ {
 		tcpListener, err = net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
@@ -257,7 +250,7 @@ func TestBootstrap_TruncatedFallbackTCP(t *testing.T) {
 		if err == nil {
 			break
 		}
-		discardedTCP = append(discardedTCP, tcpListener)
+		_ = tcpListener.Close()
 		tcpListener = nil
 	}
 	if udpConn == nil || tcpListener == nil {

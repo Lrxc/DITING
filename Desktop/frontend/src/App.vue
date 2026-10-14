@@ -44,16 +44,17 @@ function parseRoute() {
   try {
     const url = new URL(window.location.href);
     const hashParts = url.hash.replace(/^#\/?/, '').split('/');
-    const hashTab = (hashParts[0] || '').split('?')[0];
+    const hashTab = (hashParts[0] || '').split(/[?#]/)[0];
     const rawTab = (url.searchParams.get('tab') || hashTab || '').toLowerCase();
     // 子页签：查询参数优先，其次 hash 第二段
-    const rawSub = url.searchParams.get('sub') || hashParts[1] || '';
+    const hashSub = (hashParts[1] || '').split(/[?#]/)[0];
+    const rawSub = (url.searchParams.get('sub') || hashSub || '').toLowerCase();
     const route = resolveRoute(rawTab, rawSub);
     if (route) {
       currentTab.value = route.tab;
       currentSub.value = route.sub;
     } else if (rawSub) {
-      currentSub.value = rawSub.toLowerCase();
+      currentSub.value = rawSub;
     }
 
     const themeParam = url.searchParams.get('theme');

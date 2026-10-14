@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/haoze-evolluling/diting/desktop/internal/core"
 )
 
 func TestDefaultConfig(t *testing.T) {
@@ -106,6 +108,11 @@ func TestCurrentConfigStructure(t *testing.T) {
 	cfg.Web.Background.URL = "https://example.com/bg.png"
 	cfg.Web.Background.Opacity = 60
 	cfg.Web.Background.Blur = 8
+	cfg.Rewrite.Enabled = true
+	cfg.Rewrite.TTL = 120
+	cfg.Rewrite.Rules = []core.RewriteRule{
+		{Domain: "example.lan", IPs: []string{"192.168.1.100"}},
+	}
 
 	if err := SaveConfig(cfgPath, cfg); err != nil {
 		t.Fatalf("SaveConfig failed: %v", err)
@@ -130,6 +137,29 @@ func TestCurrentConfigStructure(t *testing.T) {
 	}
 	if loaded.Web.Background.Type != "url" || loaded.Web.Background.Opacity != 60 || loaded.Web.Background.Blur != 8 {
 		t.Errorf("Web background mismatch: %+v", loaded.Web.Background)
+	}
+	if !loaded.Rewrite.Enabled || loaded.Rewrite.TTL != 120 || len(loaded.Rewrite.Rules) != 1 {
+		t.Errorf("Rewrite config mismatch: %+v", loaded.Rewrite)
+	}
+}
+
+func TestNormalizeConfigDefaults(t *testing.T) {
+	cfg := &Config{}
+	cfg.DNS.EDNSPadding = -5
+	cfg.Upstream.EDNSPadding = -10
+	normalizeConfig(cfg)
+
+	if cfg.DNS.EDNSPadding != 0 {
+		t.Errorf("expected DNS EDNSPadding to clamp to 0, got %d", cfg.DNS.EDNSPadding)
+	}
+	if cfg.Upstream.EDNSPadding != 0 {
+		t.Errorf("expected Upstream EDNSPadding to clamp to 0, got %d", cfg.Upstream.EDNSPadding)
+	}
+	if cfg.Rewrite.TTL != core.DefaultRewriteTTL {
+		t.Errorf("expected Rewrite.TTL to default to %d, got %d", core.DefaultRewriteTTL, cfg.Rewrite.TTL)
+	}
+	if cfg.Rewrite.Rules == nil {
+		t.Errorf("expected Rewrite.Rules to be non-nil slice")
 	}
 }
 

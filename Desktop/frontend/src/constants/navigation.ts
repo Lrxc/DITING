@@ -84,8 +84,8 @@ export function pickSub(tab: NavTab, sub: string): string {
  * 无法识别时返回 null（由调用方保留默认分类）。
  */
 export function resolveRoute(rawTab: string, rawSub = ''): { tab: NavTab; sub: string } | null {
-  const t = (rawTab || '').toLowerCase().trim();
-  const s = (rawSub || '').toLowerCase().trim();
+  const t = (rawTab || '').toLowerCase().trim().split(/[?#]/)[0];
+  const s = (rawSub || '').toLowerCase().trim().split(/[?#]/)[0];
   if (!t || !isValidTab(t)) return null;
 
   return { tab: t, sub: pickSub(t, s) };

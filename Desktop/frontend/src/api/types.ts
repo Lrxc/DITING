@@ -407,8 +407,6 @@ export interface LoginBgConfig {
   updatedAt?: number;
 }
 
-export type LoginBackgroundConfig = LoginBgConfig;
-
 export interface SetLoginBackgroundRequest {
   type?: 'none' | 'url' | 'custom';
   url: string;
