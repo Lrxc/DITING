@@ -26,6 +26,9 @@ import com.haoze.diting.ui.localizedText
 import com.haoze.diting.data.RequestStatus
 import com.haoze.diting.ui.components.SettingsCardMargin
 
+/** Dashboard preview lists show only the leading entry; the "详情" pages hold the full lists. */
+private const val DASHBOARD_LIST_LIMIT = 1
+
 @Composable
 fun AllModeDashboard(
     state: ModernLogDashboardUiState,
@@ -50,9 +53,6 @@ fun AllModeDashboard(
         contentPadding = PaddingValues(start = SettingsCardMargin, top = 12.dp, end = SettingsCardMargin, bottom = 28.dp + contentBottomPadding),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item {
-            DashboardHero(title = localizedText("请求日志仪表盘"))
-        }
         if (onNavigateToTrafficStats != null) {
             item {
                 TrafficMonitorDashboardCard(onClick = onNavigateToTrafficStats)
@@ -95,7 +95,8 @@ fun AllModeDashboard(
                     label = localizedText("缓存命中"),
                     value = formatCount(stats.cached),
                     valueColor = MaterialTheme.colorScheme.tertiary,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    onClick = { onNavigateToRequestLogs?.invoke(RequestStatus.CACHED) }
                 )
             }
         }
@@ -161,7 +162,7 @@ fun AllModeDashboard(
             DashboardListCard(
                 title = localizedText("缓存热点"),
                 emptyText = localizedText("暂无有效缓存"),
-                rowCount = state.cacheEntries.size,
+                rowCount = minOf(state.cacheEntries.size, DASHBOARD_LIST_LIMIT),
                 trailing = { PillLink(text = localizedText("详情"), onClick = onNavigateToDnsCache) }
             ) { index ->
                 CacheEntryRow(state.cacheEntries[index])
@@ -171,7 +172,7 @@ fun AllModeDashboard(
             DashboardListCard(
                 title = localizedText("竞速胜出"),
                 emptyText = localizedText("暂无竞速数据"),
-                rowCount = race.winners.size,
+                rowCount = minOf(race.winners.size, DASHBOARD_LIST_LIMIT),
                 trailing = { PillLink(text = localizedText("详情"), onClick = onNavigateToRaceStats) }
             ) { index ->
                 val item = race.winners[index]
@@ -187,7 +188,7 @@ fun AllModeDashboard(
             DashboardListCard(
                 title = localizedText("Bootstrap DNS"),
                 emptyText = localizedText("暂无 Bootstrap 数据"),
-                rowCount = bootstrap.ips.size,
+                rowCount = minOf(bootstrap.ips.size, DASHBOARD_LIST_LIMIT),
                 trailing = { PillLink(text = localizedText("详情"), onClick = onNavigateToBootstrapStats) }
             ) { index ->
                 val item = bootstrap.ips[index]
@@ -203,7 +204,7 @@ fun AllModeDashboard(
             DashboardListCard(
                 title = localizedText("规则拦截"),
                 emptyText = localizedText("暂无规则拦截数据"),
-                rowCount = state.subscriptions.items.size,
+                rowCount = minOf(state.subscriptions.items.size, DASHBOARD_LIST_LIMIT),
                 trailing = {
                     PillLink(
                         text = localizedText("详情"),
@@ -369,7 +370,7 @@ fun FilteredModeDashboard(
             DashboardListCard(
                 title = localizedText("缓存热点"),
                 emptyText = localizedText("暂无有效缓存"),
-                rowCount = state.cacheEntries.size,
+                rowCount = minOf(state.cacheEntries.size, DASHBOARD_LIST_LIMIT),
                 trailing = { PillLink(text = localizedText("详情"), onClick = onNavigateToDnsCache) }
             ) { index ->
                 CacheEntryRow(state.cacheEntries[index])
@@ -379,7 +380,7 @@ fun FilteredModeDashboard(
             DashboardListCard(
                 title = localizedText("竞速胜出"),
                 emptyText = localizedText("暂无竞速数据"),
-                rowCount = race.winners.size,
+                rowCount = minOf(race.winners.size, DASHBOARD_LIST_LIMIT),
                 trailing = { PillLink(text = localizedText("详情"), onClick = onNavigateToRaceStats) }
             ) { index ->
                 val item = race.winners[index]
@@ -395,7 +396,7 @@ fun FilteredModeDashboard(
             DashboardListCard(
                 title = localizedText("Bootstrap DNS"),
                 emptyText = localizedText("暂无 Bootstrap 数据"),
-                rowCount = bootstrap.ips.size,
+                rowCount = minOf(bootstrap.ips.size, DASHBOARD_LIST_LIMIT),
                 trailing = { PillLink(text = localizedText("详情"), onClick = onNavigateToBootstrapStats) }
             ) { index ->
                 val item = bootstrap.ips[index]
@@ -411,7 +412,7 @@ fun FilteredModeDashboard(
             DashboardListCard(
                 title = localizedText("规则拦截"),
                 emptyText = localizedText("暂无规则拦截数据"),
-                rowCount = state.subscriptions.items.size,
+                rowCount = minOf(state.subscriptions.items.size, DASHBOARD_LIST_LIMIT),
                 trailing = {
                     PillLink(
                         text = localizedText("详情"),

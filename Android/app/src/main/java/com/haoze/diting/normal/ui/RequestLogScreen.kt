@@ -79,7 +79,6 @@ import com.haoze.diting.core.rule.AllowListManager
 import com.haoze.diting.core.rule.BlockListManager
 import com.haoze.diting.core.log.LogResult
 import com.haoze.diting.ui.components.cascade.CascadeDropdownMenu
-import com.haoze.diting.ui.components.SettingsCornerShape
 import com.haoze.diting.ui.components.SettingsDivider
 import com.haoze.diting.ui.components.SettingsOutlinedActionButton
 import com.haoze.diting.ui.components.SettingsCardMargin

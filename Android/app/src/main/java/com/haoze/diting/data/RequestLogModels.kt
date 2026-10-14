@@ -34,5 +34,6 @@ enum class RequestStatus(val label: String, val explanation: String) {
     REWRITTEN("覆写", "请求命中了覆写规则，并返回覆写后的结果"),
     BLOCKED("过滤", "请求命中了过滤规则并被拦截"),
     ERROR("失败", "请求解析或处理失败"),
-    BYPASSED("旁路", "请求未被读取或过滤，直接建立连接")
+    BYPASSED("旁路", "请求未被读取或过滤，直接建立连接"),
+    CACHED("缓存", "请求命中本地 DNS 缓存，未向上游发起查询")
 }

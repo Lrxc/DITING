@@ -134,6 +134,9 @@ class RequestLogRepository(
             RequestStatus.BYPASSED -> {
                 sql.append(" AND (queryType = 0 OR queryName LIKE 'TCP %' OR queryName LIKE 'UDP %' OR message LIKE '%blocked_by=connection%') AND (message IS NULL OR message NOT LIKE '%blocked_by=firewall:%')")
             }
+            RequestStatus.CACHED -> {
+                sql.append(" AND cached = 1")
+            }
         }
 
         return SqlFilter(sql.toString(), args.toTypedArray())
@@ -168,6 +171,10 @@ class RequestLogRepository(
             }
             RequestStatus.BYPASSED -> {
                 sql.append(" AND outcome IN ('passthrough', 'bypassed', 'unsupported_protocol', 'resource_bypass')")
+            }
+            RequestStatus.CACHED -> {
+                // HTTPS records carry no cache flag, so nothing can match this filter.
+                sql.append(" AND 0")
             }
         }
 
