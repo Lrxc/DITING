@@ -417,10 +417,8 @@ private fun RequestLogCard(
         RequestStatus.REWRITTEN -> MaterialTheme.colorScheme.tertiary
         else -> MaterialTheme.colorScheme.primary
     }
-    val systemUid = if (item.appName == null) item.systemUid() else null
-    val appLabel = item.appName
-        ?: systemUid?.let { localizedText("系统") + " (uid $it)" }
-        ?: ""
+    val owner = if (item.appName == null) item.requestOwner() else null
+    val appLabel = item.appName ?: requestOwnerLabel(owner)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -433,7 +431,7 @@ private fun RequestLogCard(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (systemUid != null) {
+            if (owner != null) {
                 SystemAppPlaceholder(size = 40.dp)
             } else {
                 AppIconImage(packageName = item.packageName, size = 40.dp)

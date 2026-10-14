@@ -196,13 +196,36 @@ private fun extractElapsedMs(message: String): Long? {
 }
 
 private const val SYSTEM_UID_PREFIX = "uid:"
+private const val UNKNOWN_OWNER = "unknown"
+private const val ROOT_PROXY_OWNER = "RootProxy"
 
 /**
- * UID recorded by the tunnel when a connection's owner could not be resolved to a package
- * (`uid:<n>`). Lets the UI label such entries — typically uid 0, i.e. kernel/system traffic —
- * instead of leaving them blank.
+ * Owner markers the tunnel writes when a request cannot be attributed to an installed package.
+ * They are not package names, so the UI must label them explicitly instead of resolving them.
  */
-fun RequestLogItem.systemUid(): Int? =
-    packageName?.takeIf { it.startsWith(SYSTEM_UID_PREFIX) }
-        ?.removePrefix(SYSTEM_UID_PREFIX)
-        ?.toIntOrNull()
+sealed interface RequestOwner {
+    /** Kernel/root traffic known only by UID, written as `uid:<n>`. */
+    data class Uid(val uid: Int) : RequestOwner
+
+    /** The tunnel could not resolve the owner at all, written as `unknown`. */
+    data object Unknown : RequestOwner
+
+    /** Server mode: the query came from this device rather than a LAN client (`RootProxy`). */
+    data object RootProxy : RequestOwner
+}
+
+/**
+ * Decodes those markers so the list and the detail sheet can show a name and a placeholder icon
+ * instead of a blank row. Returns null for real package names and for missing packages.
+ */
+fun RequestLogItem.requestOwner(): RequestOwner? {
+    val pkg = packageName ?: return null
+    return when {
+        pkg.startsWith(SYSTEM_UID_PREFIX) ->
+            pkg.removePrefix(SYSTEM_UID_PREFIX).toIntOrNull()?.let { RequestOwner.Uid(it) }
+
+        pkg.equals(UNKNOWN_OWNER, ignoreCase = true) -> RequestOwner.Unknown
+        pkg.equals(ROOT_PROXY_OWNER, ignoreCase = true) -> RequestOwner.RootProxy
+        else -> null
+    }
+}

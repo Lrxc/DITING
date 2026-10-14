@@ -12,9 +12,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.haoze.diting.data.RequestStatus
 import com.haoze.diting.ui.components.AppAlertDialog
 import com.haoze.diting.ui.components.AppDialogButton
 import com.haoze.diting.ui.components.AppIconImage
@@ -41,9 +43,17 @@ fun RequestLogDetailDialog(
     val domainButton: (@Composable () -> Unit)? = onDomainAction?.let { action ->
         { AppDialogButton(label = "域名操作", onClick = action) }
     }
-    val systemUid = if (item.appName == null) item.systemUid() else null
-    val appLabel = item.appName
-        ?: systemUid?.let { localizedText("系统") + " (uid $it)" }
+    val owner = if (item.appName == null) item.requestOwner() else null
+    val appLabel = item.appName ?: requestOwnerLabel(owner)
+    // Same status palette as the list rows, so a highlighted value keeps its meaning here.
+    val statusColor = when (item.status) {
+        RequestStatus.BLOCKED,
+        RequestStatus.ERROR -> MaterialTheme.colorScheme.error
+        RequestStatus.BYPASSED -> MaterialTheme.colorScheme.onSurfaceVariant
+        RequestStatus.REWRITTEN -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.primary
+    }
+    val highlighted = FontWeight.SemiBold
 
     AppAlertDialog(
         onDismissRequest = onDismiss,
@@ -53,7 +63,7 @@ fun RequestLogDetailDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    if (systemUid != null) {
+                    if (owner != null) {
                         SystemAppPlaceholder(size = 32.dp)
                     } else {
                         AppIconImage(packageName = item.packageName, size = 32.dp)
@@ -78,13 +88,37 @@ fun RequestLogDetailDialog(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                DetailLine(localizedText("域名"), item.title)
-                DetailLine(localizedText("规则"), item.subscriptionName.orEmpty())
-                DetailLine(localizedText("状态"), localizedText(item.status.label))
+                DetailLine(
+                    label = localizedText("域名"),
+                    value = item.title,
+                    valueColor = MaterialTheme.colorScheme.primary,
+                    valueWeight = highlighted
+                )
+                DetailLine(
+                    label = localizedText("规则"),
+                    value = item.subscriptionName.orEmpty(),
+                    valueColor = MaterialTheme.colorScheme.error,
+                    valueWeight = highlighted
+                )
+                DetailLine(
+                    label = localizedText("状态"),
+                    value = localizedText(item.status.label),
+                    valueColor = statusColor,
+                    valueWeight = highlighted
+                )
                 DetailLine(localizedText("来源"), localizedText(item.source.label))
                 DetailLine(localizedText("类型"), item.requestType.orEmpty())
                 DetailLine(localizedText("耗时"), item.elapsedMs?.let { formatMs(it.toDouble()) }.orEmpty())
-                DetailLine(localizedText("缓存"), if (item.cached) localizedText("命中缓存") else "")
+                DetailLine(
+                    label = localizedText("缓存"),
+                    value = localizedText(if (item.cached) "命中" else "未命中"),
+                    valueColor = if (item.cached) {
+                        MaterialTheme.colorScheme.tertiary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    valueWeight = highlighted
+                )
                 DetailLine(localizedText("时间"), detailTimeFormatter.get()?.format(Date(item.timestamp)).orEmpty())
                 DetailLine(localizedText("详情"), item.detail.orEmpty())
             }
@@ -95,7 +129,12 @@ fun RequestLogDetailDialog(
 }
 
 @Composable
-private fun DetailLine(label: String, value: String) {
+private fun DetailLine(
+    label: String,
+    value: String,
+    valueColor: Color? = null,
+    valueWeight: FontWeight = FontWeight.Normal
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -110,7 +149,8 @@ private fun DetailLine(label: String, value: String) {
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = valueColor ?: MaterialTheme.colorScheme.onSurface,
+            fontWeight = valueWeight,
             modifier = Modifier.weight(1f)
         )
     }

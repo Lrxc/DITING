@@ -10,7 +10,6 @@ import com.haoze.diting.data.RuleDatabases
 import com.haoze.diting.data.RuleDataset
 import com.haoze.diting.data.BootstrapStatsRange
 import com.haoze.diting.data.RaceStatsRange
-import com.haoze.diting.data.SubscriptionInterceptionStatsRange
 import com.haoze.diting.data.entity.DnsCacheEntity
 import com.haoze.diting.data.entity.DnsLogEntity
 import com.haoze.diting.data.entity.HttpRequestLogEntity
@@ -88,16 +87,9 @@ data class DashboardBootstrapSummary(
     val ips: List<DashboardBootstrapIpItem> = emptyList()
 )
 
-data class DashboardSubscriptionItem(
-    val name: String,
-    val enabled: Boolean,
-    val deleted: Boolean,
-    val hits: Int,
-    val rate: Double
-)
-
 data class DashboardSubscriptionSummary(
-    val items: List<DashboardSubscriptionItem> = emptyList()
+    /** Rules contained in every subscription shown on the dashboard card. */
+    val totalRuleCount: Int = 0
 )
 
 data class ModernLogDashboardUiState(
@@ -201,35 +193,13 @@ class ModernLogDashboardViewModel @JvmOverloads constructor(
         val totalCacheHits = dnsCacheRepository.totalHitCount()
         val raceStats = raceLogRepository.stats(RaceStatsRange.TODAY)
         val bootstrapStats = bootstrapLogRepository.stats(BootstrapStatsRange.TODAY)
-        val subscriptionStats = if (logMode == DnsLogMode.OFF) {
-            null
-        } else {
-            dnsLogRepository.subscriptionInterceptionStats(SubscriptionInterceptionStatsRange.TODAY)
-        }
+        // Only the aggregate rule count is shown on the dashboard; the per-subscription
+        // breakdown (hits / rate) had no consumer left, so its stats query was dropped.
         val subscriptions = if (logMode == DnsLogMode.OFF) {
             emptyList()
         } else {
             ruleSources.subscriptionDao().all()
         }
-        val subscriptionsById = subscriptions.associateBy { it.id }
-        val subscriptionItems = (subscriptionsById.keys + subscriptionStats?.hitsBySubscriptionId.orEmpty().keys)
-            .map { id ->
-                val subscription = subscriptionsById[id]
-                val hits = subscriptionStats?.hitsBySubscriptionId?.get(id) ?: 0
-                DashboardSubscriptionItem(
-                    name = subscription?.name ?: "已删除订阅 #$id",
-                    enabled = subscription?.enabled ?: false,
-                    deleted = subscription == null,
-                    hits = hits,
-                    rate = if (subscriptionStats == null || subscriptionStats.totalRequests == 0) {
-                        0.0
-                    } else {
-                        hits.toDouble() / subscriptionStats.totalRequests
-                    }
-                )
-            }
-            .sortedByDescending { it.hits }
-            .take(SUBSCRIPTION_LIST_LIMIT)
 
         val passed = (dailyStats?.passed ?: 0) + httpPassed
         val blocked = (dailyStats?.blocked ?: 0) + httpBlocked
@@ -282,7 +252,9 @@ class ModernLogDashboardViewModel @JvmOverloads constructor(
                     )
                 }
             ),
-            subscriptions = DashboardSubscriptionSummary(items = subscriptionItems)
+            subscriptions = DashboardSubscriptionSummary(
+                totalRuleCount = subscriptions.sumOf { it.ruleCount }
+            )
         )
     }
 
@@ -418,7 +390,6 @@ class ModernLogDashboardViewModel @JvmOverloads constructor(
 
         private const val RECENT_LOG_LIMIT = 5
         private const val RECENT_CACHE_LIMIT = 5
-        private const val SUBSCRIPTION_LIST_LIMIT = 5
         private const val TOP_LIST_LIMIT = 8
     }
 }

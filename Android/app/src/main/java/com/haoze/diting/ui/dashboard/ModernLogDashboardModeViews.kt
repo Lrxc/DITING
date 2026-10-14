@@ -71,11 +71,11 @@ fun AllModeDashboard(
                     onClick = onNavigateToDnsLogs
                 )
                 MetricCard(
-                    label = localizedText("失败"),
-                    value = formatCount(stats.error),
-                    valueColor = MaterialTheme.colorScheme.error,
+                    label = localizedText("订阅规则"),
+                    value = formatCount(state.subscriptions.totalRuleCount),
+                    valueColor = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.weight(1f),
-                    onClick = { onNavigateToRequestLogs?.invoke(RequestStatus.ERROR) }
+                    onClick = onNavigateToSubscriptionInterceptionStats
                 )
             }
         }
@@ -92,11 +92,11 @@ fun AllModeDashboard(
                     onClick = { onNavigateToRequestLogs?.invoke(RequestStatus.BLOCKED) }
                 )
                 MetricCard(
-                    label = localizedText("缓存命中"),
-                    value = formatCount(stats.cached),
+                    label = localizedText("DNS 缓存"),
+                    value = formatCount(state.totalCacheEntries),
                     valueColor = MaterialTheme.colorScheme.tertiary,
                     modifier = Modifier.weight(1f),
-                    onClick = { onNavigateToRequestLogs?.invoke(RequestStatus.CACHED) }
+                    onClick = onNavigateToDnsCache
                 )
             }
         }
@@ -159,33 +159,6 @@ fun AllModeDashboard(
             }
         }
         item {
-            DashboardCard {
-                SectionTitle(
-                    title = localizedText("最近请求"),
-                    trailing = { PillLink(text = localizedText("查看全部"), onClick = onNavigateToDnsLogs) }
-                )
-                val recentLogs = state.recentLogs.take(DASHBOARD_LIST_LIMIT)
-                if (recentLogs.isEmpty()) {
-                    EmptyText(localizedText("暂无请求日志"))
-                } else {
-                    recentLogs.forEachIndexed { index, item ->
-                        if (index > 0) ListDivider()
-                        RequestLogRow(item)
-                    }
-                }
-            }
-        }
-        item {
-            DashboardListCard(
-                title = localizedText("缓存热点"),
-                emptyText = localizedText("暂无有效缓存"),
-                rowCount = minOf(state.cacheEntries.size, DASHBOARD_LIST_LIMIT),
-                trailing = { PillLink(text = localizedText("详情"), onClick = onNavigateToDnsCache) }
-            ) { index ->
-                CacheEntryRow(state.cacheEntries[index])
-            }
-        }
-        item {
             DashboardListCard(
                 title = localizedText("竞速胜出"),
                 emptyText = localizedText("暂无竞速数据"),
@@ -214,32 +187,6 @@ fun AllModeDashboard(
                     subtitle = localizedText("${item.ip} · 成功 ${formatPercent(item.successRate)} · ${formatMs(item.avgElapsedMs)}"),
                     tag = localizedText("${formatCount(item.attempts)} 次"),
                     tagColor = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
-        item {
-            DashboardListCard(
-                title = localizedText("规则拦截"),
-                emptyText = localizedText("暂无规则拦截数据"),
-                rowCount = minOf(state.subscriptions.items.size, DASHBOARD_LIST_LIMIT),
-                trailing = {
-                    PillLink(
-                        text = localizedText("详情"),
-                        onClick = onNavigateToSubscriptionInterceptionStats
-                    )
-                }
-            ) { index ->
-                val item = state.subscriptions.items[index]
-                val status = localizedText(when {
-                    item.deleted -> "已删除"
-                    item.enabled -> "已启用"
-                    else -> "已禁用"
-                })
-                DashboardListRow(
-                    title = item.name,
-                    subtitle = localizedText("$status · 占全部请求 ${formatPercent(item.rate)}"),
-                    tag = localizedText("${formatCount(item.hits)} 次"),
-                    tagColor = MaterialTheme.colorScheme.error
                 )
             }
         }
@@ -385,16 +332,6 @@ fun FilteredModeDashboard(
         }
         item {
             DashboardListCard(
-                title = localizedText("缓存热点"),
-                emptyText = localizedText("暂无有效缓存"),
-                rowCount = minOf(state.cacheEntries.size, DASHBOARD_LIST_LIMIT),
-                trailing = { PillLink(text = localizedText("详情"), onClick = onNavigateToDnsCache) }
-            ) { index ->
-                CacheEntryRow(state.cacheEntries[index])
-            }
-        }
-        item {
-            DashboardListCard(
                 title = localizedText("竞速胜出"),
                 emptyText = localizedText("暂无竞速数据"),
                 rowCount = minOf(race.winners.size, DASHBOARD_LIST_LIMIT),
@@ -422,32 +359,6 @@ fun FilteredModeDashboard(
                     subtitle = localizedText("${item.ip} · 成功 ${formatPercent(item.successRate)} · ${formatMs(item.avgElapsedMs)}"),
                     tag = localizedText("${formatCount(item.attempts)} 次"),
                     tagColor = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
-        item {
-            DashboardListCard(
-                title = localizedText("规则拦截"),
-                emptyText = localizedText("暂无规则拦截数据"),
-                rowCount = minOf(state.subscriptions.items.size, DASHBOARD_LIST_LIMIT),
-                trailing = {
-                    PillLink(
-                        text = localizedText("详情"),
-                        onClick = onNavigateToSubscriptionInterceptionStats
-                    )
-                }
-            ) { index ->
-                val item = state.subscriptions.items[index]
-                val status = localizedText(when {
-                    item.deleted -> "已删除"
-                    item.enabled -> "已启用"
-                    else -> "已禁用"
-                })
-                DashboardListRow(
-                    title = item.name,
-                    subtitle = localizedText("$status · 占全部请求 ${formatPercent(item.rate)}"),
-                    tag = localizedText("${formatCount(item.hits)} 次"),
-                    tagColor = MaterialTheme.colorScheme.error
                 )
             }
         }
