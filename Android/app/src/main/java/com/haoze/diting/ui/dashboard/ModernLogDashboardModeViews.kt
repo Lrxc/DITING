@@ -27,7 +27,7 @@ import com.haoze.diting.data.RequestStatus
 import com.haoze.diting.ui.components.SettingsCardMargin
 
 /** Dashboard preview lists show only the leading entry; the "详情" pages hold the full lists. */
-private const val DASHBOARD_LIST_LIMIT = 1
+private const val DASHBOARD_LIST_LIMIT = 3
 
 @Composable
 fun AllModeDashboard(
@@ -71,11 +71,11 @@ fun AllModeDashboard(
                     onClick = onNavigateToDnsLogs
                 )
                 MetricCard(
-                    label = localizedText("通过"),
-                    value = formatCount(stats.passed),
-                    valueColor = MaterialTheme.colorScheme.primary,
+                    label = localizedText("失败"),
+                    value = formatCount(stats.error),
+                    valueColor = MaterialTheme.colorScheme.error,
                     modifier = Modifier.weight(1f),
-                    onClick = { onNavigateToRequestLogs?.invoke(RequestStatus.PASSED) }
+                    onClick = { onNavigateToRequestLogs?.invoke(RequestStatus.ERROR) }
                 )
             }
         }
@@ -156,6 +156,23 @@ fun AllModeDashboard(
                     value = localizedText("${formatPercent(cacheRate)} · ${formatCount(stats.cached)} 次"),
                     progress = cacheRate.toFloat()
                 )
+            }
+        }
+        item {
+            DashboardCard {
+                SectionTitle(
+                    title = localizedText("最近请求"),
+                    trailing = { PillLink(text = localizedText("查看全部"), onClick = onNavigateToDnsLogs) }
+                )
+                val recentLogs = state.recentLogs.take(DASHBOARD_LIST_LIMIT)
+                if (recentLogs.isEmpty()) {
+                    EmptyText(localizedText("暂无请求日志"))
+                } else {
+                    recentLogs.forEachIndexed { index, item ->
+                        if (index > 0) ListDivider()
+                        RequestLogRow(item)
+                    }
+                }
             }
         }
         item {
