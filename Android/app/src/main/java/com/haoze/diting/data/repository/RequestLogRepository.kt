@@ -29,7 +29,8 @@ class RequestLogRepository(
         limit: Int,
         source: RequestSource = RequestSource.ALL,
         status: RequestStatus = RequestStatus.ALL,
-        query: String = ""
+        query: String = "",
+        sinceMillis: Long? = null
     ): RequestLogBatch = coroutineScope {
         runCatching {
             onFlushRequested?.invoke() ?: activeFlusher?.invoke()
@@ -39,7 +40,7 @@ class RequestLogRepository(
             if (source == RequestSource.HTTPS) {
                 emptyList()
             } else {
-                val filter = dnsFilter(status, query)
+                val filter = dnsFilter(status, query, sinceMillis)
                 dnsDao.queryList(
                     SimpleSQLiteQuery(
                         "SELECT * FROM dns_log WHERE 1=1${filter.sql} ORDER BY timestamp DESC LIMIT $limit",
@@ -54,7 +55,7 @@ class RequestLogRepository(
             if (source == RequestSource.DNS || dao == null) {
                 emptyList()
             } else {
-                val filter = httpFilter(status, query)
+                val filter = httpFilter(status, query, sinceMillis)
                 dao.queryList(
                     SimpleSQLiteQuery(
                         "SELECT * FROM http_request_log WHERE 1=1${filter.sql} ORDER BY timestamp DESC LIMIT $limit",
@@ -69,6 +70,14 @@ class RequestLogRepository(
         RequestLogBatch(dnsRows, httpRows, dnsRows.size >= limit || httpRows.size >= limit)
     }
 
+    /** Wipes both log tables. The caller confirms destructive intent first. */
+    suspend fun clearAll() = coroutineScope {
+        val dns = async { dnsDao.clearAll() }
+        val http = async { httpDao?.clearAll() }
+        dns.await()
+        http.await()
+    }
+
     /**
      * Counts the records matching the same filters as [load], so the UI can show
      * "loaded x / total y" instead of leaving the user guessing whether more exist.
@@ -76,13 +85,14 @@ class RequestLogRepository(
     suspend fun count(
         source: RequestSource = RequestSource.ALL,
         status: RequestStatus = RequestStatus.ALL,
-        query: String = ""
+        query: String = "",
+        sinceMillis: Long? = null
     ): Int = coroutineScope {
         val dns = async {
             if (source == RequestSource.HTTPS) {
                 0
             } else {
-                val filter = dnsFilter(status, query)
+                val filter = dnsFilter(status, query, sinceMillis)
                 dnsDao.count(
                     SimpleSQLiteQuery("SELECT COUNT(*) FROM dns_log WHERE 1=1${filter.sql}", filter.args)
                 )
@@ -93,7 +103,7 @@ class RequestLogRepository(
             if (source == RequestSource.DNS || dao == null) {
                 0
             } else {
-                val filter = httpFilter(status, query)
+                val filter = httpFilter(status, query, sinceMillis)
                 dao.count(
                     SimpleSQLiteQuery("SELECT COUNT(*) FROM http_request_log WHERE 1=1${filter.sql}", filter.args)
                 )
@@ -104,9 +114,16 @@ class RequestLogRepository(
 
     private class SqlFilter(val sql: String, val args: Array<Any>)
 
-    private fun dnsFilter(status: RequestStatus, query: String): SqlFilter {
+    private fun dnsFilter(status: RequestStatus, query: String, sinceMillis: Long?): SqlFilter {
         val sql = StringBuilder()
         val args = mutableListOf<Any>()
+
+        // Bounded first: `timestamp` is indexed, so the engine can narrow before the LIKE scans.
+        if (sinceMillis != null) {
+            sql.append(" AND timestamp >= ?")
+            args.add(sinceMillis)
+        }
+
         val trimmed = query.trim()
 
         if (trimmed.isNotEmpty()) {
@@ -139,9 +156,16 @@ class RequestLogRepository(
         return SqlFilter(sql.toString(), args.toTypedArray())
     }
 
-    private fun httpFilter(status: RequestStatus, query: String): SqlFilter {
+    private fun httpFilter(status: RequestStatus, query: String, sinceMillis: Long?): SqlFilter {
         val sql = StringBuilder()
         val args = mutableListOf<Any>()
+
+        // Bounded first: `timestamp` is indexed, so the engine can narrow before the LIKE scans.
+        if (sinceMillis != null) {
+            sql.append(" AND timestamp >= ?")
+            args.add(sinceMillis)
+        }
+
         val trimmed = query.trim()
 
         if (trimmed.isNotEmpty()) {

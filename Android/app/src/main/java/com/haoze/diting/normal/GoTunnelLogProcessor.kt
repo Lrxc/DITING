@@ -52,10 +52,30 @@ internal class GoTunnelLogProcessor(
             val isConnectionLog = blockedBy == "connection"
 
             if (result == LogResult.BLOCKED) {
-                val decision = dnsPolicy.evaluate(domain, effectivePackage)
-                val ruleTypeTag = if (decision.isAppSpecific) "app rule" else if (decision.matchedRule != null) "global rule" else null
-                effectiveBlockedBy = if (ruleTypeTag != null && blockedBy.isNotBlank()) "$blockedBy ($ruleTypeTag)" else (ruleTypeTag ?: blockedBy)
-                blockSubId = (decision as? DomainDecision.Block)?.source?.subscriptionIdOrNull()
+                // CNAME/SVCB chain blocks report "cname:<target> (<source>)": the rule actually
+                // fired on the chain target, not on the queried domain, so attribute the
+                // subscription to that target instead.
+                val chainTarget = if (blockedBy.startsWith("cname:") || blockedBy.startsWith("svcb:")) {
+                    blockedBy.substringAfter(':').substringBefore(' ').trim().ifBlank { domain }
+                } else {
+                    domain
+                }
+                val decision = dnsPolicy.evaluate(chainTarget, effectivePackage)
+                // Only a real block decision carries a rule-source tag. An allow decision (e.g.
+                // the query domain sitting on the whitelist) also fills matchedRule, and must
+                // not be reported as a blocking rule.
+                val block = decision as? DomainDecision.Block
+                val ruleTypeTag = block?.let { if (it.isAppSpecific) "app rule" else "global rule" }
+                // The Kotlin policy mirror still holds the rule text, while the compiled Go index
+                // only stores the subscription id. Carry the rule into the reason so the UI can
+                // show which rule matched instead of just which subscription supplied it.
+                val matchedRule = block?.matchedRule?.takeIf { it.isNotBlank() }
+                effectiveBlockedBy = buildList {
+                    if (blockedBy.isNotBlank()) add(blockedBy)
+                    matchedRule?.let { add("($it)") }
+                    ruleTypeTag?.let { add("($it)") }
+                }.joinToString(" ")
+                blockSubId = block?.source?.subscriptionIdOrNull()
                     ?: parseBlockSubscriptionIdFromToken(blockedBy)
             } else if (blockedBy.startsWith("rewrite=")) {
                 effectiveBlockedBy = blockedBy
@@ -113,14 +133,13 @@ internal class GoTunnelLogProcessor(
         return source.subscriptionIdOrNull()
     }
 
-    private fun parseBlockSubscriptionIdFromToken(blockedBy: String): Long? {
-        return blockedBy
-            .split(',')
-            .map { it.trim() }
-            .firstNotNullOfOrNull { token ->
-                if (token.startsWith("sub_")) token.removePrefix("sub_").toLongOrNull() else null
-            }
-    }
+    /**
+     * Extracts the subscription id from the Go engine's rule token, which may be a bare
+     * "sub_6", or embedded in a longer reason such as "sub_6 (global rule)" /
+     * "cname:tracker.example.com (sub_6) (global rule)".
+     */
+    private fun parseBlockSubscriptionIdFromToken(blockedBy: String): Long? =
+        SUBSCRIPTION_TOKEN_REGEX.find(blockedBy)?.groupValues?.get(1)?.toLongOrNull()
 
     private fun buildDnsLogMessage(
         appName: String,
@@ -136,6 +155,9 @@ internal class GoTunnelLogProcessor(
         responseTimeMs.takeIf { it > 0 }?.let { "elapsed=${it}ms" }
     ).joinToString(", ").takeIf { it.isNotEmpty() }
 }
+
+/** Matches the `sub_<id>` token in any of the reason shapes the Go engine emits. */
+private val SUBSCRIPTION_TOKEN_REGEX = Regex("""(?:^|[^\w])sub_(\d+)""")
 
 
 

@@ -1,5 +1,7 @@
 package com.haoze.diting.data
 
+import java.util.Calendar
+
 enum class LogFilter { ALL, PASSED, BLOCKED, ERROR, CACHED }
 
 data class LogQueryParams(val filter: LogFilter, val query: String)
@@ -15,6 +17,30 @@ enum class SubscriptionInterceptionStatsRange(val displayName: String) {
     TODAY("今日"),
     SEVEN_DAYS("近 7 天"),
     ALL("全部")
+}
+
+/**
+ * Time window for the request log list. Resolved to an absolute lower bound when the query runs,
+ * so "today" follows the device clock instead of being frozen at first composition.
+ */
+enum class LogTimeRange(val displayName: String) {
+    TODAY("今日"),
+    SEVEN_DAYS("近 7 天"),
+    ALL("全部");
+
+    /** Lower `timestamp` bound for this window, or null when unbounded. */
+    fun sinceMillis(now: Long = System.currentTimeMillis()): Long? = when (this) {
+        TODAY -> {
+            val calendar = Calendar.getInstance()
+            calendar.set(Calendar.HOUR_OF_DAY, 0)
+            calendar.set(Calendar.MINUTE, 0)
+            calendar.set(Calendar.SECOND, 0)
+            calendar.set(Calendar.MILLISECOND, 0)
+            calendar.timeInMillis
+        }
+        SEVEN_DAYS -> now - 7L * 24 * 60 * 60 * 1000
+        ALL -> null
+    }
 }
 
 data class SubscriptionInterceptionStats(

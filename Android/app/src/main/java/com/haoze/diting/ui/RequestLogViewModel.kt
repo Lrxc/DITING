@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.haoze.diting.data.AppDatabase
 import com.haoze.diting.data.ExpressRulesDatabase
+import com.haoze.diting.data.LogTimeRange
 import com.haoze.diting.data.RequestSource
 import com.haoze.diting.data.RequestStatus
 import com.haoze.diting.data.RuleDataset
@@ -24,13 +25,14 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 
 /** Records requested per page. */
-private const val PAGE_SIZE = 100
+private const val PAGE_SIZE = 50
 
 @Immutable
 data class RequestLogUiState(
     val items: List<RequestLogItem> = emptyList(),
     val source: RequestSource = RequestSource.ALL,
     val status: RequestStatus = RequestStatus.ALL,
+    val timeRange: LogTimeRange = LogTimeRange.TODAY,
     val query: String = "",
     val searching: Boolean = false,
     val loading: Boolean = false,
@@ -110,6 +112,14 @@ class RequestLogViewModel @JvmOverloads constructor(
         load()
     }
 
+    /** Wipes both log tables, then reloads the first page so the list empties. */
+    fun clearAll() {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.clearAll()
+            refresh()
+        }
+    }
+
     fun loadMore() {
         if (_state.value.loading || !_state.value.hasMore) return
         limit += PAGE_SIZE
@@ -125,6 +135,12 @@ class RequestLogViewModel @JvmOverloads constructor(
     fun setStatus(status: RequestStatus) {
         if (_state.value.status == status) return
         _state.value = _state.value.copy(status = status)
+        refresh()
+    }
+
+    fun setTimeRange(range: LogTimeRange) {
+        if (_state.value.timeRange == range) return
+        _state.value = _state.value.copy(timeRange = range)
         refresh()
     }
 
@@ -150,6 +166,7 @@ class RequestLogViewModel @JvmOverloads constructor(
         val currentSource = _state.value.source
         val currentStatus = _state.value.status
         val currentQuery = _state.value.query
+        val currentSince = _state.value.timeRange.sinceMillis()
         val currentLimit = limit
 
         loadJob = viewModelScope.launch(Dispatchers.IO) {
@@ -159,7 +176,8 @@ class RequestLogViewModel @JvmOverloads constructor(
                     limit = currentLimit,
                     source = currentSource,
                     status = currentStatus,
-                    query = currentQuery
+                    query = currentQuery,
+                    sinceMillis = currentSince
                 )
                 // Resolved for the first page only; later pages reuse it so that loading more
                 // does not re-run an expensive COUNT on every scroll.
@@ -167,7 +185,8 @@ class RequestLogViewModel @JvmOverloads constructor(
                     repository.count(
                         source = currentSource,
                         status = currentStatus,
-                        query = currentQuery
+                        query = currentQuery,
+                        sinceMillis = currentSince
                     )
                 } else {
                     _state.value.total

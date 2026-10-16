@@ -11,6 +11,9 @@ import com.haoze.diting.util.statsRangeStartMillis
 
 class RaceLogRepository(private val dao: RaceLogDao) {
 
+    /** Wipes every recorded race entry. The caller confirms destructive intent first. */
+    suspend fun clearAll() = dao.clearAll()
+
     suspend fun stats(range: RaceStatsRange): RaceStats {
         val since = statsRangeStartMillis(range)
         return RaceStats(

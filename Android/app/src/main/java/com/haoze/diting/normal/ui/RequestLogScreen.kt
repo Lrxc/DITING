@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -34,7 +35,8 @@ import com.haoze.diting.SettingsRouteActivity
 import com.haoze.diting.ui.agent.AgentAnalysisSheet
 import com.haoze.diting.ui.agent.AnalysisTarget
 import com.haoze.diting.ui.components.AppIconImage
-import com.haoze.diting.ui.components.RuleFilterChipRow
+import com.haoze.diting.ui.components.AppConfirmDialog
+import com.haoze.diting.ui.components.RequestFilterRow
 import com.haoze.diting.ui.components.RuleTagChip
 import com.haoze.diting.ui.components.SettingsItemSpacing
 import com.haoze.diting.ui.components.SettingsScaffold
@@ -61,6 +63,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.haoze.diting.data.AppDatabase
+import com.haoze.diting.data.LogTimeRange
 import com.haoze.diting.data.RequestSource
 import com.haoze.diting.data.RequestStatus
 import com.haoze.diting.data.entity.RuleScope
@@ -112,6 +115,7 @@ fun RequestLogScreen(
     var pendingRuleScope by remember { mutableStateOf(RuleScope.DNS) }
     var detailItem by remember { mutableStateOf<RequestLogItem?>(null) }
     var showTopMenu by remember { mutableStateOf(false) }
+    var showClearConfirmDialog by remember { mutableStateOf(false) }
     var activeAnalysisTarget by remember { mutableStateOf<AnalysisTarget?>(null) }
     val scope = rememberCoroutineScope()
 
@@ -164,6 +168,12 @@ fun RequestLogScreen(
                     Icon(Icons.Default.Close, localizedText("关闭搜索"))
                 }
             } else {
+                IconButton(onClick = { showClearConfirmDialog = true }) {
+                    Icon(
+                        imageVector = Icons.Default.DeleteSweep,
+                        contentDescription = localizedText("清除历史")
+                    )
+                }
                 IconButton(onClick = { showTopMenu = true }) {
                     Icon(Icons.Filled.MoreVert, contentDescription = localizedText("更多选项"))
                 }
@@ -251,6 +261,9 @@ fun RequestLogScreen(
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             RequestFilterRow(RequestSource.entries, source, { it.label }, viewModel::setSource)
+            // Time window narrows the list without touching the search box, so the query text
+            // survives when the user switches between today / 7 days / all.
+            RequestFilterRow(LogTimeRange.entries, state.timeRange, { it.displayName }, viewModel::setTimeRange)
             if (visibleItems.isNotEmpty()) {
                 Text(
                     text = localizedText("已加载") + " ${visibleItems.size} / ${state.total}",
@@ -377,17 +390,20 @@ fun RequestLogScreen(
             viewModel.refresh()
         }
     )
-}
 
-@Composable
-private fun <T> RequestFilterRow(values: List<T>, selected: T, label: (T) -> String, select: (T) -> Unit) {
-    RuleFilterChipRow(
-        filters = values,
-        selectedFilter = selected,
-        onSelect = select,
-        labelKeyOf = label,
-        modifier = Modifier.padding(horizontal = SettingsCardMargin)
-    )
+    if (showClearConfirmDialog) {
+        AppConfirmDialog(
+            onDismissRequest = { showClearConfirmDialog = false },
+            title = "清除全部请求日志？",
+            message = "此操作将清空所有已记录的 DNS 与 HTTPS 请求日志，清除后无法恢复。",
+            confirmLabel = "清除",
+            destructive = true,
+            onConfirm = {
+                viewModel.clearAll()
+                showClearConfirmDialog = false
+            }
+        )
+    }
 }
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)

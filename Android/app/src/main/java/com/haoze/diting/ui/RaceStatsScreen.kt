@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -19,7 +20,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import android.app.Application
@@ -27,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.haoze.diting.ui.components.AppConfirmDialog
 import com.haoze.diting.data.RaceStats
 import com.haoze.diting.data.RaceStatsRange
 import com.haoze.diting.data.RaceStrategyStats
@@ -57,6 +61,7 @@ fun RaceStatsScreen(
     val range by viewModel.range.collectAsStateWithLifecycle()
     val stats by viewModel.stats.collectAsStateWithLifecycle()
     val loading by viewModel.loading.collectAsStateWithLifecycle()
+    var showClearConfirmDialog by remember { mutableStateOf(false) }
 
     NavigationSettledEffect {
         viewModel.activate()
@@ -66,6 +71,12 @@ fun RaceStatsScreen(
         title = localizedText("竞速统计"),
         onBack = onBack,
         actions = {
+            IconButton(onClick = { showClearConfirmDialog = true }) {
+                Icon(
+                    imageVector = Icons.Default.DeleteSweep,
+                    contentDescription = localizedText("清除历史")
+                )
+            }
             IconButton(onClick = { viewModel.refresh() }) {
                 Icon(
                     imageVector = Icons.Default.Refresh,
@@ -80,6 +91,20 @@ fun RaceStatsScreen(
             loading = loading,
             onRangeClick = viewModel::setRange,
             modifier = Modifier.padding(innerPadding)
+        )
+    }
+
+    if (showClearConfirmDialog) {
+        AppConfirmDialog(
+            onDismissRequest = { showClearConfirmDialog = false },
+            title = "清除全部竞速统计？",
+            message = "此操作将清空所有已记录的竞速结果，清除后无法恢复。",
+            confirmLabel = "清除",
+            destructive = true,
+            onConfirm = {
+                viewModel.clearAll()
+                showClearConfirmDialog = false
+            }
         )
     }
 }

@@ -25,6 +25,19 @@ data class RequestLogItem(
     val requestType: String? = null,
     /** Rule that blocked this request; null when nothing was blocked or no rule was recorded. */
     val matchedRule: String? = null,
+    /**
+     * Chain hop (CNAME/SVCB target) that actually matched the blocking rule. Set only when the
+     * block came from response-chain filtering rather than the queried domain itself.
+     */
+    val blockedChainTarget: String? = null,
+    /** True for an app-scoped blocking rule, false for a global one, null when unreported. */
+    val ruleIsAppSpecific: Boolean? = null,
+    /**
+     * Rule-source token the engine reports in parentheses: `sub_6` for a subscription,
+     * `important` / `security` / `filter_list` for a built-in list, or a rule pattern such as
+     * `.*bytedecko.*`. Suffixes this app appends itself ("app rule" / "global rule") are excluded.
+     */
+    val blockedRuleSource: String? = null,
     /** Handling time in milliseconds, when the log recorded one. */
     val elapsedMs: Long? = null,
     /** Subscription that supplied the blocking rule, when one was recorded. */
@@ -76,8 +89,11 @@ fun dnsRequestItem(log: DnsLogEntity): RequestLogItem {
             packageName = log.packageName,
             requestType = proto,
             matchedRule = if (status == RequestStatus.BLOCKED) blockedRule else null,
+            blockedChainTarget = extractChainTarget(blockedRule),
+            ruleIsAppSpecific = extractAppSpecific(blockedRule),
+            blockedRuleSource = extractRuleSource(blockedRule),
             elapsedMs = elapsedMs,
-            blockSubscriptionId = log.blockSubscriptionId,
+            blockSubscriptionId = log.blockSubscriptionId ?: extractSubscriptionId(blockedRule),
             cached = false
         )
     } else {
@@ -99,8 +115,11 @@ fun dnsRequestItem(log: DnsLogEntity): RequestLogItem {
             packageName = log.packageName,
             requestType = dnsRequestType(log.queryType),
             matchedRule = if (status == RequestStatus.BLOCKED) blockedRule else null,
+            blockedChainTarget = extractChainTarget(blockedRule),
+            ruleIsAppSpecific = extractAppSpecific(blockedRule),
+            blockedRuleSource = extractRuleSource(blockedRule),
             elapsedMs = elapsedMs,
-            blockSubscriptionId = log.blockSubscriptionId,
+            blockSubscriptionId = log.blockSubscriptionId ?: extractSubscriptionId(blockedRule),
             cached = log.cached
         )
     }
@@ -157,6 +176,8 @@ fun httpRequestItem(log: HttpRequestLogEntity): RequestLogItem {
         packageName = log.packageName,
         requestType = log.protocol,
         matchedRule = if (status == RequestStatus.BLOCKED) log.matchedRule?.takeIf { it.isNotBlank() } else null,
+        blockedChainTarget = extractChainTarget(log.matchedRule),
+        ruleIsAppSpecific = extractAppSpecific(log.matchedRule),
         blockSubscriptionId = log.blockSubscriptionId
     )
 }
@@ -193,6 +214,58 @@ private fun extractElapsedMs(message: String): Long? {
         .removeSuffix("ms")
         .trim()
         .toLongOrNull()
+}
+
+/**
+ * Pulls the CNAME/SVCB chain target out of a blocking reason such as
+ * `cname:oth.eve.mdt.qq.com (sub_6) (global rule)`. The rule fired on the chain target, so that
+ * is the domain worth showing; returns null for a direct block on the queried domain.
+ */
+private fun extractChainTarget(reason: String?): String? {
+    val prefix = when {
+        reason == null -> return null
+        reason.startsWith("cname:", ignoreCase = true) -> "cname:"
+        reason.startsWith("svcb:", ignoreCase = true) -> "svcb:"
+        else -> return null
+    }
+    return reason.removePrefix(prefix).substringBefore(' ').trim().takeIf { it.isNotEmpty() }
+}
+
+/** `... (app rule)` means app-scoped, `... (global rule)` means global, otherwise unknown. */
+private fun extractAppSpecific(reason: String?): Boolean? = when {
+    reason == null -> null
+    reason.contains("(app rule)", ignoreCase = true) -> true
+    reason.contains("(global rule)", ignoreCase = true) -> false
+    else -> null
+}
+
+/**
+ * Subscription id embedded in an engine reason such as `cname:host (sub_6) (global rule)`.
+ *
+ * This is a fallback for rows whose persisted `blockSubscriptionId` is empty — records written
+ * before the tunnel learned to parse the token out of the reason. Without it the UI cannot name
+ * the subscription even though the engine reported it.
+ */
+private val SUBSCRIPTION_ID_REGEX = Regex("""(?:^|[^\w])sub_(\d+)""")
+
+private fun extractSubscriptionId(reason: String?): Long? =
+    reason?.let { SUBSCRIPTION_ID_REGEX.find(it)?.groupValues?.get(1)?.toLongOrNull() }
+
+/**
+ * Rule-source token embedded in an engine reason, e.g. `sub_6` in `cname:host (sub_6)`, or the
+ * rule pattern itself in `cname:host (.*bytedecko.*)`. The first parenthesised group that is not
+ * one of the app's own suffixes wins.
+ */
+private val RULE_SOURCE_REGEX = Regex("""\(([^()]+)\)""")
+
+private fun extractRuleSource(reason: String?): String? = reason?.let {
+    RULE_SOURCE_REGEX.findAll(it)
+        .map { match -> match.groupValues[1].trim() }
+        .firstOrNull { token ->
+            token.isNotBlank() &&
+                !token.equals("app rule", ignoreCase = true) &&
+                !token.equals("global rule", ignoreCase = true)
+        }
 }
 
 private const val SYSTEM_UID_PREFIX = "uid:"

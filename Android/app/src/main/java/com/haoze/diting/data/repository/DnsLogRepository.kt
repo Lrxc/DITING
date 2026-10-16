@@ -34,6 +34,15 @@ class DnsLogRepository(
         return dao.count(buildCountQuery(params))
     }
 
+    /**
+     * Wipes both log tables this repository reads. The caller confirms destructive intent first.
+     * Nothing else needs notifying: the engine only writes logs, it never reads them back.
+     */
+    suspend fun clearAll() {
+        dao.clearAll()
+        httpRequestLogDao?.clearAll()
+    }
+
     suspend fun exportLogs(params: LogQueryParams): List<DnsLogEntity> {
         val args = mutableListOf<Any>()
         val sql = StringBuilder("SELECT * FROM dns_log WHERE 1=1")

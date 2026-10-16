@@ -58,6 +58,14 @@ class SubscriptionInterceptionStatsViewModel(
         refresh()
     }
 
+    /** Wipes the request logs this screen aggregates, then reloads the current range. */
+    fun clearAll() {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.clearAll()
+            refresh()
+        }
+    }
+
     fun refresh() {
         viewModelScope.launch(Dispatchers.IO) {
             _loading.value = true

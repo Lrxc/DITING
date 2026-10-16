@@ -21,6 +21,9 @@ class DnsCacheRepository(private val dao: DnsCacheDao) {
         return dao.deleteExpired(now)
     }
 
+    /** Wipes every cached record. The caller is responsible for confirming destructive intent. */
+    suspend fun clearAll() = dao.clearAll()
+
     suspend fun recentEntries(now: Long, limit: Int): List<DnsCacheEntity> {
         return dao.getUnexpired(now, limit.coerceAtLeast(0))
     }

@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -47,6 +48,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.haoze.diting.data.ExpressRulesDatabase
+import com.haoze.diting.data.LogTimeRange
 import com.haoze.diting.data.RequestSource
 import com.haoze.diting.data.RequestStatus
 import com.haoze.diting.data.RuleDataset
@@ -56,7 +58,9 @@ import com.haoze.diting.ui.RequestLogDetailDialog
 import com.haoze.diting.ui.RequestLogItem
 import com.haoze.diting.ui.RequestLogViewModel
 import com.haoze.diting.ui.RuntimeDnsSettingsRefresher
+import com.haoze.diting.ui.components.AppConfirmDialog
 import com.haoze.diting.ui.components.AppIconImage
+import com.haoze.diting.ui.components.RequestFilterRow
 import com.haoze.diting.ui.components.RuleTagChip
 import com.haoze.diting.ui.components.SettingsCardMargin
 import com.haoze.diting.ui.components.SettingsItemSpacing
@@ -108,6 +112,7 @@ fun ExpressRequestLogScreen(
     var pendingDomain by remember { mutableStateOf<String?>(null) }
     var detailItem by remember { mutableStateOf<RequestLogItem?>(null) }
     var showTopMenu by remember { mutableStateOf(false) }
+    var showClearConfirmDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     val visibleItems = state.items
@@ -169,6 +174,12 @@ fun ExpressRequestLogScreen(
                     Icon(Icons.Default.Close, localizedText("关闭搜索"))
                 }
             } else {
+                IconButton(onClick = { showClearConfirmDialog = true }) {
+                    Icon(
+                        imageVector = Icons.Default.DeleteSweep,
+                        contentDescription = localizedText("清除历史")
+                    )
+                }
                 IconButton(onClick = { showTopMenu = true }) {
                     Icon(Icons.Filled.MoreVert, contentDescription = localizedText("更多选项"))
                 }
@@ -245,6 +256,8 @@ fun ExpressRequestLogScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            // Same window switch as the normal-mode log screen.
+            RequestFilterRow(LogTimeRange.entries, state.timeRange, { it.displayName }, viewModel::setTimeRange)
             if (visibleItems.isNotEmpty()) {
                 Text(
                     text = localizedText("已加载") + " ${visibleItems.size} / ${state.total}",
@@ -369,6 +382,20 @@ fun ExpressRequestLogScreen(
                 }
             },
             analyze = null
+        )
+    }
+
+    if (showClearConfirmDialog) {
+        AppConfirmDialog(
+            onDismissRequest = { showClearConfirmDialog = false },
+            title = "清除全部请求日志？",
+            message = "此操作将清空所有已记录的 DNS 与 HTTPS 请求日志，清除后无法恢复。",
+            confirmLabel = "清除",
+            destructive = true,
+            onConfirm = {
+                viewModel.clearAll()
+                showClearConfirmDialog = false
+            }
         )
     }
 }

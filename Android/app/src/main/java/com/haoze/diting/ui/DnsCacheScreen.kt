@@ -16,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.rememberCoroutineScope
@@ -54,6 +55,7 @@ import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemContentType
 import com.haoze.diting.data.entity.DnsCacheEntity
+import com.haoze.diting.ui.components.AppConfirmDialog
 import com.haoze.diting.ui.components.SettingsItemSpacing
 import com.haoze.diting.ui.components.SettingsScaffold
 import com.haoze.diting.ui.components.SettingsSurfaceItem
@@ -85,6 +87,7 @@ fun DnsCacheScreen(
     var isSearchActive by remember { mutableStateOf(false) }
     var activeAnalysisTarget by remember { mutableStateOf<AnalysisTarget?>(null) }
     var pendingDomain by remember { mutableStateOf<String?>(null) }
+    var showClearConfirmDialog by remember { mutableStateOf(false) }
 
     NavigationSettledEffect {
         viewModel.activate()
@@ -135,6 +138,12 @@ fun DnsCacheScreen(
                     Icons.Filled.AutoAwesome,
                     contentDescription = localizedText("AI 网络分析"),
                     tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            IconButton(onClick = { showClearConfirmDialog = true }) {
+                Icon(
+                    imageVector = Icons.Default.DeleteSweep,
+                    contentDescription = localizedText("清除历史")
                 )
             }
             IconButton(
@@ -252,6 +261,21 @@ fun DnsCacheScreen(
             entries.refresh()
         }
     )
+
+    if (showClearConfirmDialog) {
+        AppConfirmDialog(
+            onDismissRequest = { showClearConfirmDialog = false },
+            title = "清除全部 DNS 缓存？",
+            message = "此操作将清空所有已缓存的解析记录，清除后无法恢复。",
+            confirmLabel = "清除",
+            destructive = true,
+            onConfirm = {
+                viewModel.clearAll()
+                entries.refresh()
+                showClearConfirmDialog = false
+            }
+        )
+    }
 }
 
 @Composable

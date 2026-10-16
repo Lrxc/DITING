@@ -55,6 +55,14 @@ class BootstrapStatsViewModel @JvmOverloads constructor(
         }
     }
 
+    /** Wipes the recorded statistics, then reloads the current range so the screen empties. */
+    fun clearAll() {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.clearAll()
+            _stats.value = repository.stats(_range.value)
+        }
+    }
+
     companion object {
         fun factory(
             application: Application,

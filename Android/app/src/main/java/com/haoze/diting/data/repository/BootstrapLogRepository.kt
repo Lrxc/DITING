@@ -14,6 +14,9 @@ class BootstrapLogRepository(
     private val context: Context,
     private val dao: BootstrapLogDao
 ) {
+    /** Wipes every recorded Bootstrap attempt. The caller confirms destructive intent first. */
+    suspend fun clearAll() = dao.clearAll()
+
     suspend fun stats(range: BootstrapStatsRange): BootstrapStats {
         val since = statsRangeStartMillis(range)
         val overallRow = dao.overallStats(since)

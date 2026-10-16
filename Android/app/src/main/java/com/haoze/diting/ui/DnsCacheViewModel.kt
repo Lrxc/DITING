@@ -12,6 +12,7 @@ import androidx.lifecycle.ViewModelProvider
 import com.haoze.diting.data.DnsCacheQueryParams
 import com.haoze.diting.data.RuleDatabases
 import com.haoze.diting.data.RuleDataset
+import com.haoze.diting.data.cleanup.DataCleanupManager
 import com.haoze.diting.data.entity.DnsCacheEntity
 import com.haoze.diting.data.repository.DnsCacheRepository
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +34,7 @@ class DnsCacheViewModel @JvmOverloads constructor(
     application: Application,
     dataset: RuleDataset = RuleDataset.NORMAL
 ) : AndroidViewModel(application) {
+    private val ruleDataset = dataset
     private val repository = DnsCacheRepository(
         RuleDatabases.runtimeForDataset(application, dataset).dnsCacheDao()
     )
@@ -75,6 +77,21 @@ class DnsCacheViewModel @JvmOverloads constructor(
         refreshJob = viewModelScope.launch(Dispatchers.IO) {
             val now = System.currentTimeMillis()
             repository.deleteExpired(now)
+            _nowMillis.value = now
+            _params.update { it.copy(asOfMillis = now) }
+        }
+    }
+
+    /**
+     * Wipes the whole cache after the user confirms. Goes through DataCleanupManager so the
+     * running engine drops its in-memory copy too — deleting rows alone would leave the tunnel
+     * still answering from memory. Bumping `asOfMillis` then rebuilds the paging source.
+     */
+    fun clearAll() {
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch(Dispatchers.IO) {
+            DataCleanupManager.clearDnsCache(getApplication(), dataset = ruleDataset)
+            val now = System.currentTimeMillis()
             _nowMillis.value = now
             _params.update { it.copy(asOfMillis = now) }
         }
