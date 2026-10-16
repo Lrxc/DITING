@@ -201,10 +201,17 @@ class ModernLogDashboardViewModel @JvmOverloads constructor(
         val totalCacheHitsDeferred = async { dnsCacheRepository.totalHitCount() }
         val raceStatsDeferred = async { raceLogRepository.stats(RaceStatsRange.TODAY) }
         val bootstrapStatsDeferred = async { bootstrapLogRepository.stats(BootstrapStatsRange.TODAY) }
-        // Only the aggregate rule count is shown on the dashboard; the per-subscription
-        // breakdown (hits / rate) had no consumer left, so its stats query was dropped.
-        val subscriptionsDeferred = async {
-            if (logMode == DnsLogMode.OFF) emptyList() else ruleSources.subscriptionDao().all()
+        // Only the aggregate rule count is shown on the dashboard, and it has to reflect the
+        // rules that are actually enabled: a rule toggled off inside a subscription, or a
+        // whole subscription switched off, must not be counted. `subscription.ruleCount` is the
+        // raw import total and keeps counting both, so count the enabled rows in the rule
+        // tables instead.
+        val subscriptionRuleCountDeferred = async {
+            ruleSources.blockRuleDao().enabledSubscriptionRulesCount() +
+                ruleSources.allowRuleDao().enabledSubscriptionRulesCount() +
+                ruleSources.rewriteRuleDao().enabledSubscriptionRulesCount() +
+                ruleSources.goUrlRuleDao().enabledSubscriptionRulesCount() +
+                ruleSources.cosmeticRuleDao().enabledSubscriptionRulesCount()
         }
 
         val storedDailyStats = storedDailyStatsDeferred.await()
@@ -232,7 +239,7 @@ class ModernLogDashboardViewModel @JvmOverloads constructor(
         val totalCacheHits = totalCacheHitsDeferred.await()
         val raceStats = raceStatsDeferred.await()
         val bootstrapStats = bootstrapStatsDeferred.await()
-        val subscriptions = subscriptionsDeferred.await()
+        val subscriptionRuleCount = subscriptionRuleCountDeferred.await()
 
         val passed = (dailyStats?.passed ?: 0) + httpPassed
         val blocked = (dailyStats?.blocked ?: 0) + httpBlocked
@@ -286,7 +293,7 @@ class ModernLogDashboardViewModel @JvmOverloads constructor(
                 }
             ),
             subscriptions = DashboardSubscriptionSummary(
-                totalRuleCount = subscriptions.sumOf { it.ruleCount }
+                totalRuleCount = subscriptionRuleCount
             )
         )
     }

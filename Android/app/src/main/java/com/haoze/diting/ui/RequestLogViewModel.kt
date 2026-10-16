@@ -39,6 +39,10 @@ data class RequestLogUiState(
     val hasMore: Boolean = true,
     /** Total records matching the active filters, resolved for the first page. */
     val total: Int = 0,
+    /** When set, only requests attributed to this subscription are listed. */
+    val blockSubscriptionId: Long? = null,
+    /** Display name of [blockSubscriptionId], null when the subscription is gone. */
+    val blockSubscriptionName: String? = null,
     val error: String? = null
 )
 
@@ -47,7 +51,8 @@ class RequestLogViewModel @JvmOverloads constructor(
     initialSource: RequestSource = RequestSource.ALL,
     initialStatus: RequestStatus = RequestStatus.ALL,
     initialQuery: String = "",
-    dataset: RuleDataset = RuleDataset.NORMAL
+    dataset: RuleDataset = RuleDataset.NORMAL,
+    initialBlockSubscriptionId: Long? = null
 ) : AndroidViewModel(application) {
     private val repository = if (dataset == RuleDataset.EXPRESS) {
         RequestLogRepository(
@@ -71,7 +76,8 @@ class RequestLogViewModel @JvmOverloads constructor(
             source = initialSource,
             status = initialStatus,
             query = initialQuery,
-            searching = initialQuery.isNotEmpty()
+            searching = initialQuery.isNotEmpty(),
+            blockSubscriptionId = initialBlockSubscriptionId
         )
     )
     val state: StateFlow<RequestLogUiState> = _state.asStateFlow()
@@ -161,12 +167,20 @@ class RequestLogViewModel @JvmOverloads constructor(
         }
     }
 
+    /** Drops the "blocked by this subscription" filter and reloads the unfiltered list. */
+    fun clearBlockSubscriptionFilter() {
+        if (_state.value.blockSubscriptionId == null) return
+        _state.value = _state.value.copy(blockSubscriptionId = null, blockSubscriptionName = null)
+        refresh()
+    }
+
     private fun load() {
         loadJob?.cancel()
         val currentSource = _state.value.source
         val currentStatus = _state.value.status
         val currentQuery = _state.value.query
         val currentSince = _state.value.timeRange.sinceMillis()
+        val currentSubscription = _state.value.blockSubscriptionId
         val currentLimit = limit
 
         loadJob = viewModelScope.launch(Dispatchers.IO) {
@@ -177,7 +191,8 @@ class RequestLogViewModel @JvmOverloads constructor(
                     source = currentSource,
                     status = currentStatus,
                     query = currentQuery,
-                    sinceMillis = currentSince
+                    sinceMillis = currentSince,
+                    blockSubscriptionId = currentSubscription
                 )
                 // Resolved for the first page only; later pages reuse it so that loading more
                 // does not re-run an expensive COUNT on every scroll.
@@ -186,7 +201,8 @@ class RequestLogViewModel @JvmOverloads constructor(
                         source = currentSource,
                         status = currentStatus,
                         query = currentQuery,
-                        sinceMillis = currentSince
+                        sinceMillis = currentSince,
+                        blockSubscriptionId = currentSubscription
                     )
                 } else {
                     _state.value.total
@@ -212,7 +228,8 @@ class RequestLogViewModel @JvmOverloads constructor(
                     items = items,
                     loading = false,
                     hasMore = hasMore,
-                    total = total
+                    total = total,
+                    blockSubscriptionName = currentSubscription?.let { subscriptionNames[it] }
                 )
             }.onFailure { error ->
                 _state.value = _state.value.copy(
@@ -229,7 +246,8 @@ class RequestLogViewModel @JvmOverloads constructor(
             initialSource: RequestSource = RequestSource.ALL,
             initialStatus: RequestStatus = RequestStatus.ALL,
             initialQuery: String = "",
-            dataset: RuleDataset = RuleDataset.NORMAL
+            dataset: RuleDataset = RuleDataset.NORMAL,
+            initialBlockSubscriptionId: Long? = null
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -238,7 +256,8 @@ class RequestLogViewModel @JvmOverloads constructor(
                     initialSource,
                     initialStatus,
                     initialQuery,
-                    dataset
+                    dataset,
+                    initialBlockSubscriptionId
                 ) as T
             }
         }

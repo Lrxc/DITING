@@ -9,6 +9,7 @@ import com.haoze.diting.data.AppDatabase
 import com.haoze.diting.data.RuleDatabases
 import com.haoze.diting.data.RuleDataset
 import com.haoze.diting.data.SubscriptionInterceptionStatsRange
+import com.haoze.diting.data.dao.SourceRuleCount
 import com.haoze.diting.data.repository.DnsLogRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,7 +24,9 @@ data class SubscriptionInterceptionStatItem(
     val enabled: Boolean,
     val deleted: Boolean,
     val hits: Int,
-    val rate: Double
+    val rate: Double,
+    /** Rules this subscription currently contributes, disabled rules excluded. */
+    val ruleCount: Int = 0
 )
 
 class SubscriptionInterceptionStatsViewModel(
@@ -73,6 +76,7 @@ class SubscriptionInterceptionStatsViewModel(
                 val stats = repository.subscriptionInterceptionStats(_range.value)
                 val subscriptions = database.subscriptionDao().all()
                 val byId = subscriptions.associateBy { it.id }
+                val ruleCounts = subscriptionRuleCounts()
                 val ids = (byId.keys + stats.hitsBySubscriptionId.keys).toSortedSet()
                 val items = ids.map { id ->
                     val subscription = byId[id]
@@ -83,9 +87,16 @@ class SubscriptionInterceptionStatsViewModel(
                         enabled = subscription?.enabled ?: false,
                         deleted = subscription == null,
                         hits = hits,
-                        rate = if (stats.totalRequests == 0) 0.0 else hits.toDouble() / stats.totalRequests
+                        rate = if (stats.totalRequests == 0) 0.0 else hits.toDouble() / stats.totalRequests,
+                        ruleCount = ruleCounts[id] ?: 0
                     )
-                }.sortedWith(compareByDescending<SubscriptionInterceptionStatItem> { it.hits }.thenBy { it.name })
+                }.sortedWith(
+                    // Active subscriptions lead, ordered by how much they blocked; switched-off
+                    // and deleted ones sink to the bottom so the list opens on live data.
+                    compareBy<SubscriptionInterceptionStatItem> { it.deleted || !it.enabled }
+                        .thenByDescending { it.hits }
+                        .thenBy { it.name }
+                )
                 withContext(Dispatchers.Main) {
                     _totalRequests.value = stats.totalRequests
                     _items.value = items
@@ -94,6 +105,29 @@ class SubscriptionInterceptionStatsViewModel(
                 _loading.value = false
             }
         }
+    }
+
+    /**
+     * Enabled rule count per subscription id, summed over every rule table a subscription can
+     * feed (domain block/allow, rewrite, URL and cosmetic rules) so the total matches the row's
+     * scope. Rules are stored once and linked to their sources, so a rule shared by two
+     * subscriptions is attributed to each of them.
+     */
+    private suspend fun subscriptionRuleCounts(): Map<Long, Int> {
+        val bySource = HashMap<String, Int>()
+        fun merge(rows: List<SourceRuleCount>) {
+            rows.forEach { bySource[it.source] = (bySource[it.source] ?: 0) + it.ruleCount }
+        }
+        merge(database.blockRuleDao().enabledSubscriptionRuleCountsBySource())
+        merge(database.allowRuleDao().enabledSubscriptionRuleCountsBySource())
+        merge(database.rewriteRuleDao().enabledSubscriptionRuleCountsBySource())
+        merge(database.goUrlRuleDao().enabledSubscriptionRuleCountsBySource())
+        merge(database.cosmeticRuleDao().enabledSubscriptionRuleCountsBySource())
+        // Sources are written as `sub_<id>`; anything else (preset, useradd, staging_sub_*) is
+        // not a live subscription and has no row to attach the count to.
+        return bySource.mapNotNull { (source, count) ->
+            source.removePrefix("sub_").toLongOrNull()?.let { it to count }
+        }.toMap()
     }
 
     companion object {

@@ -43,6 +43,7 @@ import com.haoze.diting.ui.components.SettingsCardMargin
 fun SubscriptionInterceptionStatsScreen(
     onBack: () -> Unit,
     dataset: RuleDataset = RuleDataset.NORMAL,
+    onOpenSubscriptionLogs: ((Long) -> Unit)? = null,
     viewModel: SubscriptionInterceptionStatsViewModel = viewModel(
         key = "SubscriptionInterceptionStatsViewModel_${dataset.name}",
         factory = SubscriptionInterceptionStatsViewModel.factory(
@@ -109,7 +110,16 @@ fun SubscriptionInterceptionStatsScreen(
                     })
                 } else {
                     SettingsSurfaceGroup(
-                        content = items.map { item -> { SubscriptionInterceptionItem(item) } }
+                        content = items.map { item ->
+                            {
+                                SubscriptionInterceptionItem(
+                                    item = item,
+                                    onClick = onOpenSubscriptionLogs?.let { open ->
+                                        { open(item.subscriptionId) }
+                                    }
+                                )
+                            }
+                        }
                     )
                 }
             }
@@ -146,20 +156,39 @@ private fun SubscriptionInterceptionRangeSelector(
 }
 
 @Composable
-private fun SubscriptionInterceptionItem(item: SubscriptionInterceptionStatItem) {
+private fun SubscriptionInterceptionItem(item: SubscriptionInterceptionStatItem, onClick: (() -> Unit)?) {
     val state = localizedText(when {
         item.deleted -> "已删除"
         item.enabled -> "已启用"
         else -> "已禁用"
     })
+    // Switched-off rows recede instead of disappearing: muted colours, still tappable so the
+    // hits recorded before the subscription was turned off stay reachable.
+    val inactive = !item.enabled
+    val titleColor = if (inactive) {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+    val mutedColor = MaterialTheme.colorScheme.onSurfaceVariant.let {
+        if (inactive) it.copy(alpha = 0.38f) else it
+    }
     SettingsItem(
-        title = item.name,
-            subtitle = localizedText("$state | 拦截 ${item.hits} 次 | ${formatPercent(item.rate)}")
+        title = "${item.name}（${item.ruleCount} ${localizedText("条规则")}）",
+        titleColor = titleColor,
+        onClick = onClick,
+        subtitleContent = {
+            Text(
+                text = localizedText("$state | 拦截 ${item.hits} 次 | ${formatPercent(item.rate)}"),
+                style = MaterialTheme.typography.bodySmall,
+                color = mutedColor
+            )
+        }
     ) {
         Text(
             text = formatPercent(item.rate),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = mutedColor
         )
     }
 }

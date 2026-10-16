@@ -37,3 +37,13 @@ data class EnabledRuleKeyset(
         dnsType = dnsType
     )
 }
+
+/**
+ * Enabled rule count attributed to a single rule source. Subscription rules store `sub_<id>`
+ * as their source, so this is what lets the UI show how many rules a subscription currently
+ * contributes without loading the rules themselves.
+ */
+data class SourceRuleCount(
+    val source: String,
+    val ruleCount: Int
+)

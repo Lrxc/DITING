@@ -30,7 +30,8 @@ class RequestLogRepository(
         source: RequestSource = RequestSource.ALL,
         status: RequestStatus = RequestStatus.ALL,
         query: String = "",
-        sinceMillis: Long? = null
+        sinceMillis: Long? = null,
+        blockSubscriptionId: Long? = null
     ): RequestLogBatch = coroutineScope {
         runCatching {
             onFlushRequested?.invoke() ?: activeFlusher?.invoke()
@@ -40,7 +41,7 @@ class RequestLogRepository(
             if (source == RequestSource.HTTPS) {
                 emptyList()
             } else {
-                val filter = dnsFilter(status, query, sinceMillis)
+                val filter = dnsFilter(status, query, sinceMillis, blockSubscriptionId)
                 dnsDao.queryList(
                     SimpleSQLiteQuery(
                         "SELECT * FROM dns_log WHERE 1=1${filter.sql} ORDER BY timestamp DESC LIMIT $limit",
@@ -55,7 +56,7 @@ class RequestLogRepository(
             if (source == RequestSource.DNS || dao == null) {
                 emptyList()
             } else {
-                val filter = httpFilter(status, query, sinceMillis)
+                val filter = httpFilter(status, query, sinceMillis, blockSubscriptionId)
                 dao.queryList(
                     SimpleSQLiteQuery(
                         "SELECT * FROM http_request_log WHERE 1=1${filter.sql} ORDER BY timestamp DESC LIMIT $limit",
@@ -86,13 +87,14 @@ class RequestLogRepository(
         source: RequestSource = RequestSource.ALL,
         status: RequestStatus = RequestStatus.ALL,
         query: String = "",
-        sinceMillis: Long? = null
+        sinceMillis: Long? = null,
+        blockSubscriptionId: Long? = null
     ): Int = coroutineScope {
         val dns = async {
             if (source == RequestSource.HTTPS) {
                 0
             } else {
-                val filter = dnsFilter(status, query, sinceMillis)
+                val filter = dnsFilter(status, query, sinceMillis, blockSubscriptionId)
                 dnsDao.count(
                     SimpleSQLiteQuery("SELECT COUNT(*) FROM dns_log WHERE 1=1${filter.sql}", filter.args)
                 )
@@ -103,7 +105,7 @@ class RequestLogRepository(
             if (source == RequestSource.DNS || dao == null) {
                 0
             } else {
-                val filter = httpFilter(status, query, sinceMillis)
+                val filter = httpFilter(status, query, sinceMillis, blockSubscriptionId)
                 dao.count(
                     SimpleSQLiteQuery("SELECT COUNT(*) FROM http_request_log WHERE 1=1${filter.sql}", filter.args)
                 )
@@ -114,7 +116,12 @@ class RequestLogRepository(
 
     private class SqlFilter(val sql: String, val args: Array<Any>)
 
-    private fun dnsFilter(status: RequestStatus, query: String, sinceMillis: Long?): SqlFilter {
+    private fun dnsFilter(
+        status: RequestStatus,
+        query: String,
+        sinceMillis: Long?,
+        blockSubscriptionId: Long?
+    ): SqlFilter {
         val sql = StringBuilder()
         val args = mutableListOf<Any>()
 
@@ -122,6 +129,13 @@ class RequestLogRepository(
         if (sinceMillis != null) {
             sql.append(" AND timestamp >= ?")
             args.add(sinceMillis)
+        }
+
+        // Subscription attribution is written at block time, so this narrows to the requests a
+        // single subscription is responsible for without any LIKE scan of the message text.
+        if (blockSubscriptionId != null) {
+            sql.append(" AND blockSubscriptionId = ?")
+            args.add(blockSubscriptionId)
         }
 
         val trimmed = query.trim()
@@ -156,7 +170,12 @@ class RequestLogRepository(
         return SqlFilter(sql.toString(), args.toTypedArray())
     }
 
-    private fun httpFilter(status: RequestStatus, query: String, sinceMillis: Long?): SqlFilter {
+    private fun httpFilter(
+        status: RequestStatus,
+        query: String,
+        sinceMillis: Long?,
+        blockSubscriptionId: Long?
+    ): SqlFilter {
         val sql = StringBuilder()
         val args = mutableListOf<Any>()
 
@@ -164,6 +183,11 @@ class RequestLogRepository(
         if (sinceMillis != null) {
             sql.append(" AND timestamp >= ?")
             args.add(sinceMillis)
+        }
+
+        if (blockSubscriptionId != null) {
+            sql.append(" AND blockSubscriptionId = ?")
+            args.add(blockSubscriptionId)
         }
 
         val trimmed = query.trim()

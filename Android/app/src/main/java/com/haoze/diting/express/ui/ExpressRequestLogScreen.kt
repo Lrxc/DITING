@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.FilterListOff
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
@@ -92,16 +93,18 @@ import java.util.Locale
 @Composable
 fun ExpressRequestLogScreen(
     onBack: () -> Unit,
+    initialBlockSubscriptionId: Long? = null,
     onRuntimeDnsSettingsChanged: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val database = remember(context) { ExpressRulesDatabase.getInstance(context) }
     val viewModel: RequestLogViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
-        key = "ExpressRequestLogViewModel",
+        key = "ExpressRequestLogViewModel_${initialBlockSubscriptionId ?: -1L}",
         factory = RequestLogViewModel.factory(
             application = context.applicationContext as Application,
             initialSource = RequestSource.DNS,
-            dataset = RuleDataset.EXPRESS
+            dataset = RuleDataset.EXPRESS,
+            initialBlockSubscriptionId = initialBlockSubscriptionId
         )
     )
 
@@ -154,17 +157,27 @@ fun ExpressRequestLogScreen(
                     shape = RoundedCornerShape(28.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
-            } else if (status != RequestStatus.ALL) {
-                Column {
-                    Text(localizedText("请求日志"))
-                    Text(
-                        text = localizedText(status.label),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
             } else {
-                Text(localizedText("请求日志"))
+                // A subscription filter arrives from the interception-stats screen, so the
+                // header carries it (together with the status) to say why the list is short.
+                val filterLabel = listOfNotNull(
+                    status.takeIf { it != RequestStatus.ALL }?.let { localizedText(it.label) },
+                    state.blockSubscriptionId?.let { id ->
+                        state.blockSubscriptionName ?: (localizedText("订阅") + " #$id")
+                    }
+                ).joinToString(" · ")
+                if (filterLabel.isEmpty()) {
+                    Text(localizedText("请求日志"))
+                } else {
+                    Column {
+                        Text(localizedText("请求日志"))
+                        Text(
+                            text = filterLabel,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
             }
         },
         onBack = onBack,
@@ -239,6 +252,22 @@ fun ExpressRequestLogScreen(
                             }
                         }
                     )
+                    if (state.blockSubscriptionId != null) {
+                        DropdownMenuItem(
+                            text = { Text(localizedText("清除订阅筛选")) },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.FilterListOff,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            onClick = {
+                                showTopMenu = false
+                                viewModel.clearBlockSubscriptionFilter()
+                            }
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text(localizedText("导出 CSV")) },
                         leadingIcon = { Icon(Icons.Default.FileDownload, contentDescription = null) },
@@ -430,32 +459,35 @@ private fun ExpressRequestLogCard(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = appLabel,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    RuleTagChip(
-                        text = localizedText(item.status.label),
-                        containerColor = color.copy(alpha = .12f),
-                        contentColor = color
-                    )
-                }
+                // Every line is a sibling here rather than wrapped in a row with the chip: the
+                // chip is taller than a text line, and as a sibling of the app name it stretched
+                // that line, which opened an extra gap above the request.
+                Text(
+                    text = appLabel,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
                 Text(
                     text = item.title,
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                Text(
+                    text = formatExpressTime(item.timestamp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
+            // Pinned to the top so it stays level with the app name while the text block grows.
+            RuleTagChip(
+                text = localizedText(item.status.label),
+                containerColor = color.copy(alpha = .12f),
+                contentColor = color,
+                modifier = Modifier.align(Alignment.Top)
+            )
         }
     }
 }

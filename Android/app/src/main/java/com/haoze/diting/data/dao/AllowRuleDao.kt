@@ -351,6 +351,13 @@ interface AllowRuleDao {
     @Query("SELECT COUNT(DISTINCT r.id) FROM allow_rule r JOIN allow_rule_source s ON s.ruleId = r.id WHERE s.source LIKE 'sub_%' AND r.enabled = 1 AND s.enabled = 1")
     suspend fun enabledSubscriptionRulesCount(): Int
 
+    @Query(
+        "SELECT s.source AS source, COUNT(DISTINCT r.id) AS ruleCount FROM allow_rule r " +
+            "JOIN allow_rule_source s ON s.ruleId = r.id " +
+            "WHERE s.source LIKE 'sub_%' AND r.enabled = 1 AND s.enabled = 1 GROUP BY s.source"
+    )
+    suspend fun enabledSubscriptionRuleCountsBySource(): List<SourceRuleCount>
+
     @Query("SELECT ruleId, source, enabled FROM allow_rule_source WHERE ruleId IN (:ruleIds)")
     suspend fun sourcesForRuleIds(ruleIds: List<Long>): List<AllowRuleSourceEntity>
 

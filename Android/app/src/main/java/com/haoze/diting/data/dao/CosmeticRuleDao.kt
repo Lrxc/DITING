@@ -35,6 +35,8 @@ interface CosmeticRuleDao {
 
     @Query("SELECT COUNT(*) FROM cosmetic_rule") suspend fun count(): Int
     @Query("SELECT COUNT(DISTINCT r.id) FROM cosmetic_rule r JOIN cosmetic_rule_source s ON s.ruleId=r.id WHERE r.enabled=1 AND s.enabled=1") suspend fun enabledCount(): Int
+    @Query("SELECT COUNT(DISTINCT r.id) FROM cosmetic_rule r JOIN cosmetic_rule_source s ON s.ruleId=r.id WHERE s.source GLOB 'sub_*' AND r.enabled=1 AND s.enabled=1") suspend fun enabledSubscriptionRulesCount(): Int
+    @Query("SELECT s.source AS source, COUNT(DISTINCT r.id) AS ruleCount FROM cosmetic_rule r JOIN cosmetic_rule_source s ON s.ruleId=r.id WHERE s.source GLOB 'sub_*' AND r.enabled=1 AND s.enabled=1 GROUP BY s.source") suspend fun enabledSubscriptionRuleCountsBySource(): List<SourceRuleCount>
     @Query("UPDATE cosmetic_rule SET enabled=:enabled WHERE id=:id") suspend fun setEnabled(id: Long, enabled: Boolean)
     @Query("UPDATE cosmetic_rule_source SET enabled=:enabled WHERE ruleId=:ruleId") suspend fun setSourceEnabledByRuleId(ruleId: Long, enabled: Boolean)
     @Query("DELETE FROM cosmetic_rule WHERE id=:id") suspend fun deleteById(id: Long)

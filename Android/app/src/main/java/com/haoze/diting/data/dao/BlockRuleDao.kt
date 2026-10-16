@@ -386,6 +386,19 @@ interface BlockRuleDao {
 
     @Query(
         "SELECT COUNT(DISTINCT r.id) FROM block_rule r JOIN block_rule_source s ON s.ruleId = r.id " +
+            "WHERE s.source LIKE 'sub_%' AND r.enabled = 1 AND s.enabled = 1"
+    )
+    suspend fun enabledSubscriptionRulesCount(): Int
+
+    @Query(
+        "SELECT s.source AS source, COUNT(DISTINCT r.id) AS ruleCount FROM block_rule r " +
+            "JOIN block_rule_source s ON s.ruleId = r.id " +
+            "WHERE s.source LIKE 'sub_%' AND r.enabled = 1 AND s.enabled = 1 GROUP BY s.source"
+    )
+    suspend fun enabledSubscriptionRuleCountsBySource(): List<SourceRuleCount>
+
+    @Query(
+        "SELECT COUNT(DISTINCT r.id) FROM block_rule r JOIN block_rule_source s ON s.ruleId = r.id " +
             "WHERE s.source LIKE 'sub_%' AND (r.pattern LIKE :query OR r.rawLine LIKE :query)"
     )
     suspend fun searchSubscriptionRulesCount(query: String): Int

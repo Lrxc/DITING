@@ -44,6 +44,10 @@ class LogRouteActivity : AppLocalizedActivity() {
     private val requestedRequestQuery: String?
         get() = intent.getStringExtra(EXTRA_REQUEST_QUERY)
 
+    /** Set when the request log is opened from a single subscription's interception row. */
+    private val requestedBlockSubscriptionId: Long?
+        get() = intent.getLongExtra(EXTRA_REQUEST_SUBSCRIPTION, -1L).takeIf { it >= 0L }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -107,6 +111,24 @@ class LogRouteActivity : AppLocalizedActivity() {
         )
     }
 
+    /**
+     * Opens the request log narrowed to the requests one subscription is responsible for.
+     * The rows only exist for blocked requests, so the status filter is pinned to 屏蔽 as well.
+     */
+    private fun openSubscriptionLogs(subscriptionId: Long) {
+        if (childLaunchInProgress || route == Routes.DNS_LOGS) return
+        childLaunchInProgress = true
+        startActivity(
+            createIntent(
+                this,
+                Routes.DNS_LOGS,
+                requestStatus = RequestStatus.BLOCKED,
+                blockSubscriptionId = subscriptionId,
+                dataset = dataset
+            )
+        )
+    }
+
     @androidx.compose.runtime.Composable
     private fun LogRouteContent(
         route: String,
@@ -129,6 +151,10 @@ class LogRouteActivity : AppLocalizedActivity() {
         val onNavigateToSubscriptionInterceptionStats = {
             onNavigate(Routes.SUBSCRIPTION_INTERCEPTION_STATS)
         }
+        // Tapping a subscription on the interception screen opens its blocked requests.
+        val onOpenSubscriptionLogs: (Long) -> Unit = { subscriptionId ->
+            openSubscriptionLogs(subscriptionId)
+        }
         val onNavigateToTrafficStats = { onNavigate(Routes.APP_TRAFFIC_STATS) }
 
         val isExpressMode = dataset == RuleDataset.EXPRESS
@@ -138,6 +164,7 @@ class LogRouteActivity : AppLocalizedActivity() {
                 if (isExpressMode) {
                     com.haoze.diting.express.ui.ExpressRequestLogScreen(
                         onBack = onBack,
+                        initialBlockSubscriptionId = requestedBlockSubscriptionId,
                         onRuntimeDnsSettingsChanged = onRuntimeDnsSettingsChanged
                     )
                 } else {
@@ -146,6 +173,7 @@ class LogRouteActivity : AppLocalizedActivity() {
                         initialSource = requestedRequestSource ?: if (route == Routes.HTTP_REQUEST_LOGS) RequestSource.HTTPS else RequestSource.ALL,
                         initialStatus = requestedRequestStatus ?: RequestStatus.ALL,
                         initialQuery = requestedRequestQuery.orEmpty(),
+                        initialBlockSubscriptionId = requestedBlockSubscriptionId,
                         onRuntimeDnsSettingsChanged = onRuntimeDnsSettingsChanged
                     )
                 }
@@ -153,7 +181,11 @@ class LogRouteActivity : AppLocalizedActivity() {
             Routes.DNS_CACHE -> DnsCacheScreen(onBack = onBack, dataset = dataset)
             Routes.RACE_STATS -> RaceStatsScreen(onBack = onBack, dataset = dataset)
             Routes.BOOTSTRAP_STATS -> BootstrapStatsScreen(onBack = onBack, dataset = dataset)
-            Routes.SUBSCRIPTION_INTERCEPTION_STATS -> SubscriptionInterceptionStatsScreen(onBack = onBack, dataset = dataset)
+            Routes.SUBSCRIPTION_INTERCEPTION_STATS -> SubscriptionInterceptionStatsScreen(
+                onBack = onBack,
+                dataset = dataset,
+                onOpenSubscriptionLogs = onOpenSubscriptionLogs
+            )
             Routes.PROVIDER_HEALTH -> ProviderHealthScreen(onBack = onBack, dataset = dataset)
             Routes.APP_TRAFFIC_STATS -> com.haoze.diting.normal.ui.AppTrafficStatsScreen(
                 onBack = onBack,
@@ -192,6 +224,7 @@ class LogRouteActivity : AppLocalizedActivity() {
         const val EXTRA_REQUEST_SOURCE = "log_request_source"
         const val EXTRA_REQUEST_STATUS = "log_request_status"
         const val EXTRA_REQUEST_QUERY = "log_request_query"
+        const val EXTRA_REQUEST_SUBSCRIPTION = "log_request_subscription"
         const val EXTRA_DATASET = "log_dataset"
 
         fun createIntent(
@@ -200,6 +233,7 @@ class LogRouteActivity : AppLocalizedActivity() {
             requestSource: RequestSource? = null,
             requestStatus: RequestStatus? = null,
             requestQuery: String? = null,
+            blockSubscriptionId: Long? = null,
             dataset: RuleDataset? = null
         ): Intent =
             Intent(context, LogRouteActivity::class.java)
@@ -208,6 +242,7 @@ class LogRouteActivity : AppLocalizedActivity() {
                     requestSource?.let { putExtra(EXTRA_REQUEST_SOURCE, it.name) }
                     requestStatus?.let { putExtra(EXTRA_REQUEST_STATUS, it.name) }
                     requestQuery?.let { putExtra(EXTRA_REQUEST_QUERY, it) }
+                    blockSubscriptionId?.let { putExtra(EXTRA_REQUEST_SUBSCRIPTION, it) }
                     dataset?.let { putExtra(EXTRA_DATASET, it.name) }
                 }
     }
