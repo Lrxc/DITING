@@ -28,7 +28,7 @@ import com.haoze.diting.ui.components.SettingsScaffold
 import com.haoze.diting.ui.components.SettingsSurfaceGroup
 import com.haoze.diting.ui.components.SettingsCardMargin
 
-private const val SPONSOR_README_URL = "https://github.com/haoze-evolluling/DITING#sponsorship"
+private const val SPONSOR_README_URL = "https://github.com/Lrxc/DITING#sponsorship"
 
 @Composable
 fun SponsorScreen(

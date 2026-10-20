@@ -63,7 +63,7 @@ import com.haoze.diting.ui.components.SettingsCardMargin
 import com.haoze.diting.core.VpnStateRegistry
 import kotlin.math.sqrt
 
-private const val PROJECT_REPOSITORY_URL = "https://github.com/haoze-evolluling/DITING"
+private const val PROJECT_REPOSITORY_URL = "https://github.com/Lrxc/DITING"
 
 internal data class AboutCapability(
     val title: String,
@@ -433,7 +433,7 @@ private fun ProjectCard(onOpenRepository: () -> Unit) {
         Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("MAINTAINED BY", color = MaterialTheme.colorScheme.primary, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                Text("haoze-evolluling", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("Lrxc", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(localizedText("一位集美大学人工智能系大三学子"), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
             }
             Surface(

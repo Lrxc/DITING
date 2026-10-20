@@ -21,7 +21,7 @@ data class RecognitionMembersConfiguration(
 
 object RecognitionMembersRepository {
     private const val CONFIGURATION_URL =
-        "https://raw.githubusercontent.com/haoze-evolluling/DITING/main/recognition_members.json"
+        "https://raw.githubusercontent.com/Lrxc/DITING/main/recognition_members.json"
     private const val CACHE_FILE_NAME = "recognition_members.json"
     private const val PREFERENCES_NAME = "recognition_members"
     private const val ETAG_KEY = "etag"
