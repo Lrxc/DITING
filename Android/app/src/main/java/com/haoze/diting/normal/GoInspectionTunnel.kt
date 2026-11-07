@@ -198,6 +198,9 @@ class GoInspectionTunnel(
     private fun configureEngine(selectedPackages: Set<String>) {
         val outboundError = engine.configureOutboundProxy(outboundProxyConfig.toNativeJson())
         require(outboundError.isBlank()) { outboundError }
+        // Only the selected apps are dialed through the outbound proxy; every
+        // other app keeps using the direct outbound.
+        engine.setProxyAppUIDs(proxyAppUidCsv(outboundProxyConfig))
         engine.setOutboundProxyStatusCallback(object : OutboundProxyStatusCallback {
             override fun onOutboundProxyStatus(state: String, message: String) {
                 vpnService.onOutboundProxyStatus(state, message)
@@ -371,6 +374,9 @@ class GoInspectionTunnel(
         })
         updatePassthroughRules()
     }
+
+    private fun proxyAppUidCsv(config: OutboundProxyConfig): String =
+        if (!config.enabled) "" else config.proxyAppPackages.mapNotNull(::packageUid).joinToString(",")
 
     private fun packageUid(packageName: String): Int? =
         runCatching { context.packageManager.getPackageUid(packageName, 0) }.getOrNull()

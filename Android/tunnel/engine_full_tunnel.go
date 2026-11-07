@@ -108,6 +108,8 @@ func (e *Engine) StartFull(fd int, protector SocketProtector) {
 	}
 	e.protectFn = protectFn
 	e.flowOutbound = newFlowOutbound(e.outboundConfig, protectFn, e.reportOutboundStatus)
+	// Direct outbound backs every app that is not selected for proxying.
+	e.directOutbound = newFlowOutbound(outboundProxyConfig{}, protectFn, nil)
 	if e.outboundConfig.Enabled {
 		e.reportOutboundStatus("connecting", "")
 	} else {
@@ -116,7 +118,9 @@ func (e *Engine) StartFull(fd int, protector SocketProtector) {
 	e.resolver = NewResolver(protectFn)
 	e.resolver.SetRaceLogCallback(e.raceLogCallback)
 	e.resolver.SetBootstrapLogCallback(e.bootstrapLogCallback)
-	e.resolver.setOutbound(e.flowOutbound)
+	// DNS upstream queries always dial directly: the resolver answers for all
+	// apps, and per-app proxy routing only applies to the apps' own flows.
+	e.resolver.setOutbound(e.directOutbound)
 	if e.dnsConfig != nil {
 		e.resolver.UpdateBootstrap(e.dnsConfig.Bootstrap)
 		if err := e.resolver.ConfigureProviders(e.dnsConfig.Mode, e.dnsConfig.Providers); err != nil {
@@ -231,10 +235,7 @@ func newFullTunnelUdpHandler(engine *Engine, filter *MitmFilter, uidr UIDResolve
 				return
 			}
 		}
-		outbound := engine.flowOutbound
-		if outbound == nil {
-			outbound = newFlowOutbound(outboundProxyConfig{}, protectFn, nil)
-		}
+		outbound := engine.outboundForUID(uid)
 		dst := net.JoinHostPort(flow.serverIP.String(), strconv.Itoa(flow.serverPort))
 		ctx, cancel := context.WithTimeout(context.Background(), flowDialTimeout)
 		remote, err := outbound.DialUDP(ctx, dst)
@@ -274,7 +275,7 @@ func newFullPassthroughTcpHandler(engine *Engine, uidr UIDResolver, protectFn fu
 		}
 		engine.logConnection(flow, ProtocolTCP)
 		clientConn := engine.trafficTracker.WrapClientConn(conn, uid)
-		relayDirectFromFlow(clientConn, flow, engine, protectFn)
+		relayDirectFromFlow(clientConn, flow, engine, protectFn, uid)
 	}
 }
 

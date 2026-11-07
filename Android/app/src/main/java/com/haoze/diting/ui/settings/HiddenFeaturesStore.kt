@@ -156,7 +156,7 @@ enum class HiddenFeature(
     OUTBOUND_PROXY(
         key = "outbound_proxy",
         titleRes = R.string.feature_hub_outbound_proxy,
-        description = "将过滤后的流量转发到本地 SOCKS5 或 HTTP 代理",
+        description = "将勾选应用的流量转发到本地 SOCKS5 或 HTTP 代理",
         icon = Icons.Filled.Lan,
         category = FeatureCategory.ADVANCED_TOOLS
     ),

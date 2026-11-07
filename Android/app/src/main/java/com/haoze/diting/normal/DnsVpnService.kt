@@ -109,6 +109,14 @@ class DnsVpnService : VpnService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == null) {
+            // Android 14+ kills the process when a service started through
+            // startForegroundService() does not reach startForeground() in
+            // time. VPN setup (provider resolution, tunnel creation) and the
+            // early-exit paths below can exceed that window, so promote to
+            // foreground before doing any work.
+            promoteToForeground()
+        }
         when (intent?.action) {
             ACTION_STOP -> stopVpn()
             ACTION_REFRESH_NOTIFICATION -> {
@@ -194,16 +202,16 @@ class DnsVpnService : VpnService() {
         } else {
             emptyMap()
         }
-        val outboundProxyConfig = OutboundProxySettingsStore.getOutboundProxyConfig(this)
+        var outboundProxyConfig = OutboundProxySettingsStore.getOutboundProxyConfig(this)
         if (outboundProxyConfig.enabled) {
             val validationError = outboundProxyConfig.validationError(this)
             if (validationError != null) {
+                // A broken (optional) proxy configuration must never block the
+                // VPN: report the problem and start without the proxy.
                 Log.e(TAG, "Outbound proxy configuration rejected: $validationError")
+                CrashBreadcrumbs.record("VPN", "outbound proxy rejected: $validationError")
                 OutboundProxySettingsStore.setOutboundProxyStatus(this, "error", validationError)
-                DnsVpnStatusNotifier.setRunningFlag(this, false)
-                DnsVpnStatusNotifier.sendStatusBroadcast(this, false)
-                stopSelf()
-                return
+                outboundProxyConfig = outboundProxyConfig.copy(enabled = false)
             }
         }
         val activeInspectionPackages = if (inspectionRequested) {
@@ -212,15 +220,14 @@ class DnsVpnService : VpnService() {
             emptySet()
         }
 
-        val proxyPackage = outboundProxyConfig.proxyAppPackage.takeIf { outboundProxyConfig.enabled }
         val vpnInterface = tunnelManager.establishVpnInterface(
             vpnService = this,
             excludedPackages = AppRulesSettingsStore.getExcludedAppPackages(this),
-            proxyPackage = proxyPackage,
             bypassLan = SystemSettingsStore.isBypassLanEnabled(this),
             ipv6Mode = SystemSettingsStore.getIpv6Mode(this)
         ) ?: run {
             Log.e(TAG, "Failed to establish VPN")
+            CrashBreadcrumbs.record("VPN", "establishVpnInterface returned null")
             PermissionDisclosureSettings.updateVpnGrant(this, false)
             DnsVpnStatusNotifier.setRunningFlag(this, false)
             DnsVpnStatusNotifier.sendStatusBroadcast(this, false)
@@ -287,6 +294,25 @@ class DnsVpnService : VpnService() {
         tunnelManager.stopInspectionDataPlane()
         tunnelManager.disconnectVpnInterface()
         startVpn(startIntent)
+    }
+
+    /**
+     * Enters the foreground as early as possible so a slow VPN bring-up can
+     * never trip the system foreground-service start timeout.
+     */
+    private fun promoteToForeground() {
+        runCatching {
+            startForeground(
+                VpnNotificationBuilder.NOTIFICATION_ID_VPN_SERVICE,
+                VpnNotificationBuilder.build(
+                    this,
+                    configManager.activeProviders,
+                    configManager.activeResolutionMode
+                )
+            )
+        }.onFailure { error ->
+            Log.w(TAG, "startForeground during startup failed", error)
+        }
     }
 
     private fun refreshForegroundNotification() {

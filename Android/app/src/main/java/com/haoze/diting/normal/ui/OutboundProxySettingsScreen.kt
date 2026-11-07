@@ -40,7 +40,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import com.haoze.diting.ui.components.SettingsActionButton
 import com.haoze.diting.ui.components.SettingsCornerShape
 import com.haoze.diting.ui.components.SettingsInfoText
@@ -51,6 +50,7 @@ import com.haoze.diting.ui.components.SettingsSurfaceItem
 import com.haoze.diting.ui.components.SettingsSurfaceGroup
 import com.haoze.diting.ui.components.SettingsCardMargin
 import com.haoze.diting.ui.settings.OutboundProxySettingsStore
+import com.haoze.diting.ui.settings.OutboundProxyTester
 import com.haoze.diting.normal.DnsVpnService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -62,16 +62,41 @@ import java.util.Locale
 fun OutboundProxySettingsScreen(
     onBack: () -> Unit,
     onSelectApp: () -> Unit,
-    selectedAppOverride: Pair<Boolean, String?>? = null
+    selectedAppsOverride: Pair<Boolean, List<String>>? = null
 ) {
     val context = LocalContext.current
     var draft by remember { mutableStateOf(OutboundProxySettingsStore.getOutboundProxyConfig(context)) }
     var portText by remember { mutableStateOf(draft.port.toString()) }
     var proxyStatus by remember { mutableStateOf(OutboundProxySettingsStore.getOutboundProxyStatus(context)) }
+    var proxyProbe by remember { mutableStateOf<ProxyProbe?>(null) }
 
-    LaunchedEffect(selectedAppOverride) {
-        selectedAppOverride?.let { (_, packageName) ->
-            draft = draft.copy(proxyAppPackage = packageName.orEmpty())
+    // Probe the configured proxy as soon as the page shows a usable address
+    // and port, regardless of whether the feature switch is on.
+    LaunchedEffect(draft.host, portText, draft.protocol, draft.username, draft.password) {
+        val probePort = portText.toIntOrNull() ?: 0
+        if (draft.host.isBlank() || probePort !in 1..65535) {
+            proxyProbe = null
+            return@LaunchedEffect
+        }
+        proxyProbe = ProxyProbe.Testing
+        delay(400)
+        proxyProbe = withContext(Dispatchers.IO) {
+            when (val result = OutboundProxyTester.test(
+                draft.protocol,
+                draft.host,
+                probePort,
+                draft.username,
+                draft.password
+            )) {
+                is OutboundProxyTester.Result.Available -> ProxyProbe.Available
+                is OutboundProxyTester.Result.Unavailable -> ProxyProbe.Unavailable(result.reason)
+            }
+        }
+    }
+
+    LaunchedEffect(selectedAppsOverride) {
+        selectedAppsOverride?.let { (_, packages) ->
+            draft = draft.copy(proxyAppPackages = packages)
         }
     }
     LaunchedEffect(draft.enabled) {
@@ -81,33 +106,48 @@ fun OutboundProxySettingsScreen(
         }
     }
 
-    var selectedLabel by remember { mutableStateOf(draft.proxyAppPackage.ifBlank { "未选择" }) }
-    LaunchedEffect(draft.proxyAppPackage) {
-        selectedLabel = if (draft.proxyAppPackage.isBlank()) {
-            "未选择"
-        } else {
-            runCatching {
-                context.packageManager.getApplicationInfo(draft.proxyAppPackage, 0)
+    var selectedLabel by remember { mutableStateOf("未选择") }
+    LaunchedEffect(draft.proxyAppPackages) {
+        val packages = draft.proxyAppPackages
+        selectedLabel = when {
+            packages.isEmpty() -> "未选择"
+            packages.size == 1 -> runCatching {
+                context.packageManager.getApplicationInfo(packages.first(), 0)
                     .loadLabel(context.packageManager).toString()
-            }.getOrDefault(draft.proxyAppPackage)
+            }.getOrDefault(packages.first())
+            else -> "已选择 ${packages.size} 个应用"
         }
     }
     fun setProxyEnabled(enabled: Boolean) {
         if (draft.enabled == enabled) return
         draft = draft.copy(enabled = enabled)
         OutboundProxySettingsStore.setOutboundProxyEnabled(context, enabled)
-        OutboundProxySettingsStore.setOutboundProxyStatus(context, if (enabled) "connecting" else "disabled", "")
-        if (enabled && !DnsVpnService.isRunning(context)) {
-            ContextCompat.startForegroundService(context, DnsVpnService.startIntent(context))
-        } else {
-            RuntimeDnsSettingsRefresher.refreshAppExclusionsIfRunning(context)
-        }
+        val vpnRunning = DnsVpnService.isRunning(context)
+        OutboundProxySettingsStore.setOutboundProxyStatus(
+            context,
+            when {
+                !enabled -> "disabled"
+                vpnRunning -> "connecting"
+                // The proxy only works while the VPN is running, and enabling
+                // the switch must not start the VPN by itself.
+                else -> "waiting"
+            },
+            ""
+        )
+        if (vpnRunning) RuntimeDnsSettingsRefresher.refreshAppExclusionsIfRunning(context)
     }
-    val statusText = when (proxyStatus.first) {
-        "connecting" -> localizedText("正在连接")
-        "ready" -> localizedText("代理可用")
-        "error" -> OutboundProxySettingsStore.formatProxyErrorMessage(context, proxyStatus.second)
-        else -> localizedText("未运行")
+    val statusText = when (val probe = proxyProbe) {
+        ProxyProbe.Testing -> localizedText("正在检测代理")
+        ProxyProbe.Available -> localizedText("代理可用")
+        is ProxyProbe.Unavailable -> localizedText("代理不可用") + " · " +
+            OutboundProxySettingsStore.formatProxyErrorMessage(context, probe.reason)
+        null -> when (proxyStatus.first) {
+            "connecting" -> localizedText("正在连接")
+            "ready" -> localizedText("代理可用")
+            "error" -> OutboundProxySettingsStore.formatProxyErrorMessage(context, proxyStatus.second)
+            "waiting" -> localizedText("等待 VPN 启动")
+            else -> localizedText("未运行")
+        }
     }
 
     SettingsScaffold(title = localizedText("出站代理"), onBack = onBack) { padding ->
@@ -126,8 +166,8 @@ fun OutboundProxySettingsScreen(
                 },
                 {
                     SettingsItem(
-            title = localizedText("代理应用"),
-                        subtitle = if (draft.proxyAppPackage.isBlank()) localizedText("未选择") else selectedLabel,
+                        title = localizedText("走代理的应用"),
+                        subtitle = localizedText(selectedLabel),
                         onClick = onSelectApp
                     ) { Icon(Icons.Default.Apps, contentDescription = null) }
                 }
@@ -186,9 +226,9 @@ fun OutboundProxySettingsScreen(
 
             SettingsInfoText(
                 if (draft.protocol == OutboundProxyProtocol.HTTP) {
-                    localizedText("HTTP CONNECT 不支持 UDP；UDP 会被严格阻断，QUIC 可回退到 TCP。代理应用本身将绕过 DITING。")
+                    localizedText("勾选应用的流量经 HTTP CONNECT 转发；HTTP CONNECT 不支持 UDP，UDP 会被严格阻断，QUIC 可回退到 TCP。未勾选的应用保持直连，DNS 始终直连。请勿勾选提供代理端口的应用，否则会形成流量环路。")
                 } else {
-                    localizedText("SOCKS5 通过 UDP ASSOCIATE 转发 UDP。代理应用本身将绕过 DITING，防止流量环路。")
+                    localizedText("勾选应用的流量经 SOCKS5 转发（UDP 通过 UDP ASSOCIATE）。未勾选的应用保持直连，DNS 始终直连。请勿勾选提供代理端口的应用（如 Clash），否则会形成流量环路。")
                 }
             )
             SettingsActionButton(
@@ -200,7 +240,15 @@ fun OutboundProxySettingsScreen(
                     } else {
                         draft = savedConfig
                         OutboundProxySettingsStore.setOutboundProxyConfig(context, savedConfig)
-                        OutboundProxySettingsStore.setOutboundProxyStatus(context, if (savedConfig.enabled) "connecting" else "disabled", "")
+                        OutboundProxySettingsStore.setOutboundProxyStatus(
+                            context,
+                            when {
+                                !savedConfig.enabled -> "disabled"
+                                DnsVpnService.isRunning(context) -> "connecting"
+                                else -> "waiting"
+                            },
+                            ""
+                        )
                         RuntimeDnsSettingsRefresher.refreshAppExclusionsIfRunning(context)
                         context.showToast("出站代理设置已保存", Toast.LENGTH_SHORT)
                     }
@@ -216,38 +264,44 @@ fun OutboundProxySettingsScreen(
 }
 
 @Composable
-fun OutboundProxyAppsScreen(onBack: () -> Unit, onSave: (String) -> Unit) {
+fun OutboundProxyAppsScreen(onBack: () -> Unit, onSave: (List<String>) -> Unit) {
     val context = LocalContext.current
-    val initialPackage = remember { OutboundProxySettingsStore.getOutboundProxyAppPackage(context) }
-    var selectedPackage by remember { mutableStateOf(initialPackage) }
+    val initialPackages = remember { OutboundProxySettingsStore.getOutboundProxyAppPackages(context).toSet() }
+    var selectedPackages by remember { mutableStateOf(initialPackages) }
     val access = rememberAppListAccessState { loadInstalledApps(context) }
     AppListDisclosureDialog(access)
     val apps = access.apps
     if (access.unavailable) {
-        return SettingsScaffold(title = localizedText("选择代理应用"), onBack = onBack) {
+        return SettingsScaffold(title = localizedText("选择走代理的应用"), onBack = onBack) {
             AppListUnavailableContent(Modifier.padding(it), access.retry)
         }
     }
     if (apps == null) {
-        return SettingsScaffold(title = localizedText("选择代理应用"), onBack = onBack) {
+        return SettingsScaffold(title = localizedText("选择走代理的应用"), onBack = onBack) {
             AppListLoadingContent(Modifier.padding(it))
         }
     }
 
     AppPickerScreen(
-        title = localizedText("选择代理应用"),
-        infoText = localizedText("选择提供本地代理端口的应用。代理应用本身会绕过 DITING。"),
+        title = localizedText("选择走代理的应用"),
+        infoText = localizedText("勾选的应用流量经出站代理转发，未勾选的应用保持直连；DNS 解析始终直连。请勿勾选提供代理端口的应用，否则会形成流量环路。"),
         apps = apps,
-        selectedPackages = if (selectedPackage.isEmpty()) emptySet() else setOf(selectedPackage),
-        onSelectedPackagesChange = { selectedPackage = it.firstOrNull() ?: "" },
+        selectedPackages = selectedPackages,
+        onSelectedPackagesChange = { selectedPackages = it },
         initialFilter = AppListFilter.USER,
         initialSort = AppListSort.LABEL_ASC,
         onFilterChanged = {},
         onSortChanged = {},
         showSelectionActions = false,
-        isDirty = selectedPackage != initialPackage,
-        onSave = { onSave(selectedPackage) },
+        isDirty = selectedPackages != initialPackages,
+        onSave = { onSave(selectedPackages.sorted()) },
         onBack = onBack,
-        singleSelect = true
+        singleSelect = false
     )
+}
+
+private sealed interface ProxyProbe {
+    data object Testing : ProxyProbe
+    data object Available : ProxyProbe
+    data class Unavailable(val reason: String) : ProxyProbe
 }

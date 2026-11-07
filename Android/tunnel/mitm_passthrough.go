@@ -19,10 +19,15 @@ func isTLSClientPort(port int) bool {
 	return port == 443 || port == 465 || port == 993 || port == 8443
 }
 
-func dialUpstream(flow flowID, hostname string, blocker adBlockChecker, protectFn func(fd int) bool) (net.Conn, error) {
-	outbound := flowOutbound(newFlowOutbound(outboundProxyConfig{}, protectFn, nil))
-	if engine, ok := blocker.(*Engine); ok && engine.flowOutbound != nil {
-		outbound = engine.flowOutbound
+// dialUpstream opens the upstream connection for a flow, honoring per-app
+// outbound-proxy routing: only flows owned by proxy-selected UIDs are dialed
+// through the configured proxy.
+func dialUpstream(flow flowID, hostname string, blocker adBlockChecker, protectFn func(fd int) bool, uid int) (net.Conn, error) {
+	var outbound flowOutbound
+	if engine, ok := blocker.(*Engine); ok && engine != nil {
+		outbound = engine.outboundForUID(uid)
+	} else {
+		outbound = newFlowOutbound(outboundProxyConfig{}, protectFn, nil)
 	}
 	if hostname == "" && blocker != nil {
 		hostname = blocker.domainForIP(flow.serverIP)
@@ -58,7 +63,7 @@ func dialUpstream(flow flowID, hostname string, blocker adBlockChecker, protectF
 	return nil, err
 }
 
-func relayDirectFromFlow(clientConn net.Conn, flow flowID, blocker adBlockChecker, protectFn func(fd int) bool) {
+func relayDirectFromFlow(clientConn net.Conn, flow flowID, blocker adBlockChecker, protectFn func(fd int) bool, uid int) {
 
 	if flow.serverIP.To4() == nil && isTLSClientPort(flow.serverPort) {
 		peeked, peekedReader, err := peekFlow(clientConn, peekSize, peekTimeout)
@@ -67,12 +72,12 @@ func relayDirectFromFlow(clientConn net.Conn, flow flowID, blocker adBlockChecke
 			if len(peeked) >= 3 && peeked[0] == 0x16 && peeked[1] == 0x03 {
 				sni = parseClientHelloSNI(peeked)
 			}
-			relayDirectPeeked(clientConn, peekedReader, flow, sni, blocker, protectFn)
+			relayDirectPeeked(clientConn, peekedReader, flow, sni, blocker, protectFn, uid)
 			return
 		}
 	}
 
-	remote, err := dialUpstream(flow, "", blocker, protectFn)
+	remote, err := dialUpstream(flow, "", blocker, protectFn, uid)
 	if err != nil {
 		return
 	}
@@ -81,8 +86,8 @@ func relayDirectFromFlow(clientConn net.Conn, flow flowID, blocker adBlockChecke
 	bidiCopyFlow(clientConn, remote)
 }
 
-func relayDirectPeeked(clientConn net.Conn, clientReader io.Reader, flow flowID, hostname string, blocker adBlockChecker, protectFn func(fd int) bool) {
-	remote, err := dialUpstream(flow, hostname, blocker, protectFn)
+func relayDirectPeeked(clientConn net.Conn, clientReader io.Reader, flow flowID, hostname string, blocker adBlockChecker, protectFn func(fd int) bool, uid int) {
+	remote, err := dialUpstream(flow, hostname, blocker, protectFn, uid)
 	if err != nil {
 		return
 	}

@@ -148,6 +148,7 @@ internal fun translateDynamicPattern(text: String): String? = when {
     text.startsWith("应用启动时不自动检查") -> "Do not check automatically at startup; you can check manually at any time"
     text.startsWith("应用启动时自动检查") -> "Automatically check for new versions at startup"
     text.startsWith("已选择 ") && text.endsWith(" 个应用") -> "${text.removePrefix("已选择 ").removeSuffix(" 个应用")} apps selected"
+    text.startsWith("代理返回 HTTP ") -> "Proxy returned " + text.removePrefix("代理返回 HTTP ")
     text.startsWith("尚未选择应用") -> "No apps selected; traffic will not be blocked when enabled"
     text.startsWith("当前筛选下") -> text.replace("当前筛选下", "No records for the current filter")
     text.startsWith("成功 ") -> text.replace("成功 ", "Success ")

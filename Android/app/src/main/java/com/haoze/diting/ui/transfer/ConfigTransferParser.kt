@@ -14,7 +14,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 object ConfigTransferParser {
-    const val FORMAT_VERSION = 9
+    const val FORMAT_VERSION = 10
     const val MIN_SUPPORTED_FORMAT_VERSION = 1
 
     fun parseAndValidate(content: String): TransferConfig {
@@ -114,7 +114,13 @@ object ConfigTransferParser {
                 port = obj.optInt("port", 7890),
                 username = obj.optString("username", ""),
                 password = obj.optString("password", ""),
-                proxyAppPackage = obj.optString("proxyAppPackage", "")
+                proxyAppPackages = when {
+                    obj.has("proxyAppPackages") -> obj.optionalArray("proxyAppPackages")
+                        .mapStrings()
+                    obj.optString("proxyAppPackage", "").isNotBlank() ->
+                        listOf(obj.optString("proxyAppPackage"))
+                    else -> emptyList()
+                }
             )
         }
 

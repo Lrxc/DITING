@@ -72,17 +72,17 @@ func newMitmTcpHandler(
 		}
 
 		if isLoopbackOrInternal(flow.serverIP.String()) {
-			relayDirectFromFlow(clientConn, flow, blocker, protectFn)
+			relayDirectFromFlow(clientConn, flow, blocker, protectFn, uid)
 			return
 		}
 
 		if flow.serverPort != 443 && flow.serverPort != 80 {
-			relayDirectFromFlow(clientConn, flow, blocker, protectFn)
+			relayDirectFromFlow(clientConn, flow, blocker, protectFn, uid)
 			return
 		}
 
 		if uid == UIDUnknown || !filter.IsUIDAllowed(uid) {
-			relayDirectFromFlow(clientConn, flow, blocker, protectFn)
+			relayDirectFromFlow(clientConn, flow, blocker, protectFn, uid)
 			return
 		}
 
@@ -101,7 +101,7 @@ func newMitmTcpHandler(
 			sni = parseHTTPHost(peeked)
 		} else {
 
-			relayDirectPeeked(clientConn, peekedReader, flow, "", blocker, protectFn)
+			relayDirectPeeked(clientConn, peekedReader, flow, "", blocker, protectFn, uid)
 			return
 		}
 
@@ -145,14 +145,14 @@ func newMitmTcpHandler(
 
 		if !filter.IsInterceptionAllowed(hostname) {
 			eng.logHTTPEvent(flow, hostname, protocolName(classification), "passthrough", "passthrough")
-			relayDirectPeeked(clientConn, peekedReader, flow, hostname, blocker, protectFn)
+			relayDirectPeeked(clientConn, peekedReader, flow, hostname, blocker, protectFn, uid)
 			return
 		}
 
 		if classification == classTLS {
-			mitmTLSFlow(clientConn, peekedReader, certMgr, filter, blocker, eng, hostname, flow, protectFn)
+			mitmTLSFlow(clientConn, peekedReader, certMgr, filter, blocker, eng, hostname, flow, protectFn, uid)
 		} else {
-			mitmHTTPFlow(clientConn, peekedReader, blocker, eng, hostname, flow, protectFn)
+			mitmHTTPFlow(clientConn, peekedReader, blocker, eng, hostname, flow, protectFn, uid)
 		}
 	}
 }

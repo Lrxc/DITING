@@ -1,6 +1,7 @@
 package com.haoze.diting.ui.settings
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -21,7 +22,8 @@ object OutboundProxySettingsStore {
     private const val KEY_OUTBOUND_PROXY_PORT = "outbound_proxy_port"
     private const val KEY_OUTBOUND_PROXY_USERNAME = "outbound_proxy_username"
     private const val KEY_OUTBOUND_PROXY_PASSWORD = "outbound_proxy_password"
-    private const val KEY_OUTBOUND_PROXY_APP = "outbound_proxy_app"
+    private const val KEY_OUTBOUND_PROXY_APPS = "outbound_proxy_apps"
+    private const val KEY_OUTBOUND_PROXY_APP_LEGACY = "outbound_proxy_app"
     private const val KEY_OUTBOUND_PROXY_STATUS = "outbound_proxy_status"
     private const val KEY_OUTBOUND_PROXY_STATUS_MESSAGE = "outbound_proxy_status_message"
 
@@ -43,7 +45,7 @@ object OutboundProxySettingsStore {
                 port = preferences.getInt(KEY_OUTBOUND_PROXY_PORT, 7890),
                 username = decryptProxySecret(preferences.getString(KEY_OUTBOUND_PROXY_USERNAME, null)),
                 password = decryptProxySecret(preferences.getString(KEY_OUTBOUND_PROXY_PASSWORD, null)),
-                proxyAppPackage = preferences.getString(KEY_OUTBOUND_PROXY_APP, "").orEmpty()
+                proxyAppPackages = readProxyAppPackages(preferences)
             )
             cachedConfig = config
             config
@@ -60,7 +62,8 @@ object OutboundProxySettingsStore {
                 .putInt(KEY_OUTBOUND_PROXY_PORT, config.port)
                 .putString(KEY_OUTBOUND_PROXY_USERNAME, encryptProxySecret(config.username))
                 .putString(KEY_OUTBOUND_PROXY_PASSWORD, encryptProxySecret(config.password))
-                .putString(KEY_OUTBOUND_PROXY_APP, config.proxyAppPackage)
+                .putStringSet(KEY_OUTBOUND_PROXY_APPS, config.proxyAppPackages.toSet())
+                .remove(KEY_OUTBOUND_PROXY_APP_LEGACY)
                 .apply()
         }
     }
@@ -76,7 +79,8 @@ object OutboundProxySettingsStore {
                 .remove(KEY_OUTBOUND_PROXY_PORT)
                 .remove(KEY_OUTBOUND_PROXY_USERNAME)
                 .remove(KEY_OUTBOUND_PROXY_PASSWORD)
-                .remove(KEY_OUTBOUND_PROXY_APP)
+                .remove(KEY_OUTBOUND_PROXY_APPS)
+                .remove(KEY_OUTBOUND_PROXY_APP_LEGACY)
                 .remove(KEY_OUTBOUND_PROXY_STATUS)
                 .remove(KEY_OUTBOUND_PROXY_STATUS_MESSAGE)
                 .apply()
@@ -98,10 +102,18 @@ object OutboundProxySettingsStore {
         }
     }
 
-    fun getOutboundProxyAppPackage(context: Context): String {
-        cachedConfig?.let { return it.proxyAppPackage }
-        val preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return preferences.getString(KEY_OUTBOUND_PROXY_APP, "").orEmpty()
+    fun getOutboundProxyAppPackages(context: Context): List<String> =
+        getOutboundProxyConfig(context).proxyAppPackages
+
+    private fun readProxyAppPackages(preferences: SharedPreferences): List<String> {
+        val stored = preferences.getStringSet(KEY_OUTBOUND_PROXY_APPS, null)
+        if (stored != null) {
+            return stored.filter { it.isNotBlank() }.sorted()
+        }
+        // Migration: the single-app selection from earlier versions becomes a
+        // one-item list.
+        val legacy = preferences.getString(KEY_OUTBOUND_PROXY_APP_LEGACY, "").orEmpty()
+        return if (legacy.isBlank()) emptyList() else listOf(legacy)
     }
 
     fun setOutboundProxyStatus(context: Context, state: String, message: String): Boolean {

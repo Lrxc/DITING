@@ -26,6 +26,7 @@ func mitmTLSFlow(
 	hostname string,
 	flow flowID,
 	protectFn func(fd int) bool,
+	uid int,
 ) {
 
 	tlsCfg := certMgr.GetDynamicTLSConfigForHost(hostname)
@@ -41,7 +42,7 @@ func mitmTLSFlow(
 	}
 	defer clientTLS.Close()
 
-	rawServer, err := dialUpstream(flow, hostname, blocker, protectFn)
+	rawServer, err := dialUpstream(flow, hostname, blocker, protectFn, uid)
 	if err != nil {
 		if engine != nil {
 			engine.logHTTPEvent(flow, hostname, "HTTPS", "upstream_failed", "upstream_tls")
@@ -89,8 +90,9 @@ func mitmHTTPFlow(
 	hostname string,
 	flow flowID,
 	protectFn func(fd int) bool,
+	uid int,
 ) {
-	serverConn, err := dialUpstream(flow, hostname, blocker, protectFn)
+	serverConn, err := dialUpstream(flow, hostname, blocker, protectFn, uid)
 	if err != nil {
 		if engine != nil {
 			engine.logHTTPEvent(flow, hostname, "HTTP/1.1", "upstream_failed", "upstream_dial")

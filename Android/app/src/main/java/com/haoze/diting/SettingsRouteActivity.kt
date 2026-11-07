@@ -83,7 +83,7 @@ class SettingsRouteActivity : AppLocalizedActivity() {
     private var languageModeAtCreate = AppLanguageMode.SYSTEM
     private var childLaunchInProgress = false
     private var routeRefreshVersion by mutableStateOf(0)
-    private var outboundProxyAppSelectionResult by mutableStateOf<Pair<Boolean, String?>?>(null)
+    private var outboundProxyAppSelectionResult by mutableStateOf<Pair<Boolean, List<String>>?>(null)
     private val appUpdateHost = AppUpdateHost(this)
 
     private val childActivityLauncher = registerForActivityResult(
@@ -237,9 +237,9 @@ class SettingsRouteActivity : AppLocalizedActivity() {
         finish()
     }
 
-    private fun finishOutboundProxyAppSelection(packageName: String) {
+    private fun finishOutboundProxyAppSelection(packages: List<String>) {
         resultData.putExtra(EXTRA_OUTBOUND_PROXY_APP_SELECTED, true)
-        resultData.putExtra(EXTRA_OUTBOUND_PROXY_APP_PACKAGE, packageName)
+        resultData.putStringArrayListExtra(EXTRA_OUTBOUND_PROXY_APP_PACKAGES, ArrayList(packages))
         setResult(RESULT_OK, resultData)
         finish()
     }
@@ -255,7 +255,8 @@ class SettingsRouteActivity : AppLocalizedActivity() {
             recordHideFromRecentsChanged(data.getBooleanExtra(EXTRA_HIDE_FROM_RECENTS, false))
         }
         if (data.getBooleanExtra(EXTRA_OUTBOUND_PROXY_APP_SELECTED, false)) {
-            outboundProxyAppSelectionResult = true to data.getStringExtra(EXTRA_OUTBOUND_PROXY_APP_PACKAGE)
+            outboundProxyAppSelectionResult = true to
+                (data.getStringArrayListExtra(EXTRA_OUTBOUND_PROXY_APP_PACKAGES)?.toList() ?: emptyList())
         }
         routeRefreshVersion++
     }
@@ -314,7 +315,7 @@ class SettingsRouteActivity : AppLocalizedActivity() {
         ruleKind: ManagedRuleKind?,
         ruleDataset: RuleDataset,
         requestedTitle: String?,
-        outboundProxyAppSelectionResult: Pair<Boolean, String?>?,
+        outboundProxyAppSelectionResult: Pair<Boolean, List<String>>?,
         onBack: () -> Unit,
         onNavigate: (String) -> Unit,
         onNavigateWithSource: (String, RequestSource?) -> Unit = { r, s -> onNavigate(r) },
@@ -396,7 +397,7 @@ class SettingsRouteActivity : AppLocalizedActivity() {
             Routes.OUTBOUND_PROXY_SETTINGS -> OutboundProxySettingsScreen(
                 onBack = onBack,
                 onSelectApp = { onNavigate(Routes.OUTBOUND_PROXY_APP_SELECTION) },
-                selectedAppOverride = outboundProxyAppSelectionResult
+                selectedAppsOverride = outboundProxyAppSelectionResult
             )
             Routes.OUTBOUND_PROXY_APP_SELECTION -> OutboundProxyAppsScreen(onBack, ::finishOutboundProxyAppSelection)
             Routes.BLOCK_RESPONSE_SETTINGS -> BlockResponseSettingsScreen(onBack, onRuntimeDnsSettingsChanged, dataset = ruleDataset)
@@ -554,7 +555,7 @@ class SettingsRouteActivity : AppLocalizedActivity() {
         const val EXTRA_BACKGROUND_CHANGED = "settings_background_changed"
         const val EXTRA_BOTTOM_BAR_CHANGED = "settings_bottom_bar_changed"
         const val EXTRA_OUTBOUND_PROXY_APP_SELECTED = "settings_outbound_proxy_app_selected"
-        const val EXTRA_OUTBOUND_PROXY_APP_PACKAGE = "settings_outbound_proxy_app_package"
+        const val EXTRA_OUTBOUND_PROXY_APP_PACKAGES = "settings_outbound_proxy_app_packages"
         const val EXTRA_BATCH_RULE_TARGET = "settings_batch_rule_target"
 
         fun createIntent(

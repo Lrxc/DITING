@@ -93,7 +93,7 @@ internal class NetworkFeatureConfigImporter(private val session: ImportSessionCo
                     port = proxy.port,
                     username = proxy.username,
                     password = proxy.password,
-                    proxyAppPackage = proxy.proxyAppPackage
+                    proxyAppPackages = proxy.proxyAppPackages
                 )
             )
             session.outboundProxyUpdated = true

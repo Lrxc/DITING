@@ -136,7 +136,10 @@ class ConfigExporter(
                 put("port", proxyConfig.port)
                 put("username", proxyConfig.username)
                 put("password", proxyConfig.password)
-                put("proxyAppPackage", proxyConfig.proxyAppPackage)
+                put(
+                    "proxyAppPackages",
+                    JSONArray().apply { proxyConfig.proxyAppPackages.forEach { put(it) } }
+                )
             })
         }
 

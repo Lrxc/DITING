@@ -95,7 +95,7 @@ data class ImportedOutboundProxy(
     val port: Int,
     val username: String = "",
     val password: String = "",
-    val proxyAppPackage: String = ""
+    val proxyAppPackages: List<String> = emptyList()
 )
 
 data class ImportedDynamicBlockResponse(

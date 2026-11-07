@@ -37,6 +37,7 @@ internal fun translateHttpInspectionExact(text: String): String? = when (text) {
     "启用所选应用的 HTTPS 流量检查" -> "Enable HTTPS inspection for selected apps"
     "仅汇总 DNS 与 HTTPS 的拦截、错误和旁路记录。" -> "Only blocked, failed, and bypassed DNS and HTTPS records are summarized."
     "HTTP CONNECT 不支持 UDP；UDP 会被严格阻断，QUIC 可回退到 TCP。代理应用本身将绕过 DITING。" -> "HTTP CONNECT does not support UDP; UDP is strictly blocked, and QUIC can fall back to TCP. The proxy app itself bypasses DITING."
+    "勾选应用的流量经 HTTP CONNECT 转发；HTTP CONNECT 不支持 UDP，UDP 会被严格阻断，QUIC 可回退到 TCP。未勾选的应用保持直连，DNS 始终直连。请勿勾选提供代理端口的应用，否则会形成流量环路。" -> "Traffic from the selected apps is forwarded through HTTP CONNECT; it does not support UDP, so UDP is strictly blocked and QUIC falls back to TCP. Unselected apps stay direct, and DNS is always direct. Do not select the app that provides the proxy port, or traffic will loop."
     "Go 隧道接管流量后，HTTPS 流量检查仅检查所选应用的 HTTP(S) 请求，其他应用直接转发。选择应用会取消其“排除应用”状态。" -> "After the Go tunnel takes over traffic, HTTPS inspection checks HTTP(S) requests only for selected apps; other apps are forwarded directly. Selecting an app removes it from excluded apps."
     "查看 HTTPS 检查根证书" -> "View HTTPS inspection root certificate"
     "安装和卸载 CA 证书方法" -> "How to install and remove CA certificates"

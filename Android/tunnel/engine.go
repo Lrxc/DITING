@@ -107,6 +107,10 @@ type Engine struct {
 	protectFn      func(fd int) bool
 	outboundConfig outboundProxyConfig
 	flowOutbound   flowOutbound
+	directOutbound flowOutbound
+
+	proxyUIDsMu sync.RWMutex
+	proxyUIDs   map[int]struct{}
 
 	fullTunnelDone chan struct{}
 
@@ -236,8 +240,13 @@ func (e *Engine) Stop() {
 	e.resolver = nil
 	oldFlowOutbound := e.flowOutbound
 	e.flowOutbound = nil
+	oldDirectOutbound := e.directOutbound
+	e.directOutbound = nil
 	if oldFlowOutbound != nil {
 		_ = oldFlowOutbound.Close()
+	}
+	if oldDirectOutbound != nil {
+		_ = oldDirectOutbound.Close()
 	}
 
 	for _, t := range e.adTries {

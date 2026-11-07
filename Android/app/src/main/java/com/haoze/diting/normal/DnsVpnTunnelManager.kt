@@ -138,7 +138,6 @@ class DnsVpnTunnelManager {
     fun establishVpnInterface(
         vpnService: VpnService,
         excludedPackages: Set<String>,
-        proxyPackage: String?,
         bypassLan: Boolean = true,
         ipv6Mode: Ipv6Mode = Ipv6Mode.AUTO
     ): ParcelFileDescriptor? {
@@ -195,7 +194,10 @@ class DnsVpnTunnelManager {
             }
         }
 
-        val allExcluded = excludedPackages + vpnService.packageName + listOfNotNull(proxyPackage)
+        // DITING itself is always excluded; the outbound proxy provider app is
+        // no longer excluded here because per-app proxying only routes the
+        // selected apps' flows through the proxy.
+        val allExcluded = excludedPackages + vpnService.packageName
         allExcluded.forEach { excluded ->
             try {
                 builder.addDisallowedApplication(excluded)

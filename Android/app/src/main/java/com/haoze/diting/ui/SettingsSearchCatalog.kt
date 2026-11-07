@@ -38,7 +38,7 @@ object ScreenDestinations {
     val logRetentionSettings = main(Routes.LOG_RETENTION_SETTINGS, "日志模式", "选择 DNS 请求日志的记录范围", Icons.Filled.History, SettingsSection.PERFORMANCE)
     val foregroundBackgroundSettings = main(Routes.FOREGROUND_BACKGROUND_SETTINGS, "前后台行为", "后台隐藏、通知常驻、绕过局域网", Icons.Filled.FlipToBack, SettingsSection.BEHAVIOR)
     val workModeSelection = main(Routes.WORK_MODE_SELECTION, "运行模式", "切换普通模式或服务器模式", Icons.Filled.Tune, SettingsSection.WORK_MODE)
-    val outboundProxy = main(Routes.OUTBOUND_PROXY_SETTINGS, "出站代理", "将过滤后的流量转发到本地 SOCKS5 或 HTTP 代理", Icons.Filled.Lan, SettingsSection.BEHAVIOR)
+    val outboundProxy = main(Routes.OUTBOUND_PROXY_SETTINGS, "出站代理", "将勾选应用的流量转发到本地 SOCKS5 或 HTTP 代理", Icons.Filled.Lan, SettingsSection.BEHAVIOR)
     val languageSettings = main(Routes.LANGUAGE_SETTINGS, "语言设置", "选择应用界面语言", Icons.Filled.Public, SettingsSection.DATA)
     val dataCleanup = main(Routes.DATA_CLEANUP, "数据清理", "删除缓存、日志或域名规则", Icons.Filled.DeleteSweep, SettingsSection.DATA)
     val agentApiSettings = main(Routes.AGENT_API_SETTINGS, "AI 分析", "配置大语言模型接口与密钥，用于域名和网络流量分析", Icons.Filled.SmartToy, SettingsSection.OTHER)
