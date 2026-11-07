@@ -18,8 +18,14 @@ internal class SubscriptionDownloader(
     private val ruleStreamer: CategorizedRuleStreamImporter,
     private val ruleStorage: SubscriptionRuleStorage,
     private val client: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        // OkHttp's read timeout applies per read, so a server that stalls
+        // before the first byte (DNS hang, blocked host, trickling mirror)
+        // can keep the update spinner alive forever. callTimeout bounds the
+        // whole exchange.
+        .callTimeout(75, TimeUnit.SECONDS)
         .build(),
     private val cacheDir: File? = null
 ) {
@@ -89,8 +95,10 @@ internal class SubscriptionDownloader(
             val body = response.body ?: throw SubscriptionUpdateException("订阅响应为空", retryable = false)
             val tempFile = createTempFile("sub_import_${subscriptionId}_")
             try {
-                tempFile.outputStream().use { out ->
-                    body.byteStream().copyTo(out)
+                body.byteStream().use { input ->
+                    tempFile.outputStream().use { out ->
+                        input.copyTo(out)
+                    }
                 }
                 val badfilterKeys = tempFile.bufferedReader().use { reader ->
                     AdGuardRuleParser.extractBadfilterKeys(reader)
@@ -177,8 +185,10 @@ internal class SubscriptionDownloader(
             val body = response.body ?: throw SubscriptionUpdateException("订阅响应为空", retryable = false)
             val tempFile = createTempFile("sub_stage_${subscription.id}_")
             try {
-                tempFile.outputStream().use { out ->
-                    body.byteStream().copyTo(out)
+                body.byteStream().use { input ->
+                    tempFile.outputStream().use { out ->
+                        input.copyTo(out)
+                    }
                 }
                 val badfilterKeys = tempFile.bufferedReader().use { reader ->
                     AdGuardRuleParser.extractBadfilterKeys(reader)

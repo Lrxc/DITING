@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import com.haoze.diting.data.RuleDataset
 import com.haoze.diting.express.ExpressVpnController
 import com.haoze.diting.express.ExpressVpnIntents
+import com.haoze.diting.normal.DnsVpnService
 import com.haoze.diting.ui.mode.AppWorkMode
 import com.haoze.diting.ui.mode.WorkModeStore
 import com.haoze.diting.ui.settings.ResolutionSettingsStore
@@ -125,9 +126,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val isAlive = if (isExpress) {
             ExpressVpnController.isRunning(context)
         } else {
-            val alive = VpnStateRegistry.isNormalRunning(context)
-            VpnStateRegistry.setNormalRunningFlag(context, alive)
-            alive
+            // The persisted flag survives a killed process, so confirm that the
+            // service instance is actually alive before showing "running".
+            // DnsVpnService.isRunning() also clears the stale flag.
+            DnsVpnService.isRunning(context)
         }
         _uiState.value = _uiState.value.copy(isRunning = isAlive, isBusy = false)
         onComplete?.invoke(isAlive)

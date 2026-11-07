@@ -4,6 +4,7 @@ import com.haoze.diting.ui.*
 import com.haoze.diting.ui.dashboard.*
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.haoze.diting.ui.components.SettingsActionButton
@@ -97,6 +99,10 @@ fun OutboundProxySettingsScreen(
     LaunchedEffect(selectedAppsOverride) {
         selectedAppsOverride?.let { (_, packages) ->
             draft = draft.copy(proxyAppPackages = packages)
+            // The picker re-reads the store when it opens, so mirror the
+            // confirmed selection right away; otherwise re-entering it would
+            // show the previously saved list instead of what was just picked.
+            OutboundProxySettingsStore.setOutboundProxyAppPackages(context, packages)
         }
     }
     LaunchedEffect(draft.enabled) {
@@ -136,6 +142,15 @@ fun OutboundProxySettingsScreen(
         )
         if (vpnRunning) RuntimeDnsSettingsRefresher.refreshAppExclusionsIfRunning(context)
     }
+    val successColor = if (isSystemInDarkTheme()) Color(0xFF6FD68B) else Color(0xFF1B7F3B)
+    val statusColor = when {
+        proxyProbe is ProxyProbe.Available -> successColor
+        proxyProbe is ProxyProbe.Unavailable -> MaterialTheme.colorScheme.error
+        proxyProbe == ProxyProbe.Testing -> null
+        proxyStatus.first == "ready" -> successColor
+        proxyStatus.first == "error" -> MaterialTheme.colorScheme.error
+        else -> null
+    }
     val statusText = when (val probe = proxyProbe) {
         ProxyProbe.Testing -> localizedText("正在检测代理")
         ProxyProbe.Available -> localizedText("代理可用")
@@ -160,6 +175,7 @@ fun OutboundProxySettingsScreen(
                     SettingsSwitchItem(
                         title = localizedText("启用出站代理功能"),
                         subtitle = statusText,
+                        subtitleColor = statusColor,
                         checked = draft.enabled,
                         onCheckedChange = ::setProxyEnabled
                     )

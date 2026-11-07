@@ -7,6 +7,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.haoze.diting.BuildConfig
@@ -31,6 +35,11 @@ fun AppUpdateScreen(
     val update = state.availableUpdate
     val downloadStatus = state.downloadState.status.takeIf { state.downloadState.version == update?.version }
         ?: AppUpdateDownloadStatus.Idle
+    // The setting lives in SharedPreferences and the host does not recompose
+    // on write, so keep a local copy to make the switch respond immediately.
+    var startupCheckDisabled by remember(startupUpdateCheckDisabled) {
+        mutableStateOf(startupUpdateCheckDisabled)
+    }
     SettingsScaffold(title = localizedText("更新与支持"), onBack = onBack) { innerPadding ->
         Column(
             modifier = Modifier
@@ -60,13 +69,16 @@ fun AppUpdateScreen(
                     add {
                         SettingsSwitchItem(
                             title = localizedText("关闭启动时检查更新"),
-                            subtitle = if (startupUpdateCheckDisabled) {
+                            subtitle = if (startupCheckDisabled) {
                                 localizedText("应用启动时不自动检查，可随时手动检查")
                             } else {
                                 localizedText("应用启动时自动检查新版本")
                             },
-                            checked = startupUpdateCheckDisabled,
-                            onCheckedChange = onStartupUpdateCheckDisabledChange,
+                            checked = startupCheckDisabled,
+                            onCheckedChange = {
+                                startupCheckDisabled = it
+                                onStartupUpdateCheckDisabledChange(it)
+                            },
                         )
                     }
                     add {

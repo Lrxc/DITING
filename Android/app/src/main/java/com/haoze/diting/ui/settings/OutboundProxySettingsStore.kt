@@ -105,6 +105,22 @@ object OutboundProxySettingsStore {
     fun getOutboundProxyAppPackages(context: Context): List<String> =
         getOutboundProxyConfig(context).proxyAppPackages
 
+    /**
+     * Persists only the proxied-app selection. The picker screen seeds its
+     * checkboxes from the store, so the parent screen mirrors confirmed
+     * selections here instead of waiting for the main save button.
+     */
+    fun setOutboundProxyAppPackages(context: Context, packages: List<String>) {
+        synchronized(this) {
+            val current = cachedConfig ?: getOutboundProxyConfig(context)
+            cachedConfig = current.copy(proxyAppPackages = packages)
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+                .putStringSet(KEY_OUTBOUND_PROXY_APPS, packages.toSet())
+                .remove(KEY_OUTBOUND_PROXY_APP_LEGACY)
+                .apply()
+        }
+    }
+
     private fun readProxyAppPackages(preferences: SharedPreferences): List<String> {
         val stored = preferences.getStringSet(KEY_OUTBOUND_PROXY_APPS, null)
         if (stored != null) {

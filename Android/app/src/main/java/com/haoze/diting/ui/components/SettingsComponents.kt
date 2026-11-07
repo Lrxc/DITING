@@ -336,6 +336,7 @@ fun SettingsItem(
     title: String,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    subtitleColor: Color? = null,
     leadingIcon: ImageVector? = null,
     titleColor: Color = MaterialTheme.colorScheme.onSurface,
     enabled: Boolean = true,
@@ -380,9 +381,8 @@ fun SettingsItem(
                 Text(
                     text = localizedText(it),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                        alpha = if (enabled) 1f else 0.38f
-                    )
+                    color = (subtitleColor ?: MaterialTheme.colorScheme.onSurfaceVariant)
+                        .copy(alpha = if (enabled) 1f else 0.38f)
                 )
             }
             subtitleContent()
@@ -402,12 +402,14 @@ fun SettingsSwitchItem(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    subtitleColor: Color? = null,
     enabled: Boolean = true,
     contentPadding: PaddingValues = DefaultSettingsItemContentPadding
 ) {
     SettingsItem(
         title = title,
         subtitle = subtitle,
+        subtitleColor = subtitleColor,
         modifier = modifier,
         contentPadding = contentPadding,
         enabled = enabled,

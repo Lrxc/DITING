@@ -34,6 +34,7 @@ class SubscriptionManager(
 ) {
     companion object {
         private const val TAG = "SubscriptionManager"
+        private const val TIMEOUT_ERROR = "下载超时（网络无响应）"
     }
 
     private val ruleStorage = SubscriptionRuleStorage(
@@ -489,6 +490,18 @@ class SubscriptionManager(
         } catch (e: CancellationException) {
             ruleStorage.markUpdateCancelled(id)
             throw e
+        } catch (e: java.io.InterruptedIOException) {
+            // OkHttp call/read timeouts; report a readable reason instead of
+            // leaving the item stuck in the importing state.
+            Log.e(TAG, "更新订阅超时", e)
+            ruleStorage.removeStagingRules(id)
+            subscriptionDao.markUpdateFailed(
+                id,
+                SubscriptionImportState.FAILED,
+                TIMEOUT_ERROR,
+                System.currentTimeMillis()
+            )
+            SubscriptionUpdateOutcome.Failed(TIMEOUT_ERROR, retryable = true)
         } catch (e: SubscriptionUpdateException) {
             Log.e(TAG, "更新订阅失败", e)
             ruleStorage.removeStagingRules(id)
