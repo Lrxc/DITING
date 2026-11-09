@@ -13,17 +13,6 @@ captures/
 *.aab
 
 # ====================================================================
-# Desktop & Frontend Build Outputs
-# ====================================================================
-Desktop/build/bin/
-Desktop/build/windows/installer/tmp/
-Desktop/build/windows/installer/wails_tools.nsh
-Desktop/frontend/dist/
-Desktop/frontend/package.json.md5
-Desktop/frontend/wailsjs/
-node_modules/
-
-# ====================================================================
 # Local Configuration & SDK
 # ====================================================================
 local.properties
@@ -39,13 +28,6 @@ DITING-keystore/
 secrets/
 keystore.properties
 signing.properties
-
-# ====================================================================
-# Python Cache & Bytecode
-# ====================================================================
-__pycache__/
-*.py[cod]
-*$py.class
 
 # ====================================================================
 # IDEs, Editors & Developer Tools
